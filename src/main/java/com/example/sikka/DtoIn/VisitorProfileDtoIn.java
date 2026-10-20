@@ -1,0 +1,41 @@
+package com.example.sikka.DtoIn;
+
+import jakarta.validation.constraints.*;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.time.LocalDate;
+
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+public class VisitorProfileDtoIn {
+
+    @NotNull(message = "account id cannot be null")
+    private Integer accountId;
+
+    @NotEmpty(message = "name is required")
+    @Size(max = 100, message = "name must not exceed 100 characters")
+    private String name;
+
+    @Past(message = "birth date must be in the past")
+    private LocalDate birthDate;
+
+    @Positive(message = "height must be positive")
+    private Double heightCm;
+
+    @Positive(message = "weight must be positive")
+    private Double weightKg;
+
+    @Pattern(regexp = "^(LOW|MEDIUM|HIGH)$", message = "thrill preference must be LOW, MEDIUM, or HIGH")
+    private String thrillPreference;
+
+    private String preferredRideTypes;
+
+    private String dislikedRideFeatures;
+
+    private String foodPreferences;
+
+    private String healthData;
+}
