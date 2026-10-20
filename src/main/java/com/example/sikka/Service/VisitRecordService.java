@@ -221,10 +221,6 @@ public class VisitRecordService {
             throw new ApiException("Status must be COMPLETED or SKIPPED");
         }
 
-        if ("QUEUING".equals(status) && !"IN_PROGRESS".equals(visit.getStatus())) {
-            throw new ApiException("Queuing can only be recorded during the visit");
-        }
-
         if (status.equals(visitRecord.getStatus())) {
             throw new ApiException("The record already has this status");
         }
