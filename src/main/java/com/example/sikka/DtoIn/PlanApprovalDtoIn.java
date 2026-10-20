@@ -1,0 +1,25 @@
+package com.example.sikka.DtoIn;
+
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Positive;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+@Getter
+@Setter
+@AllArgsConstructor
+@NoArgsConstructor
+public class PlanApprovalDtoIn {
+
+    @NotNull(message = "Visit plan ID is required")
+    @Positive(message = "Visit plan ID must be positive")
+    private Integer visitPlanId;
+
+    @NotBlank(message = "Approval response is required")
+    @Pattern(regexp = "^(APPROVED|REJECTED)$", message = "Response must be APPROVED or REJECTED")
+    private String status;
+}

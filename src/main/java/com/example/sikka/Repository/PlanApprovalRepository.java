@@ -9,4 +9,5 @@ public interface PlanApprovalRepository extends JpaRepository<PlanApproval, Inte
 
     PlanApproval findPlanApprovalById(Integer id);
 
+    PlanApproval findPlanApprovalByVisitPlan_Id(Integer visitPlanId);
 }

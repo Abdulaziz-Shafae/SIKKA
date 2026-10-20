@@ -23,7 +23,7 @@ public class VisitRecord {
     private Integer id;
 
     @NotNull(message = "Record status is required")
-    @Pattern(regexp = "^(QUEUING|COMPLETED|SKIPPED)$", message = "Record status must be QUEUING, COMPLETED or SKIPPED")
+    @Pattern(regexp = "^(COMPLETED|SKIPPED)$", message = "Record status must be COMPLETED or SKIPPED")
     @Column(columnDefinition = "VARCHAR(20) not null")
     private String status;
 
