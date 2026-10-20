@@ -4,6 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
@@ -15,8 +16,8 @@ public class VisitorProfileDtoOut {
     private Integer accountId;
     private String name;
     private LocalDate birthDate;
-    private Double heightCm;
-    private Double weightKg;
+    private BigDecimal heightCm;
+    private BigDecimal weightKg;
     private String thrillPreference;
     private String preferredRideTypes;
     private String dislikedRideFeatures;

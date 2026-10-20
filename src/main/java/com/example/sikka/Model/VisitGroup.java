@@ -24,15 +24,13 @@ public class VisitGroup {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
-    @NotEmpty(message = "group name is required")
-    @Size(max = 150, message = "group name must not exceed 150 characters")
     @Column(columnDefinition = "varchar(150) not null")
     private String name;
 
     @Column(columnDefinition = "boolean not null default true")
     private Boolean invitationsEnabled = true;
 
-    @Column(columnDefinition = "varchar(255)")
+    @Column(columnDefinition = "varchar(255) unique")
     private String inviteCodeHash;
 
     @CreationTimestamp

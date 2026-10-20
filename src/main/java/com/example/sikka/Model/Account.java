@@ -23,13 +23,9 @@ public class Account {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
-    @NotEmpty(message = "name is required")
-    @Size(max = 100, message = "name must not exceed 100 characters")
     @Column(columnDefinition = "varchar(100) not null")
     private String name;
 
-    @NotEmpty(message = "email is required")
-    @Email(message = "invalid email format")
     @Column(columnDefinition = "varchar(150) not null unique")
     private String email;
 
@@ -75,4 +71,21 @@ public class Account {
 
     @OneToMany(cascade = CascadeType.ALL, mappedBy = "organizer")
     private Set<Visit> organizedVisits;
+
+    @OneToMany(mappedBy = "account")
+    private Set<Notification> notifications;
+
+    @OneToMany(mappedBy = "approvedByAccount")
+    private Set<PlanApproval> planApprovals;
+
+    @OneToMany(mappedBy = "recordedByAccount")
+    private Set<VisitRecord> visitRecords;
+
+    @OneToMany(mappedBy = "buyerAccount")
+    private Set<PaymentOrder> paymentOrders;
+
+    @OneToMany(mappedBy = "grantedByAccount")
+    private Set<PrivacyConsent> privacyConsents;
+
+
 }

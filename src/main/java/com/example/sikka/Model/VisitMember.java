@@ -11,6 +11,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.LocalDateTime;
+import java.util.Set;
 
 @Setter
 @Getter
@@ -55,4 +56,14 @@ public class VisitMember {
     @JoinColumn(name = "visitor_profile_id", nullable = false)
     @JsonIgnore
     private VisitorProfile visitorProfile;
+
+    @OneToMany(mappedBy = "ownerVisitMember")
+    @JsonIgnore
+    private Set<VisitPlan> visitPlans;
+
+    @OneToMany(mappedBy = "visitMember")
+    @JsonIgnore
+    private Set<VisitRecord> visitRecords;
+
+
 }
