@@ -50,13 +50,13 @@ public class Notification {
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    // @ManyToOne
-    // @JoinColumn(name = "account_id", nullable = false)
-    // @JsonIgnore
-    // private Account account;
+     @ManyToOne
+     @JoinColumn(name = "account_id", nullable = false)
+     @JsonIgnore
+     private Account account;
 
-    // @ManyToOne
-    // @JoinColumn(name = "visit_id")
-    // @JsonIgnore
-    // private Visit visit;
+     @ManyToOne
+     @JoinColumn(name = "visit_id")
+     @JsonIgnore
+     private Visit visit;
 }

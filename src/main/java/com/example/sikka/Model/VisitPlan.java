@@ -16,7 +16,7 @@ import java.util.Set;
 @AllArgsConstructor
 @NoArgsConstructor
 @Entity
-// @Table(uniqueConstraints = @UniqueConstraint(name = "uk_visit_plan_visit_owner", columnNames = {"visit_id", "owner_visit_member_id"}))
+ @Table(uniqueConstraints = @UniqueConstraint(name = "uk_visit_plan_visit_owner", columnNames = {"visit_id", "owner_visit_member_id"}))
 public class VisitPlan {
 
     @Id
@@ -39,15 +39,15 @@ public class VisitPlan {
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    // @ManyToOne
-    // @JoinColumn(name = "visit_id", nullable = false)
-    // @JsonIgnore
-    // private Visit visit;
+     @ManyToOne
+     @JoinColumn(name = "visit_id", nullable = false)
+     @JsonIgnore
+     private Visit visit;
 
-    // @ManyToOne
-    // @JoinColumn(name = "owner_visit_member_id")
-    // @JsonIgnore
-    // private VisitMember ownerVisitMember;
+     @ManyToOne
+     @JoinColumn(name = "owner_visit_member_id")
+     @JsonIgnore
+     private VisitMember ownerVisitMember;
 
      @OneToMany(mappedBy = "visitPlan")
      @JsonIgnore

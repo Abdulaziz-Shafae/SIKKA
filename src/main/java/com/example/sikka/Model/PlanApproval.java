@@ -31,8 +31,8 @@ public class PlanApproval {
     @JsonIgnore
     private VisitPlan visitPlan;
 
-    // @ManyToOne
-    // @JoinColumn(name = "approved_by_account_id", nullable = false)
-    // @JsonIgnore
-    // private Account approvedByAccount;
+     @ManyToOne
+     @JoinColumn(name = "approved_by_account_id", nullable = false)
+     @JsonIgnore
+     private Account approvedByAccount;
 }

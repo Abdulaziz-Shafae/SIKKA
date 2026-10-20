@@ -56,13 +56,13 @@ public class PlanItem {
     @JsonIgnore
     private VisitPlan visitPlan;
 
-    // @ManyToOne
-    // @JoinColumn(name = "ride_id")
-    // @JsonIgnore
-    // private Ride ride;
+     @ManyToOne
+     @JoinColumn(name = "ride_id")
+     @JsonIgnore
+     private Ride ride;
 
-    // @ManyToOne
-    // @JoinColumn(name = "place_id")
-    // @JsonIgnore
-    // private Place place;
+     @ManyToOne
+     @JoinColumn(name = "place_id")
+     @JsonIgnore
+     private Place place;
 }

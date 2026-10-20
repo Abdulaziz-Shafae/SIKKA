@@ -45,18 +45,18 @@ public class VisitRecord {
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    // @ManyToOne
-    // @JoinColumn(name = "visit_member_id", nullable = false)
-    // @JsonIgnore
-    // private VisitMember visitMember;
+     @ManyToOne
+     @JoinColumn(name = "visit_member_id", nullable = false)
+     @JsonIgnore
+     private VisitMember visitMember;
 
-    // @ManyToOne
-    // @JoinColumn(name = "ride_id", nullable = false)
-    // @JsonIgnore
-    // private Ride ride;
+     @ManyToOne
+     @JoinColumn(name = "ride_id", nullable = false)
+     @JsonIgnore
+     private Ride ride;
 
-    // @ManyToOne
-    // @JoinColumn(name = "recorded_by_account_id", nullable = false)
-    // @JsonIgnore
-    // private Account recordedByAccount;
+     @ManyToOne
+     @JoinColumn(name = "recorded_by_account_id", nullable = false)
+     @JsonIgnore
+     private Account recordedByAccount;
 }
