@@ -6,5 +6,8 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface VisitorProfileRepository extends JpaRepository<VisitorProfile, Integer> {
+
     VisitorProfile findVisitorProfileById(Integer id);
+
+    VisitorProfile findVisitorProfileByAccountId(Integer accountId);
 }
