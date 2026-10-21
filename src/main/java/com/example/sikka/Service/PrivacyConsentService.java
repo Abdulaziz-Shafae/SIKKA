@@ -119,4 +119,20 @@ public class PrivacyConsentService {
 
         privacyConsentRepository.save(consent);
     }
+
+    public boolean hasConsent(Integer profileId, String kind){
+        VisitorProfile visitorProfile = visitorProfileRepository.findVisitorProfileById(profileId);
+
+        if (visitorProfile == null){
+            throw new ApiException("Visitor profile not found");
+        }
+
+        if (kind == null || (!"HEALTH_STORAGE".equals(kind) && !"LOCATION_SHARING".equals(kind) && !"WHATSAPP".equals(kind) && !"EMAIL_MARKETING".equals(kind))){
+            throw new ApiException("Invalid consent kind");
+        }
+
+        PrivacyConsent consent = privacyConsentRepository.findTopByVisitorProfileIdAndConsentKindOrderByCreatedAtDescIdDesc(profileId, kind);
+
+        return consent != null && Boolean.TRUE.equals(consent.getGranted()) && consent.getRevokedAt() == null;
+    }
 }

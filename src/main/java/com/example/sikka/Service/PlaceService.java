@@ -80,4 +80,12 @@ public class PlaceService {
         target.setMapY(source.getMapY());
         target.setDescription(source.getDescription());
     }
+
+    public List<Place> getPlaces(String kind){
+        if (kind == null || (!"RESTAURANT".equals(kind) && !"MEETING_POINT".equals(kind) && !"RESTROOM".equals(kind) && !"OTHER".equals(kind))){
+            throw new ApiException("Invalid place kind");
+        }
+
+        return placeRepository.findPlacesByKind(kind);
+    }
 }

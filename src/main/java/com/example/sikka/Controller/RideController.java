@@ -42,4 +42,9 @@ public class RideController {
         rideService.deleteRide(rideId);
         return ResponseEntity.status(200).body(new ApiResponse("Ride deleted successfully"));
     }
+
+    @GetMapping("/available")
+    public ResponseEntity<?> getOpenRides(){
+        return ResponseEntity.status(200).body(rideService.getOpenRides());
+    }
 }

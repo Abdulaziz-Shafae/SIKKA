@@ -6,7 +6,13 @@ import com.example.sikka.Repository.RideRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.example.sikka.Model.VisitorProfile;
+import com.example.sikka.Repository.VisitorProfileRepository;
 
+import java.time.LocalDate;
+import java.time.Period;
+
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -14,6 +20,7 @@ import java.util.List;
 public class RideService {
 
     private final RideRepository rideRepository;
+    private final VisitorProfileRepository visitorProfileRepository;
 
     public List<Ride> getRides() {
         return rideRepository.findAll();
@@ -125,5 +132,92 @@ public class RideService {
         target.setWaitSource(source.getWaitSource());
         target.setMapX(source.getMapX());
         target.setMapY(source.getMapY());
+    }
+
+    public List<Ride> getOpenRides(){
+        return rideRepository.findRidesByStatus("OPEN");
+    }
+
+    public boolean validateRideIds(List<Integer> rideIds){
+        if (rideIds == null){
+            return false;
+        }
+
+        for (Integer rideId : rideIds){
+            if (rideId == null || rideId <= 0){
+                return false;
+            }
+        }
+
+        List<Integer> uniqueRideIds = new ArrayList<>();
+
+        for (Integer rideId : rideIds){
+            if (!uniqueRideIds.contains(rideId)){
+                uniqueRideIds.add(rideId);
+            }
+        }
+
+        return rideRepository.findAllById(uniqueRideIds).size() == uniqueRideIds.size();
+    }
+
+    // TODO: فحص الأهلية غير مكتمل؛ حاليًا يتحقق من قيود الطول والوزن والعمر المعروفة فقط.
+    // نحتاج التمييز بين القيد غير المعروف وعدم وجود قيد، واستكمال شروط المرافق والسلامة.
+    // نحتاج توحيد صيغة healthData وقواعد مقارنتها، والتحقق من الموافقة قبل استخدامها.
+    // العمر يُحسب بتاريخ اليوم؛ نحتاج احتسابه بتاريخ الزيارة عند استخدام الدالة للتخطيط.
+    // حاليًا: مخالفة قيد معروف ترجع NOT_ELIGIBLE، وما عدا ذلك UNKNOWN.
+    // لا نرجع ELIGIBLE حتى تكتمل الفحوصات المطلوبة، ولا نعامل UNKNOWN كإثبات أهلية.
+    // حالة تشغيل اللعبة تُفحص بشكل منفصل باستخدام getOpenRides().
+    public String checkEligibility(Integer rideId, Integer profileId){
+        Ride ride = rideRepository.findRideById(rideId);
+
+        if (ride == null){
+            throw new ApiException("Ride not found");
+        }
+
+        VisitorProfile profile = visitorProfileRepository.findVisitorProfileById(profileId);
+
+        if (profile == null){
+            throw new ApiException("Visitor profile not found");
+        }
+
+        if (profile.getHeightCm() != null && profile.getHeightCm().signum() > 0){
+            if (ride.getMinHeightCm() != null
+                    && profile.getHeightCm().compareTo(ride.getMinHeightCm()) < 0){
+                return "NOT_ELIGIBLE";
+            }
+
+            if (ride.getMaxHeightCm() != null
+                    && profile.getHeightCm().compareTo(ride.getMaxHeightCm()) > 0){
+                return "NOT_ELIGIBLE";
+            }
+        }
+
+        if (profile.getWeightKg() != null && profile.getWeightKg().signum() > 0){
+            if (ride.getMinWeightKg() != null
+                    && profile.getWeightKg().compareTo(ride.getMinWeightKg()) < 0){
+                return "NOT_ELIGIBLE";
+            }
+
+            if (ride.getMaxWeightKg() != null
+                    && profile.getWeightKg().compareTo(ride.getMaxWeightKg()) > 0){
+                return "NOT_ELIGIBLE";
+            }
+        }
+
+        LocalDate today = LocalDate.now();
+
+        if (profile.getBirthDate() != null && !profile.getBirthDate().isAfter(today)){
+            int age = Period.between(profile.getBirthDate(), today).getYears();
+
+            if (ride.getMinAgeYears() != null && age < ride.getMinAgeYears()){
+                return "NOT_ELIGIBLE";
+            }
+
+            if (ride.getMaxAgeYears() != null && age > ride.getMaxAgeYears()){
+                return "NOT_ELIGIBLE";
+            }
+        }
+
+        return "UNKNOWN";
     }
 }
