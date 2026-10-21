@@ -68,6 +68,12 @@ public class PlaceService {
     }
 
     private void validatePlace(Place place){
+        if (place == null) {
+            throw new ApiException("Place details are required");
+        }
+        if (place.getKind() == null || !place.getKind().matches("^(RESTAURANT|SHOP|MEETING_POINT|RESTROOM|OTHER)$")) {
+            throw new ApiException("Invalid place kind");
+        }
         if (!"RESTAURANT".equals(place.getKind()) && (place.getServiceType() != null || (place.getCuisineTypes() != null && !place.getCuisineTypes().isEmpty()))) {
             throw new ApiException("Dining details can only be assigned to restaurants");
         }

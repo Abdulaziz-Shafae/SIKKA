@@ -34,7 +34,7 @@ public class Ride {
     @Column(length = 60)
     private String category;
 
-    @Pattern(regexp = "^(LOW|MILD|MEDIUM|HIGH|EXTREME)$", message = "Thrill level must be LOW, MILD, MEDIUM, HIGH or EXTREME" )
+    @Pattern(regexp = "^(LOW|MILD|EXTREME)$", message = "Thrill level must be LOW, MILD or EXTREME" )
     @Column(length = 20)
     private String thrillLevel;
 

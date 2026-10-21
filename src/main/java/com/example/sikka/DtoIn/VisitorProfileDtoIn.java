@@ -29,7 +29,7 @@ public class VisitorProfileDtoIn {
     @Positive(message = "weight must be positive")
     private BigDecimal weightKg;
 
-    @Pattern(regexp = "^(LOW|MILD|MEDIUM|HIGH|EXTREME)$", message = "thrill preference must be LOW, MILD, MEDIUM, HIGH or EXTREME")
+    @Pattern(regexp = "^(LOW|MILD|EXTREME)$", message = "thrill preference must be LOW, MILD or EXTREME")
     private String thrillPreference;
 
     private String preferredRideTypes;

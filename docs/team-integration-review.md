@@ -6,7 +6,7 @@ Merged the current `mohammed` and `nawaf` heads, retaining `shefo` (already an a
 
 ## Corrections
 
-- RegisterDtoIn, VisitorProfileDtoIn and VisitorProfile accept LOW/MILD/EXTREME; retained existing MEDIUM/HIGH compatibility labels.
+- RegisterDtoIn, VisitorProfileDtoIn and VisitorProfile accept LOW/MILD/EXTREME; the subsequent service validation review restricts these to LOW/MILD/EXTREME only.
 - Place filtering accepts SHOP as well as the existing place kinds. Preserved dining service, cuisine, retail types, land, companion conditions and recommended ages from the catalogue branch.
 - Visit states: DRAFT, PLANNING, READY, IN_PROGRESS, COMPLETED, CANCELLED. Removed legacy OPEN checks from plan services; OPEN remains valid for Ride/Place operating status.
 - Payment statuses: PENDING/PAID/FAILED. Consent kinds: HEALTH_STORAGE/LOCATION_SHARING/WHATSAPP/EMAIL_MARKETING. VisitRecord: COMPLETED/SKIPPED. Notification: PENDING/SENT/FAILED; added readAt without introducing READ.

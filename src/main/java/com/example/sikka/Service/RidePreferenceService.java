@@ -58,6 +58,9 @@ public class RidePreferenceService {
 
     @Transactional
     public void addRidePreference(Integer accountId, Integer rideId, RidePreference ridePreference){
+        if (ridePreference == null || ridePreference.getPreference() == null || !ridePreference.getPreference().matches("^(REPEAT|AVOID|NEUTRAL)$")) {
+            throw new ApiException("Preference must be REPEAT, AVOID or NEUTRAL");
+        }
         Account account = accountRepository.findAccountById(accountId);
 
         if (account == null){
@@ -103,6 +106,9 @@ public class RidePreferenceService {
 
     @Transactional
     public void updateRidePreference(Integer accountId, Integer preferenceId, RidePreference ridePreference){
+        if (ridePreference == null || ridePreference.getPreference() == null || !ridePreference.getPreference().matches("^(REPEAT|AVOID|NEUTRAL)$")) {
+            throw new ApiException("Preference must be REPEAT, AVOID or NEUTRAL");
+        }
         RidePreference oldPreference = ridePreferenceRepository.findRidePreferenceById(preferenceId);
 
         if (oldPreference == null){

@@ -67,6 +67,12 @@ public class AccountService {
     // creates the account and its visitor profile together (@Transactional: both or none)
     @Transactional
     public void register(RegisterDtoIn dto) {
+        if (dto == null) {
+            throw new ApiException("Profile details are required");
+        }
+        if (dto.getThrillPreference() != null && !dto.getThrillPreference().matches("^(LOW|MILD|EXTREME)$")) {
+            throw new ApiException("Thrill preference must be LOW, MILD or EXTREME");
+        }
         if (accountRepository.findAccountByEmail(dto.getEmail()) != null)
             throw new ApiException("email already exists");
 

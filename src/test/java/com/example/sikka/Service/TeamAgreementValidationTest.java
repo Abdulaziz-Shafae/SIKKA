@@ -20,6 +20,12 @@ class TeamAgreementValidationTest {
                 assertTrue(validator.validateValue(com.example.sikka.DtoIn.RegisterDtoIn.class, "thrillPreference", value).isEmpty());
                 assertTrue(validator.validateValue(VisitorProfile.class, "thrillPreference", value).isEmpty());
             }
+            for (String value : List.of("MEDIUM", "HIGH", "low", "MILD ", "")) {
+                assertFalse(validator.validateValue(com.example.sikka.DtoIn.RegisterDtoIn.class, "thrillPreference", value).isEmpty());
+                assertFalse(validator.validateValue(com.example.sikka.DtoIn.VisitorProfileDtoIn.class, "thrillPreference", value).isEmpty());
+                assertFalse(validator.validateValue(VisitorProfile.class, "thrillPreference", value).isEmpty());
+                assertFalse(validator.validateValue(Ride.class, "thrillLevel", value).isEmpty());
+            }
             assertFalse(validator.validateValue(Visit.class, "status", "OPEN").isEmpty());
             assertFalse(validator.validateValue(PaymentOrder.class, "status", "CANCELLED").isEmpty());
             assertFalse(validator.validateValue(VisitRecord.class, "status", "QUEUING").isEmpty());

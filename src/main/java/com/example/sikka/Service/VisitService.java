@@ -39,12 +39,25 @@ public class VisitService {
         return visitRepository.findAll();
     }
 
+    @Transactional
     public void add(VisitDtoIn dto) {
+        if (dto == null) {
+            throw new ApiException("Visit details are required");
+        }
         Account organizer = accountRepository.findAccountById(dto.getOrganizerId());
         if (organizer == null)
             throw new ApiException("organizer not found");
 
         checkTimes(dto.getPlannedStartTime(), dto.getPlannedEndTime());
+
+        VisitorProfile profile = visitorProfileRepository.findVisitorProfileByAccount_Id(organizer.getId());
+        if (profile == null) {
+            throw new ApiException("create your visitor profile first");
+        }
+        validateVisitDetails(dto.getVisitDate(), dto.getMaxParticipants());
+        if (!"ACTIVE".equals(organizer.getStatus())) {
+            throw new ApiException("Account is not active");
+        }
 
         Visit visit = new Visit();
         if (dto.getGroupId() != null) {
@@ -67,14 +80,24 @@ public class VisitService {
         visit.setStatus("DRAFT");
         visit.setMembersLocked(false);
         visitRepository.save(visit);
+        visitMemberService.addOrganizer(visit, profile);
     }
 
+    @Transactional
     public void update(Integer id, VisitDtoIn dto) {
-        Visit visit = visitRepository.findVisitById(id);
+        if (dto == null) {
+            throw new ApiException("Visit details are required");
+        }
+        Visit visit = visitRepository.findVisitByIdForUpdate(id);
         if (visit == null)
             throw new ApiException("visit not found");
 
         checkTimes(dto.getPlannedStartTime(), dto.getPlannedEndTime());
+
+        if ((!"DRAFT".equals(visit.getStatus()) && !"PLANNING".equals(visit.getStatus())) || Boolean.TRUE.equals(visit.getMembersLocked())) {
+            throw new ApiException("Visit details cannot be changed after planning starts or the visit closes");
+        }
+        validateVisitDetails(dto.getVisitDate(), dto.getMaxParticipants());
 
         if (dto.getMaxParticipants() < visitMemberRepository.countByVisit(visit))
             throw new ApiException("max participants is less than current members");
@@ -103,10 +126,17 @@ public class VisitService {
     // returns the raw invite code, or null for a solo visit
     @Transactional
     public String create(Integer accountId, CreateVisitDtoIn dto) {
+        if (dto == null) {
+            throw new ApiException("Visit details are required");
+        }
+        validateVisitDetails(dto.getVisitDate(), dto.getMaxParticipants());
         Account organizer = accountRepository.findAccountById(accountId);
         if (organizer == null)
             throw new ApiException("account not found");
 
+        if (!"ACTIVE".equals(organizer.getStatus())) {
+            throw new ApiException("Account is not active");
+        }
         VisitorProfile profile = visitorProfileRepository.findVisitorProfileByAccount_Id(accountId);
         if (profile == null)
             throw new ApiException("create your visitor profile first");
@@ -181,6 +211,9 @@ public class VisitService {
         if (visit == null)
             throw new ApiException("visit not found");
 
+        if (status == null || visit.getStatus() == null) {
+            throw new ApiException("Visit status is required");
+        }
         if (!isAllowed(visit.getStatus(), status))
             throw new ApiException("cannot change status from " + visit.getStatus() + " to " + status);
 
@@ -219,6 +252,15 @@ public class VisitService {
             throw new ApiException("visit not found");
         if (!visit.getOrganizer().getId().equals(accountId))
             throw new ApiException("only the organizer can do this");
+    }
+
+    private void validateVisitDetails(java.time.LocalDate visitDate, Integer maxParticipants) {
+        if (visitDate == null || visitDate.isBefore(java.time.LocalDate.now())) {
+            throw new ApiException("Visit date must be today or later");
+        }
+        if (maxParticipants == null || maxParticipants <= 0) {
+            throw new ApiException("Maximum participants must be positive");
+        }
     }
 
     private void checkTimes(LocalTime start, LocalTime end) {

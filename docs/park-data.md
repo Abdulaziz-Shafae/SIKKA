@@ -2,7 +2,7 @@
 
 Ride.category uses THRILL, FAMILY, KIDS, WATER, ARCADE. Ride.rideFeatures is an array; it is separate from audience/category and thrill level.
 
-Thrill levels accept LOW, MILD, EXTREME from official guides. MEDIUM and HIGH remain accepted for compatibility with existing records; they are internal legacy labels, not an asserted official scale. Do not silently equate MILD with MEDIUM or EXTREME with HIGH. The same vocabulary is accepted in visitor preferences.
+Thrill levels and visitor preferences accept only LOW, MILD, EXTREME. MEDIUM and HIGH are rejected. Existing records containing those old values require manual review against a verified source; do not silently convert them.
 
 Both Ride and Place use land codes: STEAM_TOWN, CITY_OF_THRILLS, TWILIGHT_GARDENS, DISCOVERY_SPRINGS, GRAND_EXPOSITION, VALLEY_OF_FORTUNE, CITADEL.
 

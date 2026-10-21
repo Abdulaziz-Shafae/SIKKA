@@ -70,6 +70,9 @@ public class PaymentOrderService {
             throw new ApiException("Account not found");
         }
 
+        if (!"ACTIVE".equals(account.getStatus())) {
+            throw new ApiException("Account is not active");
+        }
         Visit visit = visitRepository.findVisitByIdForUpdate(visitId);
 
         if (visit == null){
@@ -80,7 +83,7 @@ public class PaymentOrderService {
             throw new ApiException("Only the visit organizer can pay for the plan");
         }
 
-        if (visit.getVisitDate().isBefore(LocalDate.now())){
+        if (visit.getVisitDate() == null || visit.getVisitDate().isBefore(LocalDate.now())){
             throw new ApiException("Cannot pay for a past visit");
         }
 

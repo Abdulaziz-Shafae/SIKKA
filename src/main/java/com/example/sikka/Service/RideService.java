@@ -78,6 +78,12 @@ public class RideService {
     }
 
     private void validateRide(Ride ride) {
+        if (ride == null) {
+            throw new ApiException("Ride details are required");
+        }
+        if (ride.getThrillLevel() != null && !ride.getThrillLevel().matches("^(LOW|MILD|EXTREME)$")) {
+            throw new ApiException("Thrill level must be LOW, MILD or EXTREME");
+        }
         if (ride.getCompanionRequiredBelowHeightCm() != null && !Boolean.TRUE.equals(ride.getAdultCompanionRequired())) {
             throw new ApiException("Adult companion must be required when a companion height threshold is provided");
         }
@@ -95,6 +101,10 @@ public class RideService {
 
         if (ride.getMinWeightKg() != null && ride.getMaxWeightKg() != null && ride.getMinWeightKg().compareTo(ride.getMaxWeightKg()) > 0) {
             throw new ApiException("Minimum weight cannot exceed maximum weight");
+        }
+
+        if (ride.getWaitMinutes() != null && (ride.getWaitSource() == null || ride.getWaitSource().isBlank())) {
+            throw new ApiException("Wait source is required when waiting time is provided");
         }
 
         if (ride.getWaitMinutes() != null && ride.getWaitObservedAt() == null) {

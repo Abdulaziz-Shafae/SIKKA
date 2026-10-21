@@ -31,6 +31,9 @@ public class VisitorProfileService {
     }
 
     public void add(VisitorProfileDtoIn dto) {
+        if (dto == null) {
+            throw new ApiException("Profile details are required");
+        }
         Account account = accountRepository.findAccountById(dto.getAccountId());
         if (account == null)
             throw new ApiException("account not found");
@@ -77,6 +80,12 @@ public class VisitorProfileService {
     }
 
     private void fill(VisitorProfile p, VisitorProfileDtoIn dto) {
+        if (dto == null) {
+            throw new ApiException("Profile details are required");
+        }
+        if (dto.getThrillPreference() != null && !dto.getThrillPreference().matches("^(LOW|MILD|EXTREME)$")) {
+            throw new ApiException("Thrill preference must be LOW, MILD or EXTREME");
+        }
         p.setName(dto.getName());
         p.setBirthDate(dto.getBirthDate());
         p.setHeightCm(dto.getHeightCm());

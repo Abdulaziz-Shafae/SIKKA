@@ -85,6 +85,9 @@ public class VisitGroupService {
     }
 
     private String hash(String code) {
+        if (code == null || code.isBlank()) {
+            throw new ApiException("Invite code is required");
+        }
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
             byte[] bytes = md.digest(code.getBytes(StandardCharsets.UTF_8));
@@ -102,7 +105,17 @@ public class VisitGroupService {
                 g.getInvitationsEnabled(), g.getCreatedAt());
     }
     // creates a group for an existing visit and returns the raw invite code
+    @org.springframework.transaction.annotation.Transactional
     public String attachGroup(Visit visit, String groupName) {
+        if (visit == null || groupName == null || groupName.isBlank() || groupName.length() > 150) {
+            throw new ApiException("Visit and group name (up to 150 characters) are required");
+        }
+        if (visit.getGroup() != null) {
+            throw new ApiException("Visit already has a group");
+        }
+        if ((!"DRAFT".equals(visit.getStatus()) && !"PLANNING".equals(visit.getStatus())) || Boolean.TRUE.equals(visit.getMembersLocked())) {
+            throw new ApiException("Group cannot be added after planning starts or the visit closes");
+        }
         String code = newCode();
 
         VisitGroup group = new VisitGroup();
@@ -118,8 +131,9 @@ public class VisitGroupService {
     }
 
     // for a solo visit that wants friends later
+    @org.springframework.transaction.annotation.Transactional
     public String addGroupToVisit(Integer accountId, Integer visitId, String groupName) {
-        Visit visit = visitRepository.findVisitById(visitId);
+        Visit visit = visitRepository.findVisitByIdForUpdate(visitId);
         if (visit == null)
             throw new ApiException("visit not found");
         if (!visit.getOrganizer().getId().equals(accountId))

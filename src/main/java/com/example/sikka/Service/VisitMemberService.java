@@ -77,7 +77,7 @@ public class VisitMemberService {
             throw new ApiException("create your visitor profile first");
 
         VisitGroup group = visitGroupService.getGroupByInviteCode(dto.getCode());
-        if (!group.getInvitationsEnabled())
+        if (!Boolean.TRUE.equals(group.getInvitationsEnabled()))
             throw new ApiException("invitations are disabled for this group");
 
         Visit visit = group.getVisit();
@@ -88,7 +88,7 @@ public class VisitMemberService {
     }
 
     public void updateRsvp(Integer accountId, Integer visitId, String rsvp) {
-        if (!rsvp.matches("^(GOING|MAYBE|NOT_GOING)$"))
+        if (rsvp == null || !rsvp.matches("^(GOING|MAYBE|NOT_GOING)$"))
             throw new ApiException("rsvp must be GOING, MAYBE or NOT_GOING");
 
         VisitMember member = getMember(accountId, visitId);
@@ -128,6 +128,9 @@ public class VisitMemberService {
         if (!"GOING".equals(member.getRsvpStatus()))
             throw new ApiException("only going members can review");
 
+        if (dto == null || dto.getRating() == null || dto.getRating() < 1 || dto.getRating() > 5) {
+            throw new ApiException("Visit rating must be between 1 and 5");
+        }
         member.setVisitRating(dto.getRating());
         member.setVisitReview(dto.getReview());
         visitMemberRepository.save(member);

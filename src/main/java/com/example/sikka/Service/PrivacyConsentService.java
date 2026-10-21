@@ -54,6 +54,12 @@ public class PrivacyConsentService {
 
     @Transactional
     public void addPrivacyConsent(Integer accountId, PrivacyConsent privacyConsent){
+        if (privacyConsent == null || privacyConsent.getConsentKind() == null || !privacyConsent.getConsentKind().matches("^(HEALTH_STORAGE|LOCATION_SHARING|WHATSAPP|EMAIL_MARKETING)$")) {
+            throw new ApiException("Invalid consent kind");
+        }
+        if (privacyConsent.getPolicyVersion() == null || privacyConsent.getPolicyVersion().isBlank() || privacyConsent.getPolicyVersion().length() > 30) {
+            throw new ApiException("Policy version is required and must not exceed 30 characters");
+        }
         Account account = accountRepository.findAccountById(accountId);
 
         if (account == null){

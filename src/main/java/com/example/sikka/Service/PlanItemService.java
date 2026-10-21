@@ -138,8 +138,8 @@ public class PlanItemService {
             throw new ApiException("Account is not active");
         }
 
-        if (planItemDtoIn == null) {
-            throw new ApiException("Plan item data is required");
+        if (planItemDtoIn == null || planItemDtoIn.getPlanItemId() == null || planItemDtoIn.getPlanItemId() <= 0) {
+            throw new ApiException("A positive plan item ID is required");
         }
 
         PlanItem planItem = planItemRepository.findPlanItemById(planItemDtoIn.getPlanItemId());
