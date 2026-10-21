@@ -7,6 +7,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import com.example.sikka.DtoIn.CreateVisitDtoIn;
 
 @RestController
 @RequestMapping("/api/v1/visit")
@@ -36,5 +37,36 @@ public class VisitController {
     public ResponseEntity<?> delete(@PathVariable Integer id) {
         visitService.delete(id);
         return ResponseEntity.status(200).body(new ApiResponse("deleted successfully"));
+    }
+
+    @PostMapping("/create/{accountId}")
+    public ResponseEntity<?> create(@PathVariable Integer accountId, @RequestBody @Valid CreateVisitDtoIn dto) {
+        String code = visitService.create(accountId, dto);
+        if (code == null)
+            return ResponseEntity.status(200).body(new ApiResponse("visit created"));
+        return ResponseEntity.status(200).body(new ApiResponse("visit created, invite code: " + code));
+    }
+
+    @GetMapping("/my-visits/{accountId}")
+    public ResponseEntity<?> myVisits(@PathVariable Integer accountId) {
+        return ResponseEntity.status(200).body(visitService.myVisits(accountId));
+    }
+
+    @PutMapping("/cancel/{accountId}/{visitId}")
+    public ResponseEntity<?> cancel(@PathVariable Integer accountId, @PathVariable Integer visitId) {
+        visitService.cancel(accountId, visitId);
+        return ResponseEntity.status(200).body(new ApiResponse("visit cancelled"));
+    }
+
+    @PutMapping("/start/{accountId}/{visitId}")
+    public ResponseEntity<?> start(@PathVariable Integer accountId, @PathVariable Integer visitId) {
+        visitService.startVisit(accountId, visitId);
+        return ResponseEntity.status(200).body(new ApiResponse("visit started"));
+    }
+
+    @PutMapping("/complete/{accountId}/{visitId}")
+    public ResponseEntity<?> complete(@PathVariable Integer accountId, @PathVariable Integer visitId) {
+        visitService.completeVisit(accountId, visitId);
+        return ResponseEntity.status(200).body(new ApiResponse("visit completed"));
     }
 }

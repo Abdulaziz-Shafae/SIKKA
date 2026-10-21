@@ -182,7 +182,7 @@ public class PlanItemService {
             throw new ApiException("Invalid plan kind");
         }
 
-        if (!"DRAFT".equals(visit.getStatus()) && !"OPEN".equals(visit.getStatus()) && !"PLANNING".equals(visit.getStatus())) {
+        if (!"PLANNING".equals(visit.getStatus())) {
             throw new ApiException("Activity preferences cannot be changed in the current visit status");
         }
 

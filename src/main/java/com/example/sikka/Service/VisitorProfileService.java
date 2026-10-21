@@ -8,6 +8,8 @@ import com.example.sikka.Model.VisitorProfile;
 import com.example.sikka.Repository.AccountRepository;
 import com.example.sikka.Repository.VisitorProfileRepository;
 import lombok.RequiredArgsConstructor;
+import com.example.sikka.Model.VisitMember;
+import com.example.sikka.Repository.VisitMemberRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -19,6 +21,7 @@ public class VisitorProfileService {
 
     private final VisitorProfileRepository visitorProfileRepository;
     private final AccountRepository accountRepository;
+    private final VisitMemberRepository visitMemberRepository;
 
     public List<VisitorProfileDtoOut> get() {
         List<VisitorProfileDtoOut> list = new ArrayList<>();
@@ -56,6 +59,21 @@ public class VisitorProfileService {
 
         profile.getAccount().setVisitorProfile(null);
         visitorProfileRepository.delete(profile);
+    }
+
+    public VisitorProfileDtoOut getByAccount(Integer accountId) {
+        VisitorProfile profile = visitorProfileRepository.findVisitorProfileByAccount_Id(accountId);
+        if (profile == null)
+            throw new ApiException("profile not found");
+        return toDtoOut(profile);
+    }
+
+    // contract method for the other flows (full profile including healthData, never exposed in a Controller)
+    public VisitorProfile getProfileByMember(Integer memberId) {
+        VisitMember member = visitMemberRepository.findVisitMemberById(memberId);
+        if (member == null)
+            throw new ApiException("member not found");
+        return member.getVisitorProfile();
     }
 
     private void fill(VisitorProfile p, VisitorProfileDtoIn dto) {

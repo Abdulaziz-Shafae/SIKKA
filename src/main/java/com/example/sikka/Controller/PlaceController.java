@@ -42,4 +42,9 @@ public class PlaceController {
         placeService.deletePlace(placeId);
         return ResponseEntity.status(200).body(new ApiResponse("Place deleted successfully"));
     }
+
+    @GetMapping("/by-kind")
+    public ResponseEntity<?> getPlacesByKind(@RequestParam String kind){
+        return ResponseEntity.status(200).body(placeService.getPlaces(kind));
+    }
 }

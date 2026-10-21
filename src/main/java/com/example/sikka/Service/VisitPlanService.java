@@ -145,8 +145,12 @@ public class VisitPlanService {
             throw new ApiException("Visit not found");
         }
 
-        if (!"DRAFT".equals(visit.getStatus()) && !"OPEN".equals(visit.getStatus()) && !"PLANNING".equals(visit.getStatus())) {
+        if (!"PLANNING".equals(visit.getStatus())) {
             throw new ApiException("Plans cannot be created in the current visit status");
+        }
+
+        if (!visit.getOrganizer().getId().equals(accountId)) {
+            throw new ApiException("Only the visit organizer can start planning");
         }
 
         VisitMember visitMember = visitMemberRepository.findVisitMemberByVisit_IdAndVisitorProfile_Account_Id(visitId, accountId);
@@ -167,6 +171,7 @@ public class VisitPlanService {
             throw new ApiException("You already have an individual plan for this visit");
         }
 
+        visit.setMembersLocked(true);
         VisitPlan visitPlan = new VisitPlan();
         visitPlan.setVisit(visit);
         visitPlan.setOwnerVisitMember(visitMember);
@@ -197,7 +202,7 @@ public class VisitPlanService {
             throw new ApiException("Only the visit organizer can create the group plan");
         }
 
-        if (!"DRAFT".equals(visit.getStatus()) && !"OPEN".equals(visit.getStatus()) && !"PLANNING".equals(visit.getStatus())) {
+        if (!"PLANNING".equals(visit.getStatus())) {
             throw new ApiException("Plans cannot be created in the current visit status");
         }
 
@@ -221,6 +226,7 @@ public class VisitPlanService {
             }
         }
 
+        visit.setMembersLocked(true);
         VisitPlan visitPlan = new VisitPlan();
         visitPlan.setVisit(visit);
         visitPlan.setOwnerVisitMember(null);
@@ -257,7 +263,7 @@ public class VisitPlanService {
             throw new ApiException("Only the visit organizer can delete plans");
         }
 
-        if (!"DRAFT".equals(visit.getStatus()) && !"OPEN".equals(visit.getStatus()) && !"PLANNING".equals(visit.getStatus())) {
+        if (!"PLANNING".equals(visit.getStatus())) {
             throw new ApiException("Plans cannot be deleted in the current visit status");
         }
 
@@ -282,6 +288,31 @@ public class VisitPlanService {
         }
 
         visitPlanRepository.delete(visitPlan);
+    }
+
+    @Transactional(readOnly = true)
+    public String getPlanStatus(Integer visitId) {
+        Visit visit = visitRepository.findVisitById(visitId);
+        if (visit == null) {
+            throw new ApiException("Visit not found");
+        }
+        if ("CANCELLED".equals(visit.getStatus())) {
+            return "NOT_STARTED";
+        }
+        for (VisitPlan plan : visitPlanRepository.findAllByVisit_Id(visitId)) {
+            if ("GROUP".equals(plan.getPlanKind()) && plan.getPlanItems() != null && !plan.getPlanItems().isEmpty()) {
+                for (PlanItem item : plan.getPlanItems()) {
+                    if (item.getStartsAt() == null || item.getEndsAt() == null || !item.getEndsAt().isAfter(item.getStartsAt())) {
+                        return "NOT_STARTED";
+                    }
+                }
+                if (Boolean.TRUE.equals(plan.getIsActive()) && plan.getPlanApproval() != null && "APPROVED".equals(plan.getPlanApproval().getStatus())) {
+                    return "APPROVED";
+                }
+                return "GENERATED";
+            }
+        }
+        return "NOT_STARTED";
     }
 
     private VisitPlanDtoOut convertVisitPlanToDtoOut(VisitPlan visitPlan) {

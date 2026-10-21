@@ -84,8 +84,8 @@ public class PaymentOrderService {
             throw new ApiException("Cannot pay for a past visit");
         }
 
-        if (!"DRAFT".equals(visit.getStatus()) && !"OPEN".equals(visit.getStatus())){
-            throw new ApiException("Payment is only allowed for draft or open visits");
+        if (!"DRAFT".equals(visit.getStatus())){
+            throw new ApiException("Payment is only allowed for draft visits");
         }
 
         List<PaymentOrder> paymentOrders = paymentOrderRepository.findPaymentOrdersByVisitId(visitId);
@@ -99,10 +99,6 @@ public class PaymentOrderService {
 
             if ("PENDING".equals(paymentOrder.getStatus())){
                 throw new ApiException("A pending payment order already exists for this visit");
-            }
-
-            if ("REFUNDED".equals(paymentOrder.getStatus())){
-                throw new ApiException("Payment after a refund is not supported yet");
             }
 
             if (!"FAILED".equals(paymentOrder.getStatus())){

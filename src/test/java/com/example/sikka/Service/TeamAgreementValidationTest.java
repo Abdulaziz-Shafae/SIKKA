@@ -1,0 +1,59 @@
+package com.example.sikka.Service;
+
+import com.example.sikka.Api.ApiException;
+import com.example.sikka.Model.*;
+import com.example.sikka.Repository.*;
+import jakarta.validation.Validation;
+import org.junit.jupiter.api.Test;
+import java.time.LocalDateTime;
+import java.util.List;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+class TeamAgreementValidationTest {
+
+    @Test
+    void acceptOfficialThrillLevelsDuringRegistration() {
+        try (var factory = Validation.buildDefaultValidatorFactory()) {
+            var validator = factory.getValidator();
+            for (String value : List.of("LOW", "MILD", "EXTREME")) {
+                assertTrue(validator.validateValue(com.example.sikka.DtoIn.RegisterDtoIn.class, "thrillPreference", value).isEmpty());
+                assertTrue(validator.validateValue(VisitorProfile.class, "thrillPreference", value).isEmpty());
+            }
+            assertFalse(validator.validateValue(Visit.class, "status", "OPEN").isEmpty());
+            assertFalse(validator.validateValue(PaymentOrder.class, "status", "CANCELLED").isEmpty());
+            assertFalse(validator.validateValue(VisitRecord.class, "status", "QUEUING").isEmpty());
+            assertFalse(validator.validateValue(Notification.class, "status", "READ").isEmpty());
+        }
+    }
+
+    @Test
+    void allowFilteringShops() {
+        PlaceRepository repository = mock(PlaceRepository.class);
+        when(repository.findPlacesByKind("SHOP")).thenReturn(List.of());
+        assertTrue(new PlaceService(repository).getPlaces("SHOP").isEmpty());
+        verify(repository).findPlacesByKind("SHOP");
+    }
+
+    @Test
+    void excludeStaleAndUnknownWaitReadings() {
+        RideRepository repository = mock(RideRepository.class);
+        Ride fresh = new Ride();
+        fresh.setWaitMinutes(0);
+        fresh.setWaitObservedAt(LocalDateTime.now().minusMinutes(1));
+        fresh.setWaitSource("ADMIN");
+        Ride stale = new Ride();
+        stale.setWaitMinutes(5);
+        stale.setWaitObservedAt(LocalDateTime.now().minusHours(1));
+        stale.setWaitSource("ADMIN");
+        when(repository.findRidesByStatus("OPEN")).thenReturn(List.of(fresh, stale, new Ride()));
+        assertEquals(List.of(fresh), new RideService(repository, mock(VisitorProfileRepository.class)).getOpenRides());
+    }
+
+    @Test
+    void completedRideLookupRequiresCompletedStatus() {
+        VisitRecordRepository repository = mock(VisitRecordRepository.class);
+        when(repository.existsByVisitMember_IdAndRide_IdAndStatus(1, 2, "COMPLETED")).thenReturn(true);
+        assertTrue(new VisitRecordService(repository, mock(AccountRepository.class), mock(VisitRepository.class), mock(VisitMemberRepository.class), mock(RideRepository.class)).hasCompletedRide(1, 2));
+    }
+}

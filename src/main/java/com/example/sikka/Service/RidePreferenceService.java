@@ -11,6 +11,8 @@ import com.example.sikka.Repository.RideRepository;
 import com.example.sikka.Repository.VisitorProfileRepository;
 import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Service;
+import com.example.sikka.Model.VisitMember;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -22,6 +24,7 @@ public class RidePreferenceService {
     private final VisitorProfileRepository visitorProfileRepository;
     private final AccountRepository accountRepository;
     private final RideRepository rideRepository;
+    private final VisitRecordService visitRecordService;
 
     public List<RidePreference> getMyRidePreferences(Integer accountId){
         Account account = accountRepository.findAccountById(accountId);
@@ -53,6 +56,7 @@ public class RidePreferenceService {
         return preference;
     }
 
+    @Transactional
     public void addRidePreference(Integer accountId, Integer rideId, RidePreference ridePreference){
         Account account = accountRepository.findAccountById(accountId);
 
@@ -76,6 +80,19 @@ public class RidePreferenceService {
             throw new ApiException("A preference already exists for this ride");
         }
 
+        boolean completedRide = false;
+
+        for (VisitMember visitMember : visitorProfile.getVisitMembers()){
+            if (visitRecordService.hasCompletedRide(visitMember.getId(), rideId)){
+                completedRide = true;
+                break;
+            }
+        }
+
+        if (!completedRide){
+            throw new ApiException("You must complete this ride before setting a preference");
+        }
+
         RidePreference newPreference = new RidePreference();
         newPreference.setPreference(ridePreference.getPreference());
         newPreference.setVisitorProfile(visitorProfile);
@@ -84,6 +101,7 @@ public class RidePreferenceService {
         ridePreferenceRepository.save(newPreference);
     }
 
+    @Transactional
     public void updateRidePreference(Integer accountId, Integer preferenceId, RidePreference ridePreference){
         RidePreference oldPreference = ridePreferenceRepository.findRidePreferenceById(preferenceId);
 
@@ -93,6 +111,19 @@ public class RidePreferenceService {
 
         if (!oldPreference.getVisitorProfile().getAccount().getId().equals(accountId)){
             throw new ApiException("You cannot update another user's preference");
+        }
+
+        boolean completedRide = false;
+
+        for (VisitMember visitMember : oldPreference.getVisitorProfile().getVisitMembers()){
+            if (visitRecordService.hasCompletedRide(visitMember.getId(), oldPreference.getRide().getId())){
+                completedRide = true;
+                break;
+            }
+        }
+
+        if (!completedRide){
+            throw new ApiException("You must complete this ride before updating a preference");
         }
 
         oldPreference.setPreference(ridePreference.getPreference());
@@ -112,5 +143,15 @@ public class RidePreferenceService {
         }
 
         ridePreferenceRepository.delete(preference);
+    }
+
+    public List<RidePreference> getPreferences(Integer profileId){
+        VisitorProfile visitorProfile = visitorProfileRepository.findVisitorProfileById(profileId);
+
+        if (visitorProfile == null){
+            throw new ApiException("Visitor profile not found");
+        }
+
+        return ridePreferenceRepository.findRidePreferencesByVisitorProfileId(profileId);
     }
 }

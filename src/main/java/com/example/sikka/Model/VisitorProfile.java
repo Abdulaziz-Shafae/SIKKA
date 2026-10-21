@@ -39,6 +39,7 @@ public class VisitorProfile {
     private BigDecimal weightKg;
 
     @Column(columnDefinition = "varchar(30)")
+    @Pattern(regexp = "^(LOW|MILD|MEDIUM|HIGH|EXTREME)$", message = "Invalid thrill preference")
     private String thrillPreference;
 
     @Column(columnDefinition = "json")

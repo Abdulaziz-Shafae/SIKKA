@@ -36,8 +36,7 @@ public class VisitMember {
     @Column(columnDefinition = "datetime")
     private LocalDateTime checkedInAt;
 
-    @Min(value = 1, message = "rating must be between 1 and 5")
-    @Max(value = 5, message = "rating must be between 1 and 5")
+
     @Column(columnDefinition = "tinyint")
     private Integer visitRating;
 

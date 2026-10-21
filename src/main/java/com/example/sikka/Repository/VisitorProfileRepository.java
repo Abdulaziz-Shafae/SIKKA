@@ -10,4 +10,5 @@ public interface VisitorProfileRepository extends JpaRepository<VisitorProfile, 
     VisitorProfile findVisitorProfileById(Integer id);
 
     VisitorProfile findVisitorProfileByAccountId(Integer accountId);
+    VisitorProfile findVisitorProfileByAccount_Id(Integer accountId);
 }

@@ -37,4 +37,9 @@ public class VisitorProfileController {
         visitorProfileService.delete(id);
         return ResponseEntity.status(200).body(new ApiResponse("deleted successfully"));
     }
+
+    @GetMapping("/get-by-account/{accountId}")
+    public ResponseEntity<?> getByAccount(@PathVariable Integer accountId) {
+        return ResponseEntity.status(200).body(visitorProfileService.getByAccount(accountId));
+    }
 }

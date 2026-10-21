@@ -44,6 +44,8 @@ public class Notification {
     @Column(columnDefinition = "VARCHAR(20) not null")
     private String status = "PENDING";
 
+    private LocalDateTime readAt;
+
     private LocalDateTime scheduledAt;
 
     @CreationTimestamp

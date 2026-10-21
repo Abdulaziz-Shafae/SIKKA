@@ -247,6 +247,11 @@ public class VisitRecordService {
         visitRecordRepository.save(visitRecord);
     }
 
+    @Transactional(readOnly = true)
+    public boolean hasCompletedRide(Integer memberId, Integer rideId) {
+        return visitRecordRepository.existsByVisitMember_IdAndRide_IdAndStatus(memberId, rideId, "COMPLETED");
+    }
+
     @Transactional
     public void rateVisitRecord(Integer accountId, RateVisitRecordDtoIn rateVisitRecordDtoIn) {
         Account account = accountRepository.findAccountById(accountId);

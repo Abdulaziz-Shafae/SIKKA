@@ -18,4 +18,8 @@ public interface VisitMemberRepository extends JpaRepository<VisitMember, Intege
     VisitMember findVisitMemberByVisit_IdAndVisitorProfile_Account_Id(Integer visitId, Integer accountId);
 
     List<VisitMember> findAllByVisit_IdAndRsvpStatus(Integer visitId, String rsvpStatus);
+
+    List<VisitMember> findAllByVisit_Id(Integer visitId);
+
+    List<VisitMember> findAllByVisitorProfile_Account_Id(Integer accountId);
 }

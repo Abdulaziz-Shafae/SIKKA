@@ -25,10 +25,8 @@ public class PrivacyConsent {
     private Integer id;
 
     @NotBlank(message = "Consent kind cannot be blank")
-    @Pattern(
-            regexp = "^(HEALTH|LOCATION|COMMUNICATION)$",
-            message = "Consent kind must be HEALTH, LOCATION or COMMUNICATION"
-    )
+    @Pattern(regexp = "^(HEALTH_STORAGE|LOCATION_SHARING|WHATSAPP|EMAIL_MARKETING)$",
+            message = "Consent kind must be HEALTH_STORAGE, LOCATION_SHARING, WHATSAPP or EMAIL_MARKETING")
     @Column(nullable = false, length = 30)
     private String consentKind;
 

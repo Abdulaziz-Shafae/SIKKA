@@ -25,8 +25,7 @@ public class RidePreference {
     private Integer id;
 
     @NotBlank(message = "Preference cannot be blank")
-    @Pattern(
-            regexp = "^(REPEAT|AVOID|NEUTRAL)$",
+    @Pattern(regexp = "^(REPEAT|AVOID|NEUTRAL)$",
             message = "Preference must be REPEAT, AVOID or NEUTRAL"
     )
     @Column(nullable = false, length = 10)

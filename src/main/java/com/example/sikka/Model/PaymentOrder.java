@@ -33,10 +33,7 @@ public class PaymentOrder {
     private Integer attemptNo = 1;
 
     @NotBlank(message = "Payment kind cannot be blank")
-    @Pattern(
-            regexp = "^(INITIAL|RETRY)$",
-            message = "Payment kind must be INITIAL or RETRY"
-    )
+    @Pattern(regexp = "^(INITIAL|RETRY)$", message = "Payment kind must be INITIAL or RETRY")
     @Column(nullable = false, length = 10)
     private String kind = "INITIAL";
 
@@ -47,10 +44,7 @@ public class PaymentOrder {
     private BigDecimal amountSar;
 
     @NotBlank(message = "Payment status cannot be blank")
-    @Pattern(
-            regexp = "^(PENDING|PAID|FAILED|REFUNDED)$",
-            message = "Payment status must be PENDING, PAID, FAILED or REFUNDED"
-    )
+    @Pattern(regexp = "^(PENDING|PAID|FAILED)$", message = "Payment status must be PENDING, PAID or FAILED")
     @Column(nullable = false, length = 20)
     private String status = "PENDING";
 

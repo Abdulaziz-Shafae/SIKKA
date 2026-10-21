@@ -133,6 +133,12 @@ public class NotificationService {
     }
 
     @Transactional
+    public void sendNotification(Integer accountId, Integer visitId, String channel, String type, String title, String message) {
+        NotificationDtoIn dto = new NotificationDtoIn(visitId, channel, type, title, message, null);
+        createNotification(accountId, dto);
+    }
+
+    @Transactional
     public void createNotification(Integer recipientAccountId, NotificationDtoIn notificationDtoIn) {
         Account account = accountRepository.findAccountById(recipientAccountId);
 

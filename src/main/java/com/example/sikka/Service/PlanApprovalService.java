@@ -24,6 +24,7 @@ public class PlanApprovalService {
     private final PlanApprovalRepository planApprovalRepository;
     private final VisitPlanRepository visitPlanRepository;
     private final AccountRepository accountRepository;
+    private final VisitService visitService;
 
     @Transactional(readOnly = true)
     public PlanApprovalDtoOut getPlanApproval(Integer accountId, Integer visitPlanId) {
@@ -208,7 +209,7 @@ public class PlanApprovalService {
             }
 
             visitPlan.setIsActive(true);
-            visit.setStatus("READY");
+            visitService.changeStatus(visit.getId(), "READY");
         }
 
         planApproval.setStatus(status);

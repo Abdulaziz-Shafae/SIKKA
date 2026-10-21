@@ -37,4 +37,23 @@ public class VisitGroupController {
         visitGroupService.delete(id);
         return ResponseEntity.status(200).body(new ApiResponse("deleted successfully"));
     }
+
+    @PostMapping("/add-group/{accountId}/{visitId}")
+    public ResponseEntity<?> addGroupToVisit(@PathVariable Integer accountId, @PathVariable Integer visitId,
+                                             @RequestParam String groupName) {
+        String code = visitGroupService.addGroupToVisit(accountId, visitId, groupName);
+        return ResponseEntity.status(200).body(new ApiResponse("group added, invite code: " + code));
+    }
+
+    @PutMapping("/regenerate-code/{accountId}/{visitId}")
+    public ResponseEntity<?> regenerateCode(@PathVariable Integer accountId, @PathVariable Integer visitId) {
+        String code = visitGroupService.regenerateCode(accountId, visitId);
+        return ResponseEntity.status(200).body(new ApiResponse("new invite code: " + code));
+    }
+
+    @PutMapping("/toggle-invitations/{accountId}/{visitId}")
+    public ResponseEntity<?> toggleInvitations(@PathVariable Integer accountId, @PathVariable Integer visitId) {
+        boolean enabled = visitGroupService.toggleInvitations(accountId, visitId);
+        return ResponseEntity.status(200).body(new ApiResponse(enabled ? "invitations enabled" : "invitations disabled"));
+    }
 }
