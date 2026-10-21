@@ -60,46 +60,39 @@ public class RideService {
             throw new ApiException("Ride not found");
         }
 
-        if (!ride.getPlanItems().isEmpty()
-                || !ride.getVisitRecords().isEmpty()
-                || !ride.getRidePreferences().isEmpty()) {
-            throw new ApiException(
-                    "Cannot delete a ride linked to plans, records or preferences"
-            );
+        if (!ride.getPlanItems().isEmpty() || !ride.getVisitRecords().isEmpty() || !ride.getRidePreferences().isEmpty()) {
+            throw new ApiException( "Cannot delete a ride linked to plans, records or preferences" );
         }
 
         rideRepository.delete(ride);
     }
 
     private void validateRide(Ride ride) {
-        if (ride.getMinHeightCm() != null
-                && ride.getMaxHeightCm() != null
-                && ride.getMinHeightCm().compareTo(ride.getMaxHeightCm()) > 0) {
+        if (ride.getCompanionRequiredBelowHeightCm() != null && !Boolean.TRUE.equals(ride.getAdultCompanionRequired())) {
+            throw new ApiException("Adult companion must be required when a companion height threshold is provided");
+        }
+        if (ride.getCompanionRequiredBelowHeightCm() != null && ride.getMinHeightCm() != null && ride.getCompanionRequiredBelowHeightCm().compareTo(ride.getMinHeightCm()) < 0) {
+            throw new ApiException("Companion height threshold cannot be below minimum ride height");
+        }
+
+        if (ride.getMinHeightCm() != null && ride.getMaxHeightCm() != null && ride.getMinHeightCm().compareTo(ride.getMaxHeightCm()) > 0) {
             throw new ApiException("Minimum height cannot exceed maximum height");
         }
 
-        if (ride.getMinAgeYears() != null
-                && ride.getMaxAgeYears() != null
-                && ride.getMinAgeYears() > ride.getMaxAgeYears()) {
+        if (ride.getMinAgeYears() != null && ride.getMaxAgeYears() != null && ride.getMinAgeYears() > ride.getMaxAgeYears()) {
             throw new ApiException("Minimum age cannot exceed maximum age");
         }
 
-        if (ride.getMinWeightKg() != null
-                && ride.getMaxWeightKg() != null
-                && ride.getMinWeightKg().compareTo(ride.getMaxWeightKg()) > 0) {
+        if (ride.getMinWeightKg() != null && ride.getMaxWeightKg() != null && ride.getMinWeightKg().compareTo(ride.getMaxWeightKg()) > 0) {
             throw new ApiException("Minimum weight cannot exceed maximum weight");
         }
 
         if (ride.getWaitMinutes() != null && ride.getWaitObservedAt() == null) {
-            throw new ApiException(
-                    "Wait observation time is required when waiting time is provided"
-            );
+            throw new ApiException( "Wait observation time is required when waiting time is provided" );
         }
 
         if (ride.getWaitMinutes() == null && ride.getWaitObservedAt() != null) {
-            throw new ApiException(
-                    "Waiting time is required when wait observation time is provided"
-            );
+            throw new ApiException( "Waiting time is required when wait observation time is provided" );
         }
 
         if ((ride.getMapX() == null) != (ride.getMapY() == null)) {
@@ -109,6 +102,13 @@ public class RideService {
 
     private void copyRideFields(Ride target, Ride source) {
         target.setName(source.getName());
+        target.setLand(source.getLand());
+        target.setRideFeatures(source.getRideFeatures());
+        target.setAdultCompanionRequired(source.getAdultCompanionRequired());
+        target.setCompanionRequiredBelowHeightCm(source.getCompanionRequiredBelowHeightCm());
+        target.setRecommendedMinAgeYears(source.getRecommendedMinAgeYears());
+        target.setRecommendedUnaccompaniedAgeYears(source.getRecommendedUnaccompaniedAgeYears());
+        target.setRequirementsVerifiedAt(source.getRequirementsVerifiedAt());
         target.setCategory(source.getCategory());
         target.setThrillLevel(source.getThrillLevel());
         target.setStatus(source.getStatus());

@@ -29,22 +29,42 @@ public class Ride {
     @Column(nullable = false, length = 150)
     private String name;
 
+    @Pattern(regexp = "^(THRILL|FAMILY|KIDS|WATER|ARCADE)$", message = "Category must be THRILL, FAMILY, KIDS, WATER or ARCADE")
     @Size(max = 60, message = "Category must not exceed 60 characters")
     @Column(length = 60)
     private String category;
 
-    @Pattern(
-            regexp = "^(LOW|MEDIUM|HIGH)$",
-            message = "Thrill level must be LOW, MEDIUM or HIGH"
-    )
+    @Pattern( regexp = "^(LOW|MILD|MEDIUM|HIGH|EXTREME)$", message = "Thrill level must be LOW, MILD, MEDIUM, HIGH or EXTREME" )
     @Column(length = 20)
     private String thrillLevel;
 
+    @Pattern(regexp = "^(STEAM_TOWN|CITY_OF_THRILLS|TWILIGHT_GARDENS|DISCOVERY_SPRINGS|GRAND_EXPOSITION|VALLEY_OF_FORTUNE|CITADEL)$", message = "Invalid land")
+    @Column(length = 60)
+    private String land;
+
+    @ElementCollection
+    @Column(length = 60)
+    private Set<@Pattern(regexp = "^(ROLLER_COASTER|FLAT_RIDE|DROP_TOWER|DARK_RIDE|WATER_RIDE|INTERACTIVE|PLAYGROUND|RECORD_BREAKING|ARCADE_CARNIVAL)$", message = "Invalid rideFeatures value") String> rideFeatures = new HashSet<>();
+
+    // Null means not verified; false means no companion requirement is published.
+    private Boolean adultCompanionRequired;
+
+    @Positive(message = "Companion height threshold must be positive")
+    @Digits(integer = 3, fraction = 2, message = "Invalid companion height threshold")
+    @Column(precision = 5, scale = 2)
+    private BigDecimal companionRequiredBelowHeightCm;
+
+    @PositiveOrZero(message = "Recommended minimum age cannot be negative")
+    private Integer recommendedMinAgeYears;
+
+    @PositiveOrZero(message = "Recommended unaccompanied age cannot be negative")
+    private Integer recommendedUnaccompaniedAgeYears;
+
+    @PastOrPresent(message = "Requirements verification cannot be in the future")
+    private LocalDateTime requirementsVerifiedAt;
+
     @NotBlank(message = "Status cannot be blank")
-    @Pattern(
-            regexp = "^(OPEN|CLOSED|UNAVAILABLE)$",
-            message = "Status must be OPEN, CLOSED or UNAVAILABLE"
-    )
+    @Pattern( regexp = "^(OPEN|CLOSED|UNAVAILABLE)$", message = "Status must be OPEN, CLOSED or UNAVAILABLE" )
     @Column(nullable = false, length = 20)
     private String status = "UNAVAILABLE";
 
