@@ -7,7 +7,10 @@ import com.example.sikka.Model.Account;
 import com.example.sikka.Repository.AccountRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-
+import com.example.sikka.DtoIn.RegisterDtoIn;
+import com.example.sikka.Model.VisitorProfile;
+import com.example.sikka.Repository.VisitorProfileRepository;
+import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -16,7 +19,7 @@ import java.util.List;
 public class AccountService {
 
     private final AccountRepository accountRepository;
-
+    private final VisitorProfileRepository visitorProfileRepository;
     public List<AccountDtoOut> get() {
         List<AccountDtoOut> list = new ArrayList<>();
         for (Account a : accountRepository.findAll())
@@ -59,6 +62,42 @@ public class AccountService {
             throw new ApiException("account not found");
 
         accountRepository.delete(account);
+    }
+
+    // creates the account and its visitor profile together (@Transactional: both or none)
+    @Transactional
+    public void register(RegisterDtoIn dto) {
+        if (accountRepository.findAccountByEmail(dto.getEmail()) != null)
+            throw new ApiException("email already exists");
+
+        Account account = new Account();
+        account.setName(dto.getName());
+        account.setEmail(dto.getEmail());
+        account.setPasswordHash(dto.getPassword());
+        account.setRole("USER");
+        account.setStatus("ACTIVE");
+        account.setEmailVerified(false);
+        accountRepository.save(account);
+
+        VisitorProfile profile = new VisitorProfile();
+        profile.setName(dto.getName());
+        profile.setBirthDate(dto.getBirthDate());
+        profile.setHeightCm(dto.getHeightCm());
+        profile.setWeightKg(dto.getWeightKg());
+        profile.setThrillPreference(dto.getThrillPreference());
+        profile.setPreferredRideTypes(dto.getPreferredRideTypes());
+        profile.setDislikedRideFeatures(dto.getDislikedRideFeatures());
+        profile.setFoodPreferences(dto.getFoodPreferences());
+        profile.setAccount(account);
+        visitorProfileRepository.save(profile);
+    }
+
+    // contract method for the other flows
+    public Account getAccount(Integer accountId) {
+        Account account = accountRepository.findAccountById(accountId);
+        if (account == null)
+            throw new ApiException("account not found");
+        return account;
     }
 
     private AccountDtoOut toDtoOut(Account a) {

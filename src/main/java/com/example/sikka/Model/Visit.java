@@ -41,10 +41,13 @@ public class Visit {
     @Column(columnDefinition = "time")
     private LocalTime plannedEndTime;
 
-    @Pattern(regexp = "^(DRAFT|OPEN|PLANNING|READY|IN_PROGRESS|COMPLETED|CANCELLED)$",
+    @Pattern(regexp = "^(DRAFT|PLANNING|READY|IN_PROGRESS|COMPLETED|CANCELLED)$",
             message = "invalid visit status")
     @Column(columnDefinition = "varchar(20) not null default 'DRAFT'")
     private String status;
+
+    @Column(columnDefinition = "boolean not null default false")
+    private Boolean membersLocked = false;
 
     @CreationTimestamp
     @Column(nullable = false, updatable = false)

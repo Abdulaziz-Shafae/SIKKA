@@ -2,11 +2,13 @@ package com.example.sikka.Controller;
 
 import com.example.sikka.Api.ApiResponse;
 import com.example.sikka.DtoIn.AccountDtoIn;
+import com.example.sikka.DtoIn.RegisterDtoIn;
 import com.example.sikka.Service.AccountService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import com.example.sikka.Service.VisitorProfileService;
 
 @RestController
 @RequestMapping("/api/v1/account")
@@ -14,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 public class AccountController {
 
     private final AccountService accountService;
+
 
     @GetMapping("/get")
     public ResponseEntity<?> get() {
@@ -37,4 +40,14 @@ public class AccountController {
         accountService.delete(id);
         return ResponseEntity.status(200).body(new ApiResponse("deleted successfully"));
     }
+
+    @PostMapping("/register")
+    public ResponseEntity<?> register(@RequestBody @Valid RegisterDtoIn dto) {
+        accountService.register(dto);
+        return ResponseEntity.status(200).body(new ApiResponse("registered successfully"));
+    }
+
+
+
+
 }
