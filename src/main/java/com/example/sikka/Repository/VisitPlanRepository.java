@@ -25,4 +25,7 @@ public interface VisitPlanRepository extends JpaRepository<VisitPlan, Integer> {
     @Query("select p from VisitPlan p where p.id = :visitPlanId")
     VisitPlan findVisitPlanByIdForUpdate(@Param("visitPlanId") Integer visitPlanId);
 
+    @Query("SELECT DISTINCT vp FROM VisitPlan vp JOIN vp.planItems pi JOIN pi.ride r WHERE vp.planKind = 'GROUP' AND vp.isActive = true AND vp.visit.status = 'IN_PROGRESS' AND r.id = :rideId")
+    List<VisitPlan> findActiveGroupPlansAffectedByRide(@Param("rideId") Integer rideId);
+
 }

@@ -199,4 +199,18 @@ public class NotificationService {
         notification.setStatus("PENDING");
         notificationRepository.save(notification);
     }
+
+    @Transactional
+    public void sendNotification(Integer accountId, Integer visitId, String channel, String type, String title, String message) {
+        NotificationDtoIn notificationDtoIn = new NotificationDtoIn();
+
+        notificationDtoIn.setChannel(channel);
+        notificationDtoIn.setType(type);
+        notificationDtoIn.setTitle(title);
+        notificationDtoIn.setMessage(message);
+        notificationDtoIn.setVisitId(visitId);
+
+        createNotification(accountId, notificationDtoIn);
+    }
+
 }

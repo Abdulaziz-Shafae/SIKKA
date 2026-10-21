@@ -4,16 +4,8 @@ import com.example.sikka.Api.ApiException;
 import com.example.sikka.DtoOut.PlanItemDtoOut;
 import com.example.sikka.DtoOut.VisitPlanDetailsDtoOut;
 import com.example.sikka.DtoOut.VisitPlanDtoOut;
-import com.example.sikka.Model.Account;
-import com.example.sikka.Model.PlanItem;
-import com.example.sikka.Model.Visit;
-import com.example.sikka.Model.VisitMember;
-import com.example.sikka.Model.VisitPlan;
-import com.example.sikka.Repository.AccountRepository;
-import com.example.sikka.Repository.PaymentOrderRepository;
-import com.example.sikka.Repository.VisitMemberRepository;
-import com.example.sikka.Repository.VisitPlanRepository;
-import com.example.sikka.Repository.VisitRepository;
+import com.example.sikka.Model.*;
+import com.example.sikka.Repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,6 +23,7 @@ public class VisitPlanService {
     private final VisitRepository visitRepository;
     private final VisitMemberRepository visitMemberRepository;
     private final PaymentOrderRepository paymentOrderRepository;
+    private final RideRepository rideRepository;
 
     @Transactional(readOnly = true)
     public List<VisitPlanDtoOut> getVisitPlans(Integer accountId, Integer visitId) {
@@ -145,8 +138,8 @@ public class VisitPlanService {
             throw new ApiException("Visit not found");
         }
 
-        if (!"DRAFT".equals(visit.getStatus()) && !"OPEN".equals(visit.getStatus()) && !"PLANNING".equals(visit.getStatus())) {
-            throw new ApiException("Plans cannot be created in the current visit status");
+        if (!"PLANNING".equals(visit.getStatus())) {
+            throw new ApiException("Visit must be in PLANNING status");
         }
 
         VisitMember visitMember = visitMemberRepository.findVisitMemberByVisit_IdAndVisitorProfile_Account_Id(visitId, accountId);
@@ -197,8 +190,8 @@ public class VisitPlanService {
             throw new ApiException("Only the visit organizer can create the group plan");
         }
 
-        if (!"DRAFT".equals(visit.getStatus()) && !"OPEN".equals(visit.getStatus()) && !"PLANNING".equals(visit.getStatus())) {
-            throw new ApiException("Plans cannot be created in the current visit status");
+        if (!"PLANNING".equals(visit.getStatus())) {
+            throw new ApiException("Visit must be in PLANNING status");
         }
 
         if (!paymentOrderRepository.existsByVisit_IdAndStatusAndVerifiedAtIsNotNull(visitId, "PAID")) {
@@ -257,7 +250,7 @@ public class VisitPlanService {
             throw new ApiException("Only the visit organizer can delete plans");
         }
 
-        if (!"DRAFT".equals(visit.getStatus()) && !"OPEN".equals(visit.getStatus()) && !"PLANNING".equals(visit.getStatus())) {
+        if (!"DRAFT".equals(visit.getStatus()) && !"PLANNING".equals(visit.getStatus())) {
             throw new ApiException("Plans cannot be deleted in the current visit status");
         }
 
@@ -283,6 +276,102 @@ public class VisitPlanService {
 
         visitPlanRepository.delete(visitPlan);
     }
+
+
+    @Transactional(readOnly = true)
+    public String getPlanStatus(Integer visitId) {
+        Visit visit = visitRepository.findVisitById(visitId);
+
+        if (visit == null) {
+            throw new ApiException("Visit not found");
+        }
+
+        List<VisitPlan> visitPlans = visitPlanRepository.findAllByVisit_Id(visitId);
+
+        for (VisitPlan visitPlan : visitPlans) {
+            if (!"GROUP".equals(visitPlan.getPlanKind())) {
+                continue;
+            }
+
+            if (Boolean.TRUE.equals(visitPlan.getIsActive())) {
+                return "APPROVED";
+            }
+
+            if (visitPlan.getPlanItems() != null && !visitPlan.getPlanItems().isEmpty()) {
+                return "GENERATED";
+            }
+        }
+
+        return "NOT_STARTED";
+    }
+
+
+    @Transactional
+    public void startPlanning(Integer accountId, Integer visitId) {
+        Account account = accountRepository.findAccountById(accountId);
+
+        if (account == null) {
+            throw new ApiException("Account not found");
+        }
+
+        if (!"ACTIVE".equals(account.getStatus())) {
+            throw new ApiException("Account is not active");
+        }
+
+        Visit visit = visitRepository.findVisitByIdForUpdate(visitId);
+
+        if (visit == null) {
+            throw new ApiException("Visit not found");
+        }
+
+        if (!visit.getOrganizer().getId().equals(accountId)) {
+            throw new ApiException("Only the visit organizer can start planning");
+        }
+
+        if (!"PLANNING".equals(visit.getStatus())) {
+            throw new ApiException("Visit must be in PLANNING status");
+        }
+
+        if (!paymentOrderRepository.existsByVisit_IdAndStatusAndVerifiedAtIsNotNull(visitId, "PAID")) {
+            throw new ApiException("A verified payment is required before planning");
+        }
+
+        List<VisitMember> visitMembers = visitMemberRepository.findAllByVisit_IdAndRsvpStatus(visitId, "GOING");
+
+        if (visitMembers.isEmpty()) {
+            throw new ApiException("The visit must have at least one GOING member");
+        }
+
+        for (VisitMember visitMember : visitMembers) {
+            if (!visitPlanRepository.existsByVisit_IdAndOwnerVisitMember_IdAndPlanKind(visitId, visitMember.getId(), "INDIVIDUAL")) {
+                Integer memberAccountId = visitMember.getVisitorProfile().getAccount().getId();
+                createIndividualVisitPlan(memberAccountId, visitId);
+            }
+        }
+
+        if (!visitPlanRepository.existsByVisit_IdAndPlanKind(visitId, "GROUP")) {
+            createGroupVisitPlan(accountId, visitId);
+        }
+    }
+
+
+    @Transactional(readOnly = true)
+    public void onRideChanged(Integer rideId) {
+        Ride ride = rideRepository.findRideById(rideId);
+
+        if (ride == null) {
+            throw new ApiException("Ride not found");
+        }
+
+        List<VisitPlan> affectedPlans = visitPlanRepository.findActiveGroupPlansAffectedByRide(rideId);
+
+        for (VisitPlan visitPlan : affectedPlans) {
+            if (!"OPEN".equals(ride.getStatus())) {
+                System.out.println("Replanning required for visit: " + visitPlan.getVisit().getId());
+            }
+        }
+    }
+
 
     private VisitPlanDtoOut convertVisitPlanToDtoOut(VisitPlan visitPlan) {
         Integer ownerVisitMemberId = null;

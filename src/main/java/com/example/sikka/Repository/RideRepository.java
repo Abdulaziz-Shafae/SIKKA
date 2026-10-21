@@ -8,5 +8,4 @@ import org.springframework.stereotype.Repository;
 public interface RideRepository extends JpaRepository<Ride, Integer> {
 
     Ride findRideById(Integer id);
-
 }

@@ -287,4 +287,23 @@ public class VisitRecordService {
         visitRecord.setReviewNote(rateVisitRecordDtoIn.getReviewNote());
         visitRecordRepository.save(visitRecord);
     }
+
+
+    @Transactional(readOnly = true)
+    public boolean hasCompletedRide(Integer memberId, Integer rideId) {
+        VisitMember visitMember = visitMemberRepository.findVisitMemberById(memberId);
+
+        if (visitMember == null) {
+            throw new ApiException("Visit member not found");
+        }
+
+        Ride ride = rideRepository.findRideById(rideId);
+
+        if (ride == null) {
+            throw new ApiException("Ride not found");
+        }
+
+        return visitRecordRepository.existsByVisitMember_IdAndRide_IdAndStatus(memberId, rideId, "COMPLETED");
+    }
+
 }

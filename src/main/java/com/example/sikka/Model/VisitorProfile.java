@@ -10,7 +10,6 @@ import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Set;
@@ -26,18 +25,24 @@ public class VisitorProfile {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
+    @NotEmpty(message = "name is required")
+    @Size(max = 100, message = "name must not exceed 100 characters")
     @Column(columnDefinition = "varchar(100) not null")
     private String name;
 
+    @Past(message = "birth date must be in the past")
     @Column(columnDefinition = "date")
     private LocalDate birthDate;
 
+    @Positive(message = "height must be positive")
     @Column(columnDefinition = "decimal(5,2)")
-    private BigDecimal heightCm;
+    private Double heightCm;
 
+    @Positive(message = "weight must be positive")
     @Column(columnDefinition = "decimal(6,2)")
-    private BigDecimal weightKg;
+    private Double weightKg;
 
+    @Pattern(regexp = "^(LOW|MEDIUM|HIGH)$", message = "thrill preference must be LOW, MEDIUM, or HIGH")
     @Column(columnDefinition = "varchar(30)")
     private String thrillPreference;
 
@@ -67,14 +72,5 @@ public class VisitorProfile {
     private Account account;
 
     @OneToMany(cascade = CascadeType.ALL, mappedBy = "visitorProfile")
-    @JsonIgnore
     private Set<VisitMember> visitMembers;
-
-    @OneToMany(mappedBy = "visitorProfile")
-    @JsonIgnore
-    private Set<RidePreference> ridePreferences;
-
-    @OneToMany(mappedBy = "visitorProfile")
-    @JsonIgnore
-    private Set<PrivacyConsent> privacyConsents;
 }

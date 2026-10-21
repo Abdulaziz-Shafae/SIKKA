@@ -27,21 +27,17 @@ public class VisitPlanController {
         return ResponseEntity.status(200).body(visitPlanService.getVisitPlanDetails(accountId, visitPlanId));
     }
 
-    @PostMapping("/create/individual/{accountId}/{visitId}")
-    public ResponseEntity<ApiResponse> createIndividualVisitPlan(@PathVariable Integer accountId, @PathVariable Integer visitId) {
-        visitPlanService.createIndividualVisitPlan(accountId, visitId);
-        return ResponseEntity.status(201).body(new ApiResponse("Individual visit plan created successfully"));
-    }
-
-    @PostMapping("/create/group/{accountId}/{visitId}")
-    public ResponseEntity<ApiResponse> createGroupVisitPlan(@PathVariable Integer accountId, @PathVariable Integer visitId) {
-        visitPlanService.createGroupVisitPlan(accountId, visitId);
-        return ResponseEntity.status(201).body(new ApiResponse("Group visit plan created successfully"));
-    }
-
     @DeleteMapping("/delete/{accountId}/{visitPlanId}")
     public ResponseEntity<ApiResponse> deleteVisitPlan(@PathVariable Integer accountId, @PathVariable Integer visitPlanId) {
         visitPlanService.deleteVisitPlan(accountId, visitPlanId);
         return ResponseEntity.status(200).body(new ApiResponse("Visit plan deleted successfully"));
     }
+
+    @PostMapping("/start/{accountId}/{visitId}")
+    public ResponseEntity<ApiResponse> startPlanning(@PathVariable Integer accountId, @PathVariable Integer visitId) {
+        visitPlanService.startPlanning(accountId, visitId);
+        return ResponseEntity.status(200).body(new ApiResponse("Visit planning started successfully"));
+    }
+
+
 }

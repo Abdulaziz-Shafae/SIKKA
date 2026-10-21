@@ -182,8 +182,8 @@ public class PlanItemService {
             throw new ApiException("Invalid plan kind");
         }
 
-        if (!"DRAFT".equals(visit.getStatus()) && !"OPEN".equals(visit.getStatus()) && !"PLANNING".equals(visit.getStatus())) {
-            throw new ApiException("Activity preferences cannot be changed in the current visit status");
+        if (!"PLANNING".equals(visit.getStatus())) {
+            throw new ApiException("Activity preferences can only be changed during PLANNING");
         }
 
         if (Boolean.TRUE.equals(visitPlan.getIsActive())) {
@@ -196,10 +196,6 @@ public class PlanItemService {
 
         if (visitPlan.getProposedItems() != null) {
             throw new ApiException("A plan with a pending proposal cannot be edited directly");
-        }
-
-        if (planItemDtoIn == null) {
-            throw new ApiException("Activity preferences are required");
         }
 
         String priority = planItemDtoIn.getPriority();

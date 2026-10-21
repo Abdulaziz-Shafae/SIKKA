@@ -20,4 +20,7 @@ public interface VisitRecordRepository extends JpaRepository<VisitRecord, Intege
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select r from VisitRecord r where r.id = :visitRecordId")
     VisitRecord findVisitRecordByIdForUpdate(@Param("visitRecordId") Integer visitRecordId);
+
+    boolean existsByVisitMember_IdAndRide_IdAndStatus(Integer memberId, Integer rideId, String status);
+
 }
