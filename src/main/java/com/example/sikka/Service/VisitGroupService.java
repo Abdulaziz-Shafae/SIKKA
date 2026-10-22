@@ -62,6 +62,7 @@ public class VisitGroupService {
         visitGroupRepository.save(group);
     }
 
+    @org.springframework.transaction.annotation.Transactional
     public void delete(Integer id) {
         VisitGroup group = visitGroupRepository.findVisitGroupById(id);
         if (group == null)
@@ -72,6 +73,9 @@ public class VisitGroupService {
             visit.setGroup(null);
             group.setVisit(null);
             visitRepository.save(visit);
+        }
+        if (group.getOrganizer().getOrganizedGroups() != null) {
+            group.getOrganizer().getOrganizedGroups().remove(group);
         }
         visitGroupRepository.delete(group);
     }
@@ -101,8 +105,7 @@ public class VisitGroupService {
     }
 
     private VisitGroupDtoOut toDtoOut(VisitGroup g) {
-        return new VisitGroupDtoOut(g.getId(), g.getName(), g.getOrganizer().getId(),
-                g.getInvitationsEnabled(), g.getCreatedAt());
+        return new VisitGroupDtoOut(g.getId(), g.getName(), g.getOrganizer().getId(), g.getInvitationsEnabled(), g.getCreatedAt());
     }
     // creates a group for an existing visit and returns the raw invite code
     @org.springframework.transaction.annotation.Transactional

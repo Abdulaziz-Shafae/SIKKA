@@ -1,9 +1,7 @@
 package com.example.sikka.Service;
 
 import com.example.sikka.Api.ApiException;
-import com.example.sikka.DtoOut.PlanItemDtoOut;
-import com.example.sikka.DtoOut.VisitPlanDetailsDtoOut;
-import com.example.sikka.DtoOut.VisitPlanDtoOut;
+import com.example.sikka.DtoOut.*;
 import com.example.sikka.Model.Account;
 import com.example.sikka.Model.PlanItem;
 import com.example.sikka.Model.Visit;
@@ -16,7 +14,16 @@ import com.example.sikka.Repository.VisitPlanRepository;
 import com.example.sikka.Repository.VisitRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
+
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.HashSet;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -31,6 +38,7 @@ public class VisitPlanService {
     private final VisitRepository visitRepository;
     private final VisitMemberRepository visitMemberRepository;
     private final PaymentOrderRepository paymentOrderRepository;
+    private final JsonMapper participantJsonMapper = JsonMapper.builder().enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS).build();
 
     @Transactional(readOnly = true)
     public List<VisitPlanDtoOut> getVisitPlans(Integer accountId, Integer visitId) {
@@ -345,4 +353,410 @@ public class VisitPlanService {
 
         return new PlanItemDtoOut(planItem.getId(), planItem.getActivityKind(), planItem.getTitle(), rideId, rideName, placeId, placeName, planItem.getStartsAt(), planItem.getEndsAt(), planItem.getSortOrder(), planItem.getPriority(), planItem.getPinned(), planItem.getParticipantVisitMemberIds(), planItem.getSubgroupKey());
     }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void preparePlanning(Integer accountId, Integer visitId) {
+        if (accountId == null || accountId <= 0) {
+            throw new ApiException("A valid account ID is required");
+        }
+
+        if (visitId == null || visitId <= 0) {
+            throw new ApiException("A valid visit ID is required");
+        }
+
+        Account account = accountRepository.findAccountById(accountId);
+
+        if (account == null) {
+            throw new ApiException("Account not found");
+        }
+
+        if (!"ACTIVE".equals(account.getStatus())) {
+            throw new ApiException("Account is not active");
+        }
+
+        Visit visit = visitRepository.findVisitByIdForUpdate(visitId);
+
+        if (visit == null) {
+            throw new ApiException("Visit not found");
+        }
+
+        if (!visit.getOrganizer().getId().equals(accountId)) {
+            throw new ApiException("Only the visit organizer can start planning");
+        }
+
+        if (!"PLANNING".equals(visit.getStatus())) {
+            throw new ApiException("Planning can only start while the visit is in PLANNING status");
+        }
+
+        if (!paymentOrderRepository.existsByVisit_IdAndStatusAndVerifiedAtIsNotNull(visitId, "PAID")) {
+            throw new ApiException("A verified payment is required before planning");
+        }
+
+        List<VisitMember> goingMembers = visitMemberRepository.findAllByVisit_IdAndRsvpStatus(visitId, "GOING");
+
+        if (goingMembers.isEmpty()) {
+            throw new ApiException("The visit must have at least one GOING member");
+        }
+
+        if (!Boolean.TRUE.equals(visit.getMembersLocked())) {
+            visit.setMembersLocked(true);
+            visitRepository.save(visit);
+        }
+
+    }
+
+    @Transactional(readOnly = true)
+    public VisitPlanDetailsDtoOut getMyIndividualVisitPlan(Integer accountId, Integer visitId) {
+        if (accountId == null || accountId <= 0) {
+            throw new ApiException("A valid account ID is required");
+        }
+
+        if (visitId == null || visitId <= 0) {
+            throw new ApiException("A valid visit ID is required");
+        }
+
+        Account account = accountRepository.findAccountById(accountId);
+
+        if (account == null) {
+            throw new ApiException("Account not found");
+        }
+
+        if (!"ACTIVE".equals(account.getStatus())) {
+            throw new ApiException("Account is not active");
+        }
+
+        Visit visit = visitRepository.findVisitById(visitId);
+
+        if (visit == null) {
+            throw new ApiException("Visit not found");
+        }
+
+        VisitMember visitMember = visitMemberRepository.findVisitMemberByVisit_IdAndVisitorProfile_Account_Id(visitId, accountId);
+
+        if (visitMember == null) {
+            throw new ApiException("You are not a member of this visit");
+        }
+
+        VisitPlan visitPlan = visitPlanRepository.findVisitPlanByVisit_IdAndOwnerVisitMember_IdAndPlanKind(visitId, visitMember.getId(), "INDIVIDUAL");
+
+        if (visitPlan == null) {
+            throw new ApiException("Your individual plan has not been created yet");
+        }
+
+        return getVisitPlanDetails(accountId, visitPlan.getId());
+    }
+
+    @Transactional(readOnly = true)
+    public VisitPlanDetailsDtoOut getApprovedGroupVisitPlan(Integer accountId, Integer visitId) {
+        if (accountId == null || accountId <= 0) {
+            throw new ApiException("A valid account ID is required");
+        }
+
+        if (visitId == null || visitId <= 0) {
+            throw new ApiException("A valid visit ID is required");
+        }
+
+        Account account = accountRepository.findAccountById(accountId);
+
+        if (account == null) {
+            throw new ApiException("Account not found");
+        }
+
+        if (!"ACTIVE".equals(account.getStatus())) {
+            throw new ApiException("Account is not active");
+        }
+
+        Visit visit = visitRepository.findVisitById(visitId);
+
+        if (visit == null) {
+            throw new ApiException("Visit not found");
+        }
+
+        if (!visit.getOrganizer().getId().equals(accountId)) {
+            VisitMember visitMember = visitMemberRepository.findVisitMemberByVisit_IdAndVisitorProfile_Account_Id(visitId, accountId);
+
+            if (visitMember == null) {
+                throw new ApiException("You are not a member of this visit");
+            }
+        }
+
+        List<VisitPlan> groupPlans = visitPlanRepository.findAllByVisit_IdAndPlanKind(visitId, "GROUP");
+        VisitPlan approvedGroupPlan = null;
+
+        for (VisitPlan groupPlan : groupPlans) {
+            if (Boolean.TRUE.equals(groupPlan.getIsActive()) && groupPlan.getPlanApproval() != null && "APPROVED".equals(groupPlan.getPlanApproval().getStatus())) {
+                if (approvedGroupPlan != null) {
+                    throw new ApiException("Multiple active approved group plans were found");
+                }
+
+                approvedGroupPlan = groupPlan;
+            }
+        }
+
+        if (approvedGroupPlan == null) {
+            throw new ApiException("No approved group plan is available yet");
+        }
+
+        return getVisitPlanDetails(accountId, approvedGroupPlan.getId());
+    }
+
+    @Transactional(readOnly = true)
+    public VisitPlanDetailsDtoOut getPendingGroupVisitPlan(Integer accountId, Integer visitId) {
+        if (accountId == null || accountId <= 0) {
+            throw new ApiException("A valid account ID is required");
+        }
+
+        if (visitId == null || visitId <= 0) {
+            throw new ApiException("A valid visit ID is required");
+        }
+
+        Account account = accountRepository.findAccountById(accountId);
+
+        if (account == null) {
+            throw new ApiException("Account not found");
+        }
+
+        if (!"ACTIVE".equals(account.getStatus())) {
+            throw new ApiException("Account is not active");
+        }
+
+        Visit visit = visitRepository.findVisitById(visitId);
+
+        if (visit == null) {
+            throw new ApiException("Visit not found");
+        }
+
+        if (!visit.getOrganizer().getId().equals(accountId)) {
+            throw new ApiException("Only the visit organizer can preview the pending group plan");
+        }
+
+        if (!"PLANNING".equals(visit.getStatus())) {
+            throw new ApiException("Initial plan preview requires a visit in PLANNING status");
+        }
+
+        List<VisitPlan> groupPlans = visitPlanRepository.findAllByVisit_IdAndPlanKind(visitId, "GROUP");
+        VisitPlan pendingGroupPlan = null;
+
+        for (VisitPlan groupPlan : groupPlans) {
+            if (!Boolean.TRUE.equals(groupPlan.getIsActive()) && (groupPlan.getPlanApproval() == null || "PENDING".equals(groupPlan.getPlanApproval().getStatus()))) {
+                if (groupPlan.getPlanItems() == null || groupPlan.getPlanItems().isEmpty()) {
+                    continue;
+                }
+
+                if (pendingGroupPlan != null) {
+                    throw new ApiException("Multiple pending group plans were found");
+                }
+
+                pendingGroupPlan = groupPlan;
+            }
+        }
+
+        if (pendingGroupPlan == null) {
+            throw new ApiException("No group plan is available for preview");
+        }
+
+        return getVisitPlanDetails(accountId, pendingGroupPlan.getId());
+    }
+
+    @Transactional(readOnly = true)
+    public List<PlanItemDtoOut> getVisitMeetingPoints(Integer accountId, Integer visitId) {
+        VisitPlanDetailsDtoOut approvedGroupPlan = getApprovedGroupVisitPlan(accountId, visitId);
+        List<PlanItemDtoOut> meetingPoints = new ArrayList<>();
+
+        for (PlanItemDtoOut planItem : approvedGroupPlan.getPlanItems()) {
+            if ("MEETING_POINT".equals(planItem.getActivityKind())) {
+                meetingPoints.add(planItem);
+            }
+        }
+
+        return meetingPoints;
+    }
+
+    private HashSet<Integer> parseActivityParticipantIds(String participantVisitMemberIds) {
+        if (participantVisitMemberIds == null || participantVisitMemberIds.isBlank()) {
+            throw new ApiException("Activity participant IDs are missing");
+        }
+
+        JsonNode participantIdsNode;
+
+        try {
+            participantIdsNode = participantJsonMapper.readTree(participantVisitMemberIds);
+        } catch (JacksonException exception) {
+            throw new ApiException("Activity participant IDs contain invalid JSON");
+        }
+
+        if (participantIdsNode == null || !participantIdsNode.isArray()) {
+            throw new ApiException("Activity participant IDs must be a JSON array");
+        }
+
+        HashSet<Integer> participantIds = new HashSet<>();
+
+        for (JsonNode participantIdNode : participantIdsNode) {
+            if (!participantIdNode.isIntegralNumber() || !participantIdNode.canConvertToInt()) {
+                throw new ApiException("Activity participant IDs must be integers");
+            }
+
+            int participantId = participantIdNode.intValue();
+
+            if (participantId <= 0) {
+                throw new ApiException("Activity participant IDs must be positive");
+            }
+
+            if (!participantIds.add(participantId)) {
+                throw new ApiException("Activity participant IDs must not contain duplicates");
+            }
+        }
+
+        return participantIds;
+    }
+
+    @Transactional(readOnly = true)
+    public HashSet<Integer> getMyPlannedRideIds(Integer accountId, Integer visitId) {
+        VisitPlanDetailsDtoOut approvedGroupPlan = getApprovedGroupVisitPlan(accountId, visitId);
+        Visit visit = visitRepository.findVisitById(visitId);
+
+        if (!"READY".equals(visit.getStatus()) && !"IN_PROGRESS".equals(visit.getStatus()) && !"COMPLETED".equals(visit.getStatus())) {
+            throw new ApiException("Progress is not available in the current visit status");
+        }
+
+        VisitMember visitMember = visitMemberRepository.findVisitMemberByVisit_IdAndVisitorProfile_Account_Id(visitId, accountId);
+
+        if (visitMember == null) {
+            throw new ApiException("You are not a member of this visit");
+        }
+
+        HashSet<Integer> visitMemberIds = new HashSet<>();
+
+        for (VisitMember member : visitMemberRepository.findAllByVisit_Id(visitId)) {
+            visitMemberIds.add(member.getId());
+        }
+
+        HashSet<Integer> plannedRideIds = new HashSet<>();
+
+        for (PlanItemDtoOut planItem : approvedGroupPlan.getPlanItems()) {
+            if (!"RIDE".equals(planItem.getActivityKind())) {
+                continue;
+            }
+
+            if (planItem.getRideId() == null) {
+                throw new ApiException("A ride activity must reference a ride");
+            }
+
+            HashSet<Integer> participantIds = parseActivityParticipantIds(planItem.getParticipantVisitMemberIds());
+
+            if (!visitMemberIds.containsAll(participantIds)) {
+                throw new ApiException("An activity contains participants from outside this visit");
+            }
+
+            if (participantIds.contains(visitMember.getId())) {
+                plannedRideIds.add(planItem.getRideId());
+            }
+        }
+
+        return plannedRideIds;
+    }
+
+    @Transactional(readOnly = true)
+    public NextActivityDtoOut getMyNextActivity(Integer accountId, Integer visitId) {
+        VisitPlanDetailsDtoOut approvedGroupPlan = getApprovedGroupVisitPlan(accountId, visitId);
+        Visit visit = visitRepository.findVisitById(visitId);
+
+        if (!"IN_PROGRESS".equals(visit.getStatus())) {
+            throw new ApiException("The visit must be in progress to view the next activity");
+        }
+
+        VisitMember visitMember = visitMemberRepository.findVisitMemberByVisit_IdAndVisitorProfile_Account_Id(visitId, accountId);
+
+        if (visitMember == null) {
+            throw new ApiException("You are not a member of this visit");
+        }
+
+        if (!"GOING".equals(visitMember.getRsvpStatus())) {
+            throw new ApiException("Only GOING members can view their next activity");
+        }
+
+        VisitPlan groupPlan = visitPlanRepository.findVisitPlanById(approvedGroupPlan.getPlan().getId());
+
+        if (groupPlan == null) {
+            throw new ApiException("Group plan not found");
+        }
+
+        List<PlanItem> planItems = new ArrayList<>(groupPlan.getPlanItems());
+        HashSet<Integer> visitMemberIds = new HashSet<>();
+
+        for (VisitMember member : visitMemberRepository.findAllByVisit_Id(visitId)) {
+            visitMemberIds.add(member.getId());
+        }
+
+        for (PlanItem planItem : planItems) {
+            if (planItem.getStartsAt() == null || planItem.getEndsAt() == null || !planItem.getEndsAt().isAfter(planItem.getStartsAt())) {
+                throw new ApiException("The group plan contains invalid activity times");
+            }
+        }
+
+        planItems.sort(Comparator.comparing(PlanItem::getStartsAt).thenComparing(PlanItem::getSortOrder).thenComparing(PlanItem::getId));
+        LocalDateTime now = LocalDateTime.now(ZoneId.of("Asia/Riyadh"));
+
+        for (PlanItem planItem : planItems) {
+            if (!planItem.getEndsAt().isAfter(now)) {
+                continue;
+            }
+
+            HashSet<Integer> participantIds = parseActivityParticipantIds(planItem.getParticipantVisitMemberIds());
+
+            if (!visitMemberIds.containsAll(participantIds)) {
+                throw new ApiException("An activity contains participants from outside this visit");
+            }
+
+            if (!participantIds.contains(visitMember.getId())) {
+                continue;
+            }
+
+            if ("RIDE".equals(planItem.getActivityKind())) {
+                if (planItem.getRide() == null) {
+                    throw new ApiException("A ride activity must reference a ride");
+                }
+
+                if (!"OPEN".equals(planItem.getRide().getStatus())) {
+                    continue;
+                }
+            }
+
+            String activityStatus = "UPCOMING";
+
+            if (!planItem.getStartsAt().isAfter(now)) {
+                activityStatus = "CURRENT";
+            }
+
+            return new NextActivityDtoOut(visitId, activityStatus, convertPlanItemToDtoOut(planItem));
+        }
+
+        return new NextActivityDtoOut(visitId, "NONE", null);
+    }
+
+    @Transactional(readOnly = true)
+    public MySubgroupDtoOut getMyCurrentSubgroup(Integer accountId, Integer visitId) {
+        NextActivityDtoOut nextActivity = getMyNextActivity(accountId, visitId);
+
+        if (!"CURRENT".equals(nextActivity.getActivityStatus())) {
+            return new MySubgroupDtoOut(visitId, "NONE", null, null, new ArrayList<>());
+        }
+
+        PlanItemDtoOut currentActivity = nextActivity.getActivity();
+        HashSet<Integer> participantIds = parseActivityParticipantIds(currentActivity.getParticipantVisitMemberIds());
+        List<VisitMember> visitMembers = visitMemberRepository.findAllByVisit_Id(visitId);
+        List<SubgroupMemberDtoOut> subgroupMembers = new ArrayList<>();
+
+        visitMembers.sort(Comparator.comparing(VisitMember::getId));
+
+        for (VisitMember visitMember : visitMembers) {
+            if (participantIds.contains(visitMember.getId())) {
+                subgroupMembers.add(new SubgroupMemberDtoOut(visitMember.getId(), visitMember.getVisitorProfile().getName()));
+            }
+        }
+
+        return new MySubgroupDtoOut(visitId, "CURRENT", currentActivity.getSubgroupKey(), currentActivity, subgroupMembers);
+    }
+
+
 }
