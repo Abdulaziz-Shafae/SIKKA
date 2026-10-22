@@ -3,6 +3,7 @@ package com.example.sikka.Controller;
 import com.example.sikka.Api.ApiResponse;
 import com.example.sikka.DtoIn.JoinDtoIn;
 import com.example.sikka.DtoIn.ReviewDtoIn;
+import com.example.sikka.DtoIn.SelectedRidesDtoIn;
 import com.example.sikka.DtoIn.VisitMemberDtoIn;
 import com.example.sikka.Service.VisitMemberService;
 import jakarta.validation.Valid;
@@ -53,8 +54,8 @@ public class VisitMemberController {
 
     @PutMapping("/update-selected-rides/{accountId}/{visitId}")
     public ResponseEntity<?> updateSelectedRides(@PathVariable Integer accountId, @PathVariable Integer visitId,
-                                                 @RequestBody String selectedRides) {
-        visitMemberService.updateSelectedRides(accountId, visitId, selectedRides);
+                                                 @RequestBody @Valid SelectedRidesDtoIn dto) {
+        visitMemberService.updateSelectedRides(accountId, visitId, dto);
         return ResponseEntity.status(200).body(new ApiResponse("selected rides updated successfully"));
     }
 
@@ -84,8 +85,8 @@ public class VisitMemberController {
         return ResponseEntity.status(200).body(new ApiResponse("member removed successfully"));
     }
 
-    @GetMapping("/summary/{visitId}")
-    public ResponseEntity<?> summary(@PathVariable Integer visitId) {
-        return ResponseEntity.status(200).body(visitMemberService.getSummary(visitId));
+    @GetMapping("/summary/{accountId}/{visitId}")
+    public ResponseEntity<?> summary(@PathVariable Integer accountId, @PathVariable Integer visitId) {
+        return ResponseEntity.status(200).body(visitMemberService.getSummary(accountId, visitId));
     }
 }
