@@ -18,7 +18,6 @@ public class SelectedRideDtoIn {
     private Integer rideId;
 
     @NotEmpty(message = "priority is required")
-    @Pattern(regexp = "^(MUST_RIDE|PREFERRED|OPTIONAL)$",
-            message = "priority must be MUST_RIDE, PREFERRED or OPTIONAL")
+    @Pattern(regexp = "^(MUST_RIDE|PREFERRED|OPTIONAL)$", message = "priority must be MUST_RIDE, PREFERRED or OPTIONAL")
     private String priority;
 }

@@ -56,11 +56,19 @@ public class AccountService {
         accountRepository.save(account);
     }
 
+    @org.springframework.transaction.annotation.Transactional
     public void delete(Integer id) {
         Account account = accountRepository.findAccountById(id);
         if (account == null)
             throw new ApiException("account not found");
 
+        if ((account.getOrganizedVisits() != null && !account.getOrganizedVisits().isEmpty()) || (account.getOrganizedGroups() != null && !account.getOrganizedGroups().isEmpty()) || (account.getNotifications() != null && !account.getNotifications().isEmpty()) || (account.getPlanApprovals() != null && !account.getPlanApprovals().isEmpty()) || (account.getVisitRecords() != null && !account.getVisitRecords().isEmpty()) || (account.getPaymentOrders() != null && !account.getPaymentOrders().isEmpty()) || (account.getPrivacyConsents() != null && !account.getPrivacyConsents().isEmpty())) {
+            throw new ApiException("Cannot delete an account linked to visits, groups, notifications, approvals, records, payments or consents");
+        }
+        VisitorProfile profile = account.getVisitorProfile();
+        if (profile != null && ((profile.getVisitMembers() != null && !profile.getVisitMembers().isEmpty()) || (profile.getRidePreferences() != null && !profile.getRidePreferences().isEmpty()) || (profile.getPrivacyConsents() != null && !profile.getPrivacyConsents().isEmpty()))) {
+            throw new ApiException("Cannot delete an account whose profile is linked to visit memberships, ride preferences or consents");
+        }
         accountRepository.delete(account);
     }
 
@@ -107,7 +115,6 @@ public class AccountService {
     }
 
     private AccountDtoOut toDtoOut(Account a) {
-        return new AccountDtoOut(a.getId(), a.getName(), a.getEmail(), a.getRole(),
-                a.getStatus(), a.getEmailVerified(), a.getCreatedAt());
+        return new AccountDtoOut(a.getId(), a.getName(), a.getEmail(), a.getRole(), a.getStatus(), a.getEmailVerified(), a.getCreatedAt());
     }
 }

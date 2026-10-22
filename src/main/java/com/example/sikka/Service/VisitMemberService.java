@@ -54,14 +54,23 @@ public class VisitMemberService {
         createMember(visit, profile);
     }
 
+    @Transactional
     public void delete(Integer id) {
         VisitMember member = visitMemberRepository.findVisitMemberById(id);
         if (member == null)
             throw new ApiException("member not found");
 
+        visitRepository.findVisitByIdForUpdate(member.getVisit().getId());
         checkOpenForChanges(member.getVisit());
         if (member.getVisitorProfile().getAccount().getId().equals(member.getVisit().getOrganizer().getId()))
             throw new ApiException("organizer cannot be removed");
+        validateMemberDeletion(member);
+        if (member.getVisit().getMembers() != null) {
+            member.getVisit().getMembers().remove(member);
+        }
+        if (member.getVisitorProfile().getVisitMembers() != null) {
+            member.getVisitorProfile().getVisitMembers().remove(member);
+        }
         visitMemberRepository.delete(member);
     }
 
@@ -112,6 +121,14 @@ public class VisitMemberService {
         VisitMember member = getMemberLocked(accountId, visitId);
         checkOpenForChanges(member.getVisit());
 
+        if (dto == null || dto.getRides() == null) {
+            throw new ApiException("Selected rides list is required");
+        }
+        for (SelectedRideDtoIn selectedRide : dto.getRides()) {
+            if (selectedRide == null || selectedRide.getRideId() == null || selectedRide.getRideId() <= 0 || selectedRide.getPriority() == null || !selectedRide.getPriority().matches("^(MUST_RIDE|PREFERRED|OPTIONAL)$")) {
+                throw new ApiException("Every selected ride requires a positive ride ID and a valid priority");
+            }
+        }
         List<Integer> rideIds = new ArrayList<>();
         Set<Integer> seen = new HashSet<>();
         for (SelectedRideDtoIn r : dto.getRides()) {
@@ -127,8 +144,7 @@ public class VisitMemberService {
             SelectedRideDtoIn r = dto.getRides().get(i);
             if (i > 0)
                 json.append(",");
-            json.append("{\"rideId\":").append(r.getRideId())
-                    .append(",\"priority\":\"").append(r.getPriority()).append("\"}");
+            json.append("{\"rideId\":").append(r.getRideId()) .append(",\"priority\":\"").append(r.getPriority()).append("\"}");
         }
         json.append("]");
 
@@ -144,6 +160,13 @@ public class VisitMemberService {
             throw new ApiException("organizer cannot leave, cancel the visit instead");
         checkOpenForChanges(member.getVisit());
 
+        validateMemberDeletion(member);
+        if (member.getVisit().getMembers() != null) {
+            member.getVisit().getMembers().remove(member);
+        }
+        if (member.getVisitorProfile().getVisitMembers() != null) {
+            member.getVisitorProfile().getVisitMembers().remove(member);
+        }
         visitMemberRepository.delete(member);
     }
 
@@ -197,6 +220,13 @@ public class VisitMemberService {
             throw new ApiException("organizer cannot be removed");
 
         checkOpenForChanges(visit);
+        validateMemberDeletion(member);
+        if (member.getVisit().getMembers() != null) {
+            member.getVisit().getMembers().remove(member);
+        }
+        if (member.getVisitorProfile().getVisitMembers() != null) {
+            member.getVisitorProfile().getVisitMembers().remove(member);
+        }
         visitMemberRepository.delete(member);
     }
 
@@ -208,8 +238,7 @@ public class VisitMemberService {
         List<VisitMemberDtoOut> list = new ArrayList<>();
         int going = 0;
         for (VisitMember m : visitMemberRepository.findAllByVisit_Id(visitId)) {
-            list.add(new VisitMemberDtoOut(m.getId(), m.getVisitorProfile().getId(),
-                    m.getVisitorProfile().getName(), m.getRsvpStatus(), m.getCheckedInAt()));
+            list.add(new VisitMemberDtoOut(m.getId(), m.getVisitorProfile().getId(), m.getVisitorProfile().getName(), m.getRsvpStatus(), m.getCheckedInAt()));
             if ("GOING".equals(m.getRsvpStatus()))
                 going++;
         }
@@ -238,6 +267,13 @@ public class VisitMemberService {
 
     // ---------- helpers ----------
 
+    private void validateMemberDeletion(VisitMember member) {
+        if ((member.getVisitPlans() != null && !member.getVisitPlans().isEmpty()) || (member.getVisitRecords() != null && !member.getVisitRecords().isEmpty())) {
+            throw new ApiException("Cannot remove a member linked to plans or ride records");
+        }
+    }
+
+
     // locks the visit row first, then returns the member (same lock used by plan generation)
     private VisitMember getMemberLocked(Integer accountId, Integer visitId) {
         if (visitRepository.findVisitByIdForUpdate(visitId) == null)
@@ -245,8 +281,7 @@ public class VisitMemberService {
         return getMember(accountId, visitId);
     }
     private VisitMember getMember(Integer accountId, Integer visitId) {
-        VisitMember member = visitMemberRepository
-                .findVisitMemberByVisit_IdAndVisitorProfile_Account_Id(visitId, accountId);
+        VisitMember member = visitMemberRepository .findVisitMemberByVisit_IdAndVisitorProfile_Account_Id(visitId, accountId);
         if (member == null)
             throw new ApiException("you are not a member of this visit");
         return member;

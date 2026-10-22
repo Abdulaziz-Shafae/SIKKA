@@ -46,15 +46,13 @@ public class VisitMemberController {
     }
 
     @PutMapping("/update-rsvp/{accountId}/{visitId}/{rsvp}")
-    public ResponseEntity<?> updateRsvp(@PathVariable Integer accountId, @PathVariable Integer visitId,
-                                        @PathVariable String rsvp) {
+    public ResponseEntity<?> updateRsvp(@PathVariable Integer accountId, @PathVariable Integer visitId, @PathVariable String rsvp) {
         visitMemberService.updateRsvp(accountId, visitId, rsvp);
         return ResponseEntity.status(200).body(new ApiResponse("rsvp updated successfully"));
     }
 
     @PutMapping("/update-selected-rides/{accountId}/{visitId}")
-    public ResponseEntity<?> updateSelectedRides(@PathVariable Integer accountId, @PathVariable Integer visitId,
-                                                 @RequestBody @Valid SelectedRidesDtoIn dto) {
+    public ResponseEntity<?> updateSelectedRides(@PathVariable Integer accountId, @PathVariable Integer visitId, @RequestBody @Valid SelectedRidesDtoIn dto) {
         visitMemberService.updateSelectedRides(accountId, visitId, dto);
         return ResponseEntity.status(200).body(new ApiResponse("selected rides updated successfully"));
     }
@@ -66,8 +64,7 @@ public class VisitMemberController {
     }
 
     @PutMapping("/review/{accountId}/{visitId}")
-    public ResponseEntity<?> review(@PathVariable Integer accountId, @PathVariable Integer visitId,
-                                    @RequestBody @Valid ReviewDtoIn dto) {
+    public ResponseEntity<?> review(@PathVariable Integer accountId, @PathVariable Integer visitId, @RequestBody @Valid ReviewDtoIn dto) {
         visitMemberService.review(accountId, visitId, dto);
         return ResponseEntity.status(200).body(new ApiResponse("review saved successfully"));
     }
@@ -79,8 +76,7 @@ public class VisitMemberController {
     }
 
     @DeleteMapping("/remove/{organizerId}/{visitId}/{memberId}")
-    public ResponseEntity<?> remove(@PathVariable Integer organizerId, @PathVariable Integer visitId,
-                                    @PathVariable Integer memberId) {
+    public ResponseEntity<?> remove(@PathVariable Integer organizerId, @PathVariable Integer visitId, @PathVariable Integer memberId) {
         visitMemberService.remove(organizerId, visitId, memberId);
         return ResponseEntity.status(200).body(new ApiResponse("member removed successfully"));
     }

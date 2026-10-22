@@ -25,4 +25,7 @@ public interface VisitPlanRepository extends JpaRepository<VisitPlan, Integer> {
     @Query("select p from VisitPlan p where p.id = :visitPlanId")
     VisitPlan findVisitPlanByIdForUpdate(@Param("visitPlanId") Integer visitPlanId);
 
+    VisitPlan findVisitPlanByVisit_IdAndOwnerVisitMember_IdAndPlanKind(Integer visitId, Integer visitMemberId, String planKind);
+
+    List<VisitPlan> findAllByVisit_IdAndPlanKind(Integer visitId, String planKind);
 }

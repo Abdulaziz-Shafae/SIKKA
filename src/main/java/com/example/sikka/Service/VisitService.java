@@ -110,13 +110,34 @@ public class VisitService {
         visitRepository.save(visit);
     }
 
+    @org.springframework.transaction.annotation.Transactional
     public void delete(Integer id) {
         Visit visit = visitRepository.findVisitById(id);
         if (visit == null)
             throw new ApiException("visit not found");
 
+        if ((visit.getVisitPlans() != null && !visit.getVisitPlans().isEmpty()) || (visit.getNotifications() != null && !visit.getNotifications().isEmpty()) || (visit.getPaymentOrders() != null && !visit.getPaymentOrders().isEmpty())) {
+            throw new ApiException("Cannot delete a visit linked to plans, notifications or payments");
+        }
+        if (visit.getMembers() != null) {
+            for (VisitMember member : visit.getMembers()) {
+                if ((member.getVisitPlans() != null && !member.getVisitPlans().isEmpty()) || (member.getVisitRecords() != null && !member.getVisitRecords().isEmpty())) {
+                    throw new ApiException("Cannot delete a visit whose members have plans or ride records");
+                }
+            }
+        }
         if (visit.getGroup() != null)
             visit.getGroup().setVisit(null);
+        if (visit.getMembers() != null) {
+            for (VisitMember member : visit.getMembers()) {
+                if (member.getVisitorProfile().getVisitMembers() != null) {
+                    member.getVisitorProfile().getVisitMembers().remove(member);
+                }
+            }
+        }
+        if (visit.getOrganizer().getOrganizedVisits() != null) {
+            visit.getOrganizer().getOrganizedVisits().remove(visit);
+        }
         visitRepository.delete(visit);
     }
 

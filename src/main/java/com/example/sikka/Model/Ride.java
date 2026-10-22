@@ -1,6 +1,7 @@
 package com.example.sikka.Model;
 
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
 import lombok.AllArgsConstructor;
@@ -122,13 +123,28 @@ public class Ride {
     @Column(nullable = false)
     private LocalDateTime updatedAt;
 
+    @Pattern(regexp = "^(UNKNOWN|NONE|SPECIFIED)$", message = "Invalid height rule status")
+    @Column(length = 15)
+    private String heightRuleStatus = "UNKNOWN";
+
+    @Pattern(regexp = "^(UNKNOWN|NONE|SPECIFIED)$", message = "Invalid weight rule status")
+    @Column(length = 15)
+    private String weightRuleStatus = "UNKNOWN";
+
+    @Pattern(regexp = "^(UNKNOWN|NONE|SPECIFIED)$", message = "Invalid age rule status")
+    @Column(length = 15)
+    private String ageRuleStatus = "UNKNOWN";
+
     @OneToMany(mappedBy = "ride")
+    @JsonIgnore
     private Set<PlanItem> planItems = new HashSet<>();
 
     @OneToMany(mappedBy = "ride")
+    @JsonIgnore
     private Set<VisitRecord> visitRecords = new HashSet<>();
 
     @OneToMany(mappedBy = "ride")
+    @JsonIgnore
     private Set<RidePreference> ridePreferences = new HashSet<>();
 
     @PrePersist

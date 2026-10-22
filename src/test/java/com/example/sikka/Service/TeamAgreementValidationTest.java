@@ -53,13 +53,13 @@ class TeamAgreementValidationTest {
         stale.setWaitObservedAt(LocalDateTime.now().minusHours(1));
         stale.setWaitSource("ADMIN");
         when(repository.findRidesByStatus("OPEN")).thenReturn(List.of(fresh, stale, new Ride()));
-        assertEquals(List.of(fresh), new RideService(repository, mock(VisitorProfileRepository.class)).getOpenRides());
+        assertEquals(List.of(fresh), new RideService(repository, mock(VisitorProfileRepository.class), mock(AccountRepository.class)).getOpenRides());
     }
 
     @Test
     void completedRideLookupRequiresCompletedStatus() {
         VisitRecordRepository repository = mock(VisitRecordRepository.class);
         when(repository.existsByVisitMember_IdAndRide_IdAndStatus(1, 2, "COMPLETED")).thenReturn(true);
-        assertTrue(new VisitRecordService(repository, mock(AccountRepository.class), mock(VisitRepository.class), mock(VisitMemberRepository.class), mock(RideRepository.class)).hasCompletedRide(1, 2));
+        assertTrue(new VisitRecordService(repository, mock(AccountRepository.class), mock(VisitRepository.class), mock(VisitMemberRepository.class), mock(RideRepository.class), mock(VisitPlanService.class)).hasCompletedRide(1, 2));
     }
 }
