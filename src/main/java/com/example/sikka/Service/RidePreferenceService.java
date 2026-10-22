@@ -1,6 +1,7 @@
 package com.example.sikka.Service;
 
 import com.example.sikka.Api.ApiException;
+import com.example.sikka.DtoOut.RidePreferenceDtoOut;
 import com.example.sikka.Model.Account;
 import com.example.sikka.Model.Ride;
 import com.example.sikka.Model.RidePreference;
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Service;
 import com.example.sikka.Model.VisitMember;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -26,7 +28,8 @@ public class RidePreferenceService {
     private final RideRepository rideRepository;
     private final VisitRecordService visitRecordService;
 
-    public List<RidePreference> getMyRidePreferences(Integer accountId){
+    @Transactional(readOnly = true)
+    public List<RidePreferenceDtoOut> getMyRidePreferences(Integer accountId){
         Account account = accountRepository.findAccountById(accountId);
 
         if (account == null){
@@ -39,10 +42,24 @@ public class RidePreferenceService {
             throw new ApiException("Visitor profile not found");
         }
 
-        return ridePreferenceRepository.findRidePreferencesByVisitorProfileId(visitorProfile.getId());
+        List<RidePreference> preferences = ridePreferenceRepository.findRidePreferencesByVisitorProfileId(visitorProfile.getId());
+
+        List<RidePreferenceDtoOut> result = new ArrayList<>();
+
+        for (RidePreference preference : preferences){
+            result.add(new RidePreferenceDtoOut(
+                    preference.getId(),
+                    preference.getRide().getId(),
+                    preference.getRide().getName(),
+                    preference.getPreference()
+            ));
+        }
+
+        return result;
     }
 
-    public RidePreference getRidePreferenceById(Integer accountId, Integer preferenceId){
+    @Transactional(readOnly = true)
+    public RidePreferenceDtoOut getRidePreferenceById(Integer accountId, Integer preferenceId){
         RidePreference preference = ridePreferenceRepository.findRidePreferenceById(preferenceId);
 
         if (preference == null){
@@ -53,7 +70,12 @@ public class RidePreferenceService {
             throw new ApiException("You cannot access another user's preference");
         }
 
-        return preference;
+        return new RidePreferenceDtoOut(
+                preference.getId(),
+                preference.getRide().getId(),
+                preference.getRide().getName(),
+                preference.getPreference()
+        );
     }
 
     @Transactional
