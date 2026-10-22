@@ -1,5 +1,6 @@
 package com.example.sikka.Model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.PastOrPresent;
@@ -80,6 +81,7 @@ public class Place {
     private LocalDateTime updatedAt;
 
     @OneToMany(mappedBy = "place")
+    @JsonIgnore
     private Set<PlanItem> planItems = new HashSet<>();
 
     @PrePersist

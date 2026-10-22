@@ -55,11 +55,15 @@ public class VisitorProfileService {
         visitorProfileRepository.save(profile);
     }
 
+    @org.springframework.transaction.annotation.Transactional
     public void delete(Integer id) {
         VisitorProfile profile = visitorProfileRepository.findVisitorProfileById(id);
         if (profile == null)
             throw new ApiException("profile not found");
 
+        if ((profile.getVisitMembers() != null && !profile.getVisitMembers().isEmpty()) || (profile.getRidePreferences() != null && !profile.getRidePreferences().isEmpty()) || (profile.getPrivacyConsents() != null && !profile.getPrivacyConsents().isEmpty())) {
+            throw new ApiException("Cannot delete a profile linked to visit memberships, ride preferences or consents");
+        }
         profile.getAccount().setVisitorProfile(null);
         visitorProfileRepository.delete(profile);
     }
@@ -98,9 +102,6 @@ public class VisitorProfileService {
     }
 
     private VisitorProfileDtoOut toDtoOut(VisitorProfile p) {
-        return new VisitorProfileDtoOut(p.getId(), p.getAccount().getId(), p.getName(),
-                p.getBirthDate(), p.getHeightCm(), p.getWeightKg(), p.getThrillPreference(),
-                p.getPreferredRideTypes(), p.getDislikedRideFeatures(), p.getFoodPreferences(),
-                p.getCreatedAt(), p.getUpdatedAt());
+        return new VisitorProfileDtoOut(p.getId(), p.getAccount().getId(), p.getName(), p.getBirthDate(), p.getHeightCm(), p.getWeightKg(), p.getThrillPreference(), p.getPreferredRideTypes(), p.getDislikedRideFeatures(), p.getFoodPreferences(), p.getCreatedAt(), p.getUpdatedAt());
     }
 }
