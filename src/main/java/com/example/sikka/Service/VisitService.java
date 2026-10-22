@@ -171,6 +171,46 @@ public class VisitService {
             visits.add(m.getVisit());
         return visits;
     }
+    // visit details, only for members of the visit
+    public Visit getVisitDetails(Integer accountId, Integer visitId) {
+        Visit visit = visitRepository.findVisitById(visitId);
+        if (visit == null)
+            throw new ApiException("visit not found");
+        if (visitMemberRepository.findVisitMemberByVisit_IdAndVisitorProfile_Account_Id(visitId, accountId) == null)
+            throw new ApiException("you are not a member of this visit");
+        return visit;
+    }
+
+    // organizer edits the visit details (same body as create, groupName is ignored)
+    @Transactional
+    public void updateByOrganizer(Integer accountId, Integer visitId, CreateVisitDtoIn dto) {
+        if (dto == null)
+            throw new ApiException("Visit details are required");
+
+        Visit visit = visitRepository.findVisitByIdForUpdate(visitId);
+        if (visit == null)
+            throw new ApiException("visit not found");
+        if (!visit.getOrganizer().getId().equals(accountId))
+            throw new ApiException("only the organizer can do this");
+
+        checkTimes(dto.getPlannedStartTime(), dto.getPlannedEndTime());
+
+        if ((!"DRAFT".equals(visit.getStatus()) && !"PLANNING".equals(visit.getStatus()))
+                || Boolean.TRUE.equals(visit.getMembersLocked()))
+            throw new ApiException("Visit details cannot be changed after planning starts or the visit closes");
+
+        validateVisitDetails(dto.getVisitDate(), dto.getMaxParticipants());
+
+        if (dto.getMaxParticipants() < visitMemberRepository.countByVisit(visit))
+            throw new ApiException("max participants is less than current members");
+
+        visit.setName(dto.getName());
+        visit.setVisitDate(dto.getVisitDate());
+        visit.setPlannedStartTime(dto.getPlannedStartTime());
+        visit.setPlannedEndTime(dto.getPlannedEndTime());
+        visit.setMaxParticipants(dto.getMaxParticipants());
+        visitRepository.save(visit);
+    }
 
     @Transactional
     public void cancel(Integer accountId, Integer visitId) {

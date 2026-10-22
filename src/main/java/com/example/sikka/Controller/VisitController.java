@@ -52,6 +52,18 @@ public class VisitController {
         return ResponseEntity.status(200).body(visitService.myVisits(accountId));
     }
 
+    @GetMapping("/details/{accountId}/{visitId}")
+    public ResponseEntity<?> details(@PathVariable Integer accountId, @PathVariable Integer visitId) {
+        return ResponseEntity.status(200).body(visitService.getVisitDetails(accountId, visitId));
+    }
+
+    @PutMapping("/update-visit/{accountId}/{visitId}")
+    public ResponseEntity<?> updateVisit(@PathVariable Integer accountId, @PathVariable Integer visitId,
+                                         @RequestBody @Valid CreateVisitDtoIn dto) {
+        visitService.updateByOrganizer(accountId, visitId, dto);
+        return ResponseEntity.status(200).body(new ApiResponse("visit updated successfully"));
+    }
+
     @PutMapping("/cancel/{accountId}/{visitId}")
     public ResponseEntity<?> cancel(@PathVariable Integer accountId, @PathVariable Integer visitId) {
         visitService.cancel(accountId, visitId);
