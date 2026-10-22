@@ -70,7 +70,6 @@ public class RideService {
     }
 
     @Transactional
-    @org.springframework.transaction.annotation.Transactional
     public void deleteRide(Integer id) {
         Ride ride = rideRepository.findRideById(id);
 

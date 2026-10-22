@@ -121,6 +121,14 @@ public class VisitMemberService {
         VisitMember member = getMemberLocked(accountId, visitId);
         checkOpenForChanges(member.getVisit());
 
+        if (dto == null || dto.getRides() == null) {
+            throw new ApiException("Selected rides list is required");
+        }
+        for (SelectedRideDtoIn selectedRide : dto.getRides()) {
+            if (selectedRide == null || selectedRide.getRideId() == null || selectedRide.getRideId() <= 0 || selectedRide.getPriority() == null || !selectedRide.getPriority().matches("^(MUST_RIDE|PREFERRED|OPTIONAL)$")) {
+                throw new ApiException("Every selected ride requires a positive ride ID and a valid priority");
+            }
+        }
         List<Integer> rideIds = new ArrayList<>();
         Set<Integer> seen = new HashSet<>();
         for (SelectedRideDtoIn r : dto.getRides()) {

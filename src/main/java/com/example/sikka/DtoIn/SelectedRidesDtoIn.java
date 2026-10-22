@@ -15,5 +15,5 @@ public class SelectedRidesDtoIn {
 
     @NotNull(message = "rides list is required")
     @Valid
-    private List<SelectedRideDtoIn> rides;
+    private List<@NotNull(message = "Selected ride cannot be null") SelectedRideDtoIn> rides;
 }

@@ -53,7 +53,6 @@ public class PlaceService {
     }
 
     @Transactional
-    @org.springframework.transaction.annotation.Transactional
     public void deletePlace(Integer placeId){
         Place place = placeRepository.findPlaceById(placeId);
 
