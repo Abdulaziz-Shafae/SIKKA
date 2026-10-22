@@ -4,7 +4,9 @@ import com.example.sikka.Api.ApiException;
 import com.example.sikka.DtoIn.CreateVisitRecordDtoIn;
 import com.example.sikka.DtoIn.UpdateVisitRecordDtoIn;
 import com.example.sikka.DtoIn.RateVisitRecordDtoIn;
+import com.example.sikka.DtoOut.VisitProgressDtoOut;
 import com.example.sikka.DtoOut.VisitRecordDtoOut;
+import com.example.sikka.DtoOut.VisitSummaryDtoOut;
 import com.example.sikka.Model.Account;
 import com.example.sikka.Model.Ride;
 import com.example.sikka.Model.Visit;
@@ -33,6 +35,7 @@ public class VisitRecordService {
     private final VisitRepository visitRepository;
     private final VisitMemberRepository visitMemberRepository;
     private final RideRepository rideRepository;
+    private final VisitPlanService visitPlanService;
 
     @Transactional(readOnly = true)
     public List<VisitRecordDtoOut> getMyVisitRecords(Integer accountId, Integer visitId) {
@@ -247,6 +250,11 @@ public class VisitRecordService {
         visitRecordRepository.save(visitRecord);
     }
 
+    @Transactional(readOnly = true)
+    public boolean hasCompletedRide(Integer memberId, Integer rideId) {
+        return visitRecordRepository.existsByVisitMember_IdAndRide_IdAndStatus(memberId, rideId, "COMPLETED");
+    }
+
     @Transactional
     public void rateVisitRecord(Integer accountId, RateVisitRecordDtoIn rateVisitRecordDtoIn) {
         Account account = accountRepository.findAccountById(accountId);
@@ -288,22 +296,102 @@ public class VisitRecordService {
         visitRecordRepository.save(visitRecord);
     }
 
-
     @Transactional(readOnly = true)
-    public boolean hasCompletedRide(Integer memberId, Integer rideId) {
-        VisitMember visitMember = visitMemberRepository.findVisitMemberById(memberId);
+    public VisitSummaryDtoOut getMyVisitSummary(Integer accountId, Integer visitId) {
+        if (accountId == null || accountId <= 0) {
+            throw new ApiException("A valid account ID is required");
+        }
+
+        if (visitId == null || visitId <= 0) {
+            throw new ApiException("A valid visit ID is required");
+        }
+
+        Account account = accountRepository.findAccountById(accountId);
+
+        if (account == null) {
+            throw new ApiException("Account not found");
+        }
+
+        if (!"ACTIVE".equals(account.getStatus())) {
+            throw new ApiException("Account is not active");
+        }
+
+        Visit visit = visitRepository.findVisitById(visitId);
+
+        if (visit == null) {
+            throw new ApiException("Visit not found");
+        }
+
+        VisitMember visitMember = visitMemberRepository.findVisitMemberByVisit_IdAndVisitorProfile_Account_Id(visitId, accountId);
 
         if (visitMember == null) {
-            throw new ApiException("Visit member not found");
+            throw new ApiException("You are not a member of this visit");
         }
 
-        Ride ride = rideRepository.findRideById(rideId);
-
-        if (ride == null) {
-            throw new ApiException("Ride not found");
+        if (!"COMPLETED".equals(visit.getStatus())) {
+            throw new ApiException("The visit must be completed before viewing its summary");
         }
 
-        return visitRecordRepository.existsByVisitMember_IdAndRide_IdAndStatus(memberId, rideId, "COMPLETED");
+        List<VisitRecord> visitRecords = visitRecordRepository.findAllByVisitMember_IdOrderByCreatedAtDescIdDesc(visitMember.getId());
+        HashSet<Integer> completedRideIds = new HashSet<>();
+        int completedRidesCount = 0;
+        int skippedRidesCount = 0;
+        int ratingsCount = 0;
+        int ratingsTotal = 0;
+
+        for (VisitRecord visitRecord : visitRecords) {
+            if ("COMPLETED".equals(visitRecord.getStatus())) {
+                completedRidesCount++;
+                completedRideIds.add(visitRecord.getRide().getId());
+
+                if (visitRecord.getRating() != null) {
+                    ratingsCount++;
+                    ratingsTotal += visitRecord.getRating();
+                }
+            } else if ("SKIPPED".equals(visitRecord.getStatus())) {
+                skippedRidesCount++;
+            }
+        }
+
+        int uniqueCompletedRidesCount = completedRideIds.size();
+        int repeatedRidesCount = completedRidesCount - uniqueCompletedRidesCount;
+        Double averageRating = null;
+
+        if (ratingsCount > 0) {
+            averageRating = Math.round((double) ratingsTotal / ratingsCount * 100.0) / 100.0;
+        }
+
+        return new VisitSummaryDtoOut(visitId, visitMember.getId(), completedRidesCount, uniqueCompletedRidesCount, repeatedRidesCount, skippedRidesCount, ratingsCount, averageRating);
+    }
+
+    @Transactional(readOnly = true)
+    public VisitProgressDtoOut getMyVisitProgress(Integer accountId, Integer visitId) {
+        HashSet<Integer> plannedRideIds = visitPlanService.getMyPlannedRideIds(accountId, visitId);
+        VisitMember visitMember = visitMemberRepository.findVisitMemberByVisit_IdAndVisitorProfile_Account_Id(visitId, accountId);
+
+        if (visitMember == null) {
+            throw new ApiException("You are not a member of this visit");
+        }
+
+        List<VisitRecord> visitRecords = visitRecordRepository.findAllByVisitMember_IdOrderByCreatedAtDescIdDesc(visitMember.getId());
+        HashSet<Integer> completedPlannedRideIds = new HashSet<>();
+
+        for (VisitRecord visitRecord : visitRecords) {
+            if ("COMPLETED".equals(visitRecord.getStatus()) && plannedRideIds.contains(visitRecord.getRide().getId())) {
+                completedPlannedRideIds.add(visitRecord.getRide().getId());
+            }
+        }
+
+        int plannedRidesCount = plannedRideIds.size();
+        int completedPlannedRidesCount = completedPlannedRideIds.size();
+        int remainingRidesCount = plannedRidesCount - completedPlannedRidesCount;
+        Double completionPercentage = null;
+
+        if (plannedRidesCount > 0) {
+            completionPercentage = Math.round((double) completedPlannedRidesCount / plannedRidesCount * 10000.0) / 100.0;
+        }
+
+        return new VisitProgressDtoOut(visitId, plannedRidesCount, completedPlannedRidesCount, remainingRidesCount, completionPercentage);
     }
 
 }

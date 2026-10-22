@@ -138,8 +138,8 @@ public class PlanItemService {
             throw new ApiException("Account is not active");
         }
 
-        if (planItemDtoIn == null) {
-            throw new ApiException("Plan item data is required");
+        if (planItemDtoIn == null || planItemDtoIn.getPlanItemId() == null || planItemDtoIn.getPlanItemId() <= 0) {
+            throw new ApiException("A positive plan item ID is required");
         }
 
         PlanItem planItem = planItemRepository.findPlanItemById(planItemDtoIn.getPlanItemId());
@@ -183,7 +183,7 @@ public class PlanItemService {
         }
 
         if (!"PLANNING".equals(visit.getStatus())) {
-            throw new ApiException("Activity preferences can only be changed during PLANNING");
+            throw new ApiException("Activity preferences cannot be changed in the current visit status");
         }
 
         if (Boolean.TRUE.equals(visitPlan.getIsActive())) {
@@ -196,6 +196,10 @@ public class PlanItemService {
 
         if (visitPlan.getProposedItems() != null) {
             throw new ApiException("A plan with a pending proposal cannot be edited directly");
+        }
+
+        if (planItemDtoIn == null) {
+            throw new ApiException("Activity preferences are required");
         }
 
         String priority = planItemDtoIn.getPriority();

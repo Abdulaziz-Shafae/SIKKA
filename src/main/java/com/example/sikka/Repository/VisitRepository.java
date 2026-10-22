@@ -8,6 +8,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
+
 @Repository
 public interface VisitRepository extends JpaRepository<Visit, Integer> {
 
@@ -16,4 +18,7 @@ public interface VisitRepository extends JpaRepository<Visit, Integer> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select v from Visit v where v.id = :visitId")
     Visit findVisitByIdForUpdate(@Param("visitId") Integer visitId);
+
+    List<Visit> findAllByOrganizer_Id(Integer accountId);
+
 }

@@ -85,6 +85,9 @@ public class VisitGroupService {
     }
 
     private String hash(String code) {
+        if (code == null || code.isBlank()) {
+            throw new ApiException("Invite code is required");
+        }
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
             byte[] bytes = md.digest(code.getBytes(StandardCharsets.UTF_8));
@@ -100,5 +103,77 @@ public class VisitGroupService {
     private VisitGroupDtoOut toDtoOut(VisitGroup g) {
         return new VisitGroupDtoOut(g.getId(), g.getName(), g.getOrganizer().getId(),
                 g.getInvitationsEnabled(), g.getCreatedAt());
+    }
+    // creates a group for an existing visit and returns the raw invite code
+    @org.springframework.transaction.annotation.Transactional
+    public String attachGroup(Visit visit, String groupName) {
+        if (visit == null || groupName == null || groupName.isBlank() || groupName.length() > 150) {
+            throw new ApiException("Visit and group name (up to 150 characters) are required");
+        }
+        if (visit.getGroup() != null) {
+            throw new ApiException("Visit already has a group");
+        }
+        if ((!"DRAFT".equals(visit.getStatus()) && !"PLANNING".equals(visit.getStatus())) || Boolean.TRUE.equals(visit.getMembersLocked())) {
+            throw new ApiException("Group cannot be added after planning starts or the visit closes");
+        }
+        String code = newCode();
+
+        VisitGroup group = new VisitGroup();
+        group.setName(groupName);
+        group.setInvitationsEnabled(true);
+        group.setOrganizer(visit.getOrganizer());
+        group.setInviteCodeHash(hash(code));
+        visitGroupRepository.save(group);
+
+        visit.setGroup(group);
+        visitRepository.save(visit);
+        return code;
+    }
+
+    // for a solo visit that wants friends later
+    @org.springframework.transaction.annotation.Transactional
+    public String addGroupToVisit(Integer accountId, Integer visitId, String groupName) {
+        Visit visit = visitRepository.findVisitByIdForUpdate(visitId);
+        if (visit == null)
+            throw new ApiException("visit not found");
+        if (!visit.getOrganizer().getId().equals(accountId))
+            throw new ApiException("only the organizer can do this");
+        if (visit.getGroup() != null)
+            throw new ApiException("visit already has a group");
+        if (visit.getStatus().equals("CANCELLED") || visit.getStatus().equals("COMPLETED"))
+            throw new ApiException("visit is closed");
+
+        return attachGroup(visit, groupName);
+    }
+
+    public String regenerateCode(Integer accountId, Integer visitId) {
+        VisitGroup group = getOrganizerGroup(accountId, visitId);
+        String code = newCode();
+        group.setInviteCodeHash(hash(code));
+        visitGroupRepository.save(group);
+        return code;
+    }
+
+    // flips invitations on/off, returns the new value
+    public boolean toggleInvitations(Integer accountId, Integer visitId) {
+        VisitGroup group = getOrganizerGroup(accountId, visitId);
+        group.setInvitationsEnabled(!group.getInvitationsEnabled());
+        visitGroupRepository.save(group);
+        return group.getInvitationsEnabled();
+    }
+
+    private VisitGroup getOrganizerGroup(Integer accountId, Integer visitId) {
+        Visit visit = visitRepository.findVisitById(visitId);
+        if (visit == null)
+            throw new ApiException("visit not found");
+        if (!visit.getOrganizer().getId().equals(accountId))
+            throw new ApiException("only the organizer can do this");
+        if (visit.getGroup() == null)
+            throw new ApiException("visit has no group");
+        return visit.getGroup();
+    }
+
+    private String newCode() {
+        return UUID.randomUUID().toString().replace("-", "").substring(0, 12).toUpperCase();
     }
 }

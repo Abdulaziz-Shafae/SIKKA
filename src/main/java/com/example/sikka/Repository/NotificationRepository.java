@@ -12,4 +12,7 @@ public interface NotificationRepository extends JpaRepository<Notification, Inte
     Notification findNotificationById(Integer id);
 
     List<Notification> findAllByAccount_IdAndChannelAndStatusOrderByCreatedAtDescIdDesc(Integer accountId, String channel, String status);
+
+    long countByAccount_IdAndChannelAndStatusAndReadAtIsNull(Integer accountId, String channel, String status);
+
 }

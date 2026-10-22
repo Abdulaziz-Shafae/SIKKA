@@ -15,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -54,7 +55,7 @@ public class NotificationService {
                 visitId = notification.getVisit().getId();
             }
 
-            notificationDtoOuts.add(new NotificationDtoOut(notification.getId(), visitId, notification.getChannel(), notification.getType(), notification.getTitle(), notification.getMessage(), notification.getStatus(), notification.getScheduledAt(), notification.getCreatedAt()));
+            notificationDtoOuts.add(new NotificationDtoOut(notification.getId(), visitId, notification.getChannel(), notification.getType(), notification.getTitle(), notification.getMessage(), notification.getStatus(), notification.getScheduledAt(), notification.getCreatedAt(), notification.getReadAt()));
         }
 
         return notificationDtoOuts;
@@ -96,7 +97,7 @@ public class NotificationService {
             visitId = notification.getVisit().getId();
         }
 
-        return new NotificationDtoOut(notification.getId(), visitId, notification.getChannel(), notification.getType(), notification.getTitle(), notification.getMessage(), notification.getStatus(), notification.getScheduledAt(), notification.getCreatedAt());
+        return new NotificationDtoOut(notification.getId(), visitId, notification.getChannel(), notification.getType(), notification.getTitle(), notification.getMessage(), notification.getStatus(), notification.getScheduledAt(), notification.getCreatedAt(), notification.getReadAt());
     }
 
     @Transactional
@@ -130,6 +131,12 @@ public class NotificationService {
         }
 
         notificationRepository.delete(notification);
+    }
+
+    @Transactional
+    public void sendNotification(Integer accountId, Integer visitId, String channel, String type, String title, String message) {
+        NotificationDtoIn dto = new NotificationDtoIn(visitId, channel, type, title, message, null);
+        createNotification(accountId, dto);
     }
 
     @Transactional
@@ -201,16 +208,66 @@ public class NotificationService {
     }
 
     @Transactional
-    public void sendNotification(Integer accountId, Integer visitId, String channel, String type, String title, String message) {
-        NotificationDtoIn notificationDtoIn = new NotificationDtoIn();
+    public void markNotificationAsRead(Integer accountId, Integer notificationId) {
+        if (accountId == null || accountId <= 0) {
+            throw new ApiException("A valid account ID is required");
+        }
 
-        notificationDtoIn.setChannel(channel);
-        notificationDtoIn.setType(type);
-        notificationDtoIn.setTitle(title);
-        notificationDtoIn.setMessage(message);
-        notificationDtoIn.setVisitId(visitId);
+        if (notificationId == null || notificationId <= 0) {
+            throw new ApiException("A valid notification ID is required");
+        }
 
-        createNotification(accountId, notificationDtoIn);
+        Account account = accountRepository.findAccountById(accountId);
+
+        if (account == null) {
+            throw new ApiException("Account not found");
+        }
+
+        if (!"ACTIVE".equals(account.getStatus())) {
+            throw new ApiException("Account is not active");
+        }
+
+        Notification notification = notificationRepository.findNotificationById(notificationId);
+
+        if (notification == null) {
+            throw new ApiException("Notification not found");
+        }
+
+        if (!notification.getAccount().getId().equals(accountId)) {
+            throw new ApiException("This notification does not belong to you");
+        }
+
+        if (!"IN_APP".equals(notification.getChannel())) {
+            throw new ApiException("Only in-app notifications can be marked as read");
+        }
+
+        if (!"SENT".equals(notification.getStatus())) {
+            throw new ApiException("This notification is not available yet");
+        }
+
+        if (notification.getReadAt() == null) {
+            notification.setReadAt(LocalDateTime.now());
+            notificationRepository.save(notification);
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public long getUnreadNotificationsCount(Integer accountId) {
+        if (accountId == null || accountId <= 0) {
+            throw new ApiException("A valid account ID is required");
+        }
+
+        Account account = accountRepository.findAccountById(accountId);
+
+        if (account == null) {
+            throw new ApiException("Account not found");
+        }
+
+        if (!"ACTIVE".equals(account.getStatus())) {
+            throw new ApiException("Account is not active");
+        }
+
+        return notificationRepository.countByAccount_IdAndChannelAndStatusAndReadAtIsNull(accountId, "IN_APP", "SENT");
     }
 
 }

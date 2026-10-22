@@ -22,4 +22,5 @@ public class NotificationDtoOut {
     private String status;
     private LocalDateTime scheduledAt;
     private LocalDateTime createdAt;
+    private LocalDateTime readAt;
 }

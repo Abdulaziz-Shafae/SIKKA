@@ -5,6 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 
 @Data
@@ -23,12 +24,12 @@ public class VisitorProfileDtoIn {
     private LocalDate birthDate;
 
     @Positive(message = "height must be positive")
-    private Double heightCm;
+    private BigDecimal heightCm;
 
     @Positive(message = "weight must be positive")
-    private Double weightKg;
+    private BigDecimal weightKg;
 
-    @Pattern(regexp = "^(LOW|MEDIUM|HIGH)$", message = "thrill preference must be LOW, MEDIUM, or HIGH")
+    @Pattern(regexp = "^(LOW|MILD|EXTREME)$", message = "thrill preference must be LOW, MILD or EXTREME")
     private String thrillPreference;
 
     private String preferredRideTypes;

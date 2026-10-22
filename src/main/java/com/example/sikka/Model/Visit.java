@@ -26,14 +26,14 @@ public class Visit {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
-    @Size(max = 150, message = "name must not exceed 150 characters")
     @Column(columnDefinition = "varchar(150)")
     private String name;
 
-    @NotNull(message = "visit date is required")
-    @FutureOrPresent(message = "visit date cannot be in the past")
     @Column(columnDefinition = "date not null")
     private LocalDate visitDate;
+
+    @Column(columnDefinition = "int not null")
+    private Integer maxParticipants;
 
     @Column(columnDefinition = "time")
     private LocalTime plannedStartTime;
@@ -41,15 +41,13 @@ public class Visit {
     @Column(columnDefinition = "time")
     private LocalTime plannedEndTime;
 
-    @Pattern(regexp = "^(DRAFT|OPEN|PLANNING|READY|IN_PROGRESS|COMPLETED|CANCELLED)$",
+    @Pattern(regexp = "^(DRAFT|PLANNING|READY|IN_PROGRESS|COMPLETED|CANCELLED)$",
             message = "invalid visit status")
     @Column(columnDefinition = "varchar(20) not null default 'DRAFT'")
     private String status;
 
-    @NotNull(message = "max participants is required")
-    @Positive(message = "max participants must be positive")
-    @Column(columnDefinition = "int not null")
-    private Integer maxParticipants;
+    @Column(columnDefinition = "boolean not null default false")
+    private Boolean membersLocked = false;
 
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
@@ -70,5 +68,18 @@ public class Visit {
     private Account organizer;
 
     @OneToMany(cascade = CascadeType.ALL, mappedBy = "visit")
+    @JsonIgnore
     private Set<VisitMember> members;
+
+    @OneToMany(mappedBy = "visit")
+    @JsonIgnore
+    private Set<VisitPlan> visitPlans;
+
+    @OneToMany(mappedBy = "visit")
+    @JsonIgnore
+    private Set<Notification> notifications;
+
+    @OneToMany(mappedBy = "visit")
+    @JsonIgnore
+    private Set<PaymentOrder> paymentOrders;
 }

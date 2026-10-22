@@ -2,6 +2,7 @@ package com.example.sikka.Model;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.PastOrPresent;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
@@ -32,12 +33,36 @@ public class Place {
     private String name;
 
     @NotBlank(message = "Place kind cannot be blank")
-    @Pattern(
-            regexp = "^(RESTAURANT|MEETING_POINT|RESTROOM|OTHER)$",
-            message = "Place kind must be RESTAURANT, MEETING_POINT, RESTROOM or OTHER"
-    )
+    @Pattern(regexp = "^(RESTAURANT|SHOP|MEETING_POINT|RESTROOM|OTHER)$", message = "Place kind must be RESTAURANT, SHOP, MEETING_POINT, RESTROOM or OTHER" )
     @Column(nullable = false, length = 20)
     private String kind;
+
+    @Pattern(regexp = "^(STEAM_TOWN|CITY_OF_THRILLS|TWILIGHT_GARDENS|DISCOVERY_SPRINGS|GRAND_EXPOSITION|VALLEY_OF_FORTUNE|CITADEL)$", message = "Invalid land")
+    @Column(length = 60)
+    private String land;
+
+    @Pattern(regexp = "^(FULL_SERVICE|FAST_FOOD|BUFFETERIA|KIOSK|CART|VIP_LOUNGE)$", message = "Invalid serviceType")
+    @Column(length = 60)
+    private String serviceType;
+
+    @ElementCollection
+    @Column(length = 60)
+    private Set<@Pattern(regexp = "^(NORTH_AMERICAN|MIDDLE_EASTERN|MEXICAN|INDIAN|ITALIAN|PAN_ASIAN|MULTINATIONAL)$", message = "Invalid cuisineTypes value") String> cuisineTypes = new HashSet<>();
+
+    @ElementCollection
+    @Column(length = 60)
+    private Set<@Pattern(regexp = "^(FLAGSHIP|LAND_STORE|RIDE_STORE|PHOTO_STORE|SPECIALTY_STORE|KIOSK|CART)$", message = "Invalid shopTypes value") String> shopTypes = new HashSet<>();
+
+    @Pattern(regexp = "^(OPEN|CLOSED|UNAVAILABLE)$", message = "Invalid status")
+    @Column(length = 20)
+    private String status;
+
+    @Size(max = 500, message = "Source URL must not exceed 500 characters")
+    @Column(length = 500)
+    private String sourceUrl;
+
+    @PastOrPresent(message = "Details verification cannot be in the future")
+    private LocalDateTime detailsVerifiedAt;
 
     @Digits(integer = 4, fraction = 6, message = "Invalid map X coordinate")
     @Column(precision = 10, scale = 6)
