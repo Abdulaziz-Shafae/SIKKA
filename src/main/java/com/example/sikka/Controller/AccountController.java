@@ -47,6 +47,11 @@ public class AccountController {
         return ResponseEntity.status(200).body(new ApiResponse("registered successfully"));
     }
 
+    @GetMapping("/me/{accountId}")
+    public ResponseEntity<?> me(@PathVariable Integer accountId) {
+        return ResponseEntity.status(200).body(accountService.getMe(accountId));
+    }
+
 
 
 

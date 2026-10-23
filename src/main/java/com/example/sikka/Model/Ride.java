@@ -30,6 +30,11 @@ public class Ride {
     @Column(nullable = false, length = 150)
     private String name;
 
+    @Size(max = 150, message = "Source ride ID must not exceed 150 characters")
+    @Pattern(regexp = "^[a-z0-9]+(-[a-z0-9]+)*$", message = "Invalid source ride ID")
+    @Column(unique = true, length = 150)
+    private String sourceRideId;
+
     @Pattern(regexp = "^(THRILL|FAMILY|KIDS|WATER|ARCADE)$", message = "Category must be THRILL, FAMILY, KIDS, WATER or ARCADE")
     @Size(max = 60, message = "Category must not exceed 60 characters")
     @Column(length = 60)
@@ -152,4 +157,14 @@ public class Ride {
     public void updateTimestamp() {
         updatedAt = LocalDateTime.now();
     }
+
+    @jakarta.validation.constraints.Positive
+    private Integer rideDurationMinutes;
+
+    @jakarta.validation.constraints.PositiveOrZero
+    private Integer entryExitBufferMinutes;
+
+    @Column(columnDefinition = "json")
+    private String trackingArea;
+
 }

@@ -10,6 +10,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Set;
 
@@ -24,6 +26,21 @@ public class VisitMember {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
+
+    @Column(columnDefinition = "varchar(100)")
+    private String name;
+
+    @Column(columnDefinition = "date")
+    private LocalDate birthDate;
+
+    @Column(columnDefinition = "decimal(5,2)")
+    private BigDecimal heightCm;
+
+    @Column(columnDefinition = "decimal(6,2)")
+    private BigDecimal weightKg;
+
+    @Column(columnDefinition = "varchar(10)")
+    private String gender;
 
     @Pattern(regexp = "^(INVITED|GOING|MAYBE|NOT_GOING)$",
             message = "rsvp status must be INVITED, GOING, MAYBE, or NOT_GOING")
@@ -43,6 +60,12 @@ public class VisitMember {
     @Column(columnDefinition = "text")
     private String visitReview;
 
+    @Column(columnDefinition = "tinyint")
+    private Integer sikkaRating;
+
+    @Column(columnDefinition = "text")
+    private String sikkaReview;
+
     @Column(columnDefinition = "datetime")
     private LocalDateTime invitedAt;
 
@@ -52,7 +75,7 @@ public class VisitMember {
     private Visit visit;
 
     @ManyToOne
-    @JoinColumn(name = "visitor_profile_id", nullable = false)
+    @JoinColumn(name = "visitor_profile_id")
     @JsonIgnore
     private VisitorProfile visitorProfile;
 
@@ -64,5 +87,20 @@ public class VisitMember {
     @JsonIgnore
     private Set<VisitRecord> visitRecords;
 
+
+
+    @ManyToOne
+    @JoinColumn(name = "family_member_id")
+    @JsonIgnore
+    private FamilyMember familyMember;
+
+    @Pattern(regexp = "^(PENDING|ANSWERED|SKIPPED)$")
+    @Column(columnDefinition = "varchar(15) not null default 'PENDING'")
+    private String answerStatus = "PENDING";
+
+    @Column(columnDefinition = "json")
+    private String preferences;
+
+    private LocalDateTime snapshotAt;
 
 }

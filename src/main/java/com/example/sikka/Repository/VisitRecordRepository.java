@@ -1,5 +1,6 @@
 package com.example.sikka.Repository;
 
+import com.example.sikka.Model.Account;
 import com.example.sikka.Model.VisitRecord;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -22,4 +23,13 @@ public interface VisitRecordRepository extends JpaRepository<VisitRecord, Intege
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select r from VisitRecord r where r.id = :visitRecordId")
     VisitRecord findVisitRecordByIdForUpdate(@Param("visitRecordId") Integer visitRecordId);
+
+    List<VisitRecord> findAllByRecordedByAccount_IdAndRequestKeyOrderByIdAsc(Integer accountId, String requestKey);
+
+    VisitRecord findVisitRecordByVisitMember_IdAndPlanItem_Id(Integer visitMemberId, Integer planItemId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select a from Account a where a.id = :accountId")
+    Account findRecordingAccountByIdForUpdate(@Param("accountId") Integer accountId);
+
 }

@@ -2,10 +2,7 @@ package com.example.sikka.Model;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 
@@ -16,11 +13,16 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @NoArgsConstructor
 @Entity
+@Table(uniqueConstraints = {@UniqueConstraint(name = "uk_visit_record_account_member_request", columnNames = {"recorded_by_account_id", "visit_member_id", "request_key"}), @UniqueConstraint(name = "uk_visit_record_member_plan_item", columnNames = {"visit_member_id", "plan_item_id"})})
 public class VisitRecord {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
+
+    @Size(max = 80, message = "Request key must not exceed 80 characters")
+    @Column(name = "request_key", length = 80, updatable = false)
+    private String requestKey;
 
     @NotNull(message = "Record status is required")
     @Pattern(regexp = "^(COMPLETED|SKIPPED)$", message = "Record status must be COMPLETED or SKIPPED")
@@ -59,4 +61,15 @@ public class VisitRecord {
      @JoinColumn(name = "recorded_by_account_id", nullable = false)
      @JsonIgnore
      private Account recordedByAccount;
+
+    @ManyToOne
+    @JoinColumn(name = "plan_item_id")
+    @JsonIgnore
+    private PlanItem planItem;
+
+    @OneToOne
+    @JoinColumn(name = "activity_session_id", unique = true)
+    @JsonIgnore
+    private ActivitySession activitySession;
+
 }

@@ -14,15 +14,32 @@ import java.time.LocalDateTime;
 public class VisitRecordDtoOut {
 
     private Integer id;
+
+    private String requestKey;
+
     private Integer visitMemberId;
+
+    private Integer planItemId;
+
+    private Integer activitySessionId;
+
     private Integer rideId;
+
     private String rideName;
+
     private Integer recordedByAccountId;
+
     private String status;
+
     private LocalDateTime completedAt;
+
     private LocalDateTime skippedAt;
+
     private Integer rating;
+
     private String reviewNote;
+
     private LocalDateTime correctedAt;
+
     private LocalDateTime createdAt;
 }

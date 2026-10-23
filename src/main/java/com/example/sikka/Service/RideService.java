@@ -26,6 +26,7 @@ import java.util.List;
 public class RideService {
 
     private final RideRepository rideRepository;
+    private final com.example.sikka.Repository.VisitMemberRepository visitMemberRepository;
     private final VisitorProfileRepository visitorProfileRepository;
     private final AccountRepository accountRepository;
 
@@ -195,6 +196,10 @@ public class RideService {
     }
 
     private void copyRideFields(Ride target, Ride source) {
+        target.setSourceRideId(source.getSourceRideId());
+        target.setRideDurationMinutes(source.getRideDurationMinutes());
+        target.setEntryExitBufferMinutes(source.getEntryExitBufferMinutes());
+        target.setTrackingArea(source.getTrackingArea());
         target.setName(source.getName());
         target.setLand(source.getLand());
         target.setRideFeatures(source.getRideFeatures());
@@ -428,4 +433,58 @@ public class RideService {
         // TODO: ربط التغيير المؤثر بـ VisitPlanService.onRideChanged(rideId)
         // بعد تنفيذها، لفحص الخطط المتأثرة واقتراح بديل دون تغيير الخطة المعتمدة مباشرة.
     }
+
+    public java.util.Map<String, Object> checkEligibilityForMember(Integer accountId, Integer memberId, Integer rideId) {
+        com.example.sikka.Model.VisitMember member = visitMemberRepository.findVisitMemberById(memberId);
+        if (member == null || !member.getVisit().getOrganizer().getId().equals(accountId) && (member.getVisitorProfile() == null || !member.getVisitorProfile().getAccount().getId().equals(accountId))) {
+            throw new ApiException("You cannot access this visit member");
+        }
+        Ride ride = getRideById(rideId);
+        List<String> reasons = new ArrayList<>();
+        List<String> missing = new ArrayList<>();
+        java.math.BigDecimal height = member.getHeightCm();
+        java.math.BigDecimal weight = member.getWeightKg();
+        if (height == null) {
+            missing.add("heightCm");
+        } else if (ride.getMinHeightCm() != null && height.compareTo(ride.getMinHeightCm()) < 0 || ride.getMaxHeightCm() != null && height.compareTo(ride.getMaxHeightCm()) > 0) {
+            reasons.add("Height is outside the known ride limits");
+        }
+        if (weight == null) {
+            missing.add("weightKg");
+        } else if (ride.getMinWeightKg() != null && weight.compareTo(ride.getMinWeightKg()) < 0 || ride.getMaxWeightKg() != null && weight.compareTo(ride.getMaxWeightKg()) > 0) {
+            reasons.add("Weight is outside the known ride limits");
+        }
+        if (member.getBirthDate() == null) {
+            missing.add("birthDate");
+        } else {
+            int age = Period.between(member.getBirthDate(), member.getVisit().getVisitDate()).getYears();
+            if (age < 0 || ride.getMinAgeYears() != null && age < ride.getMinAgeYears() || ride.getMaxAgeYears() != null && age > ride.getMaxAgeYears()) {
+                reasons.add("Age is outside the known ride limits on the visit date");
+            }
+        }
+        if (reasons.isEmpty()) {
+            reasons.add("Eligibility is unconfirmed; health and companion requirements still need verification");
+        } else {
+            return java.util.Map.of("status", "NOT_ELIGIBLE", "reasons", reasons, "missingFields", missing);
+        }
+        return java.util.Map.of("status", "UNKNOWN", "reasons", reasons, "missingFields", missing);
+    }
+
+    public java.util.Map<String, Object> getRideSnapshot(Integer rideId) {
+        Ride ride = getRideById(rideId);
+        java.util.Map<String, Object> snapshot = new java.util.LinkedHashMap<>();
+        snapshot.put("id", ride.getId());
+        snapshot.put("status", ride.getStatus());
+        snapshot.put("nodeKey", "RIDE:" + ride.getId());
+        snapshot.put("rideDurationMinutes", ride.getRideDurationMinutes());
+        snapshot.put("entryExitBufferMinutes", ride.getEntryExitBufferMinutes());
+        snapshot.put("features", ride.getRideFeatures());
+        boolean recent = ride.getWaitMinutes() != null && ride.getWaitObservedAt() != null && !ride.getWaitObservedAt().isAfter(LocalDateTime.now()) && !ride.getWaitObservedAt().isBefore(LocalDateTime.now().minusMinutes(waitFreshnessMinutes));
+        snapshot.put("planningWaitMinutes", recent ? ride.getWaitMinutes() : null);
+        snapshot.put("waitIsEstimate", true);
+        snapshot.put("waitSource", ride.getWaitSource() == null ? "UNKNOWN" : ride.getWaitSource());
+        snapshot.put("waitObservedAt", recent ? ride.getWaitObservedAt().atZone(java.time.ZoneId.of("Asia/Riyadh")).toOffsetDateTime().toString() : null);
+        return snapshot;
+    }
+
 }

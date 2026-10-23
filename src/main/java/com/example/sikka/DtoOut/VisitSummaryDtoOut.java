@@ -26,4 +26,12 @@ public class VisitSummaryDtoOut {
     private Integer ratingsCount;
 
     private Double averageRating;
+
+    private Integer completedOtherActivitiesCount;
+
+    private Integer skippedOtherActivitiesCount;
+
+    private Integer otherActivitiesRatingsCount;
+
+    private Double averageOtherActivitiesRating;
 }

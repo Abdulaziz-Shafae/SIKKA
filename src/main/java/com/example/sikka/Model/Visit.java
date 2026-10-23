@@ -41,6 +41,24 @@ public class Visit {
     @Column(columnDefinition = "time")
     private LocalTime plannedEndTime;
 
+    @Column(columnDefinition = "varchar(10)")
+    private String tripType;
+
+    @Column(name = "group_mode", columnDefinition = "varchar(10)")
+    private String togetherMode;
+
+    @Column(columnDefinition = "json")
+    private String goals;
+
+    @Column(name = "top_goal", columnDefinition = "varchar(50)")
+    private String primaryGoal;
+
+    @Column(name = "prayer_enabled", columnDefinition = "boolean not null default false")
+    private Boolean includePrayer = false;
+
+    @Column(columnDefinition = "time")
+    private LocalTime expectedArrivalTime;
+
     @Pattern(regexp = "^(DRAFT|PLANNING|READY|IN_PROGRESS|COMPLETED|CANCELLED)$",
             message = "invalid visit status")
     @Column(columnDefinition = "varchar(20) not null default 'DRAFT'")
@@ -82,4 +100,17 @@ public class Visit {
     @OneToMany(mappedBy = "visit")
     @JsonIgnore
     private Set<PaymentOrder> paymentOrders;
+
+    @OneToMany(mappedBy = "visit")
+    @JsonIgnore
+    private Set<PlanHistory> planHistories;
+
+    @Positive
+    private Integer durationMinutes;
+
+    private LocalDateTime startedAt;
+
+    @Column(columnDefinition = "json")
+    private String sharedSelectedRides;
+
 }

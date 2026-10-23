@@ -143,6 +143,8 @@ public class VisitGroupService {
             throw new ApiException("only the organizer can do this");
         if (visit.getGroup() != null)
             throw new ApiException("visit already has a group");
+        if (!"FRIENDS".equals(visit.getTripType()))
+            throw new ApiException("only a FRIENDS trip can have a group");
         if (visit.getStatus().equals("CANCELLED") || visit.getStatus().equals("COMPLETED"))
             throw new ApiException("visit is closed");
 

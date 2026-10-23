@@ -18,7 +18,7 @@ class ParkCatalogueValidationTest {
         RideRepository repository = mock(RideRepository.class);
         Ride ride = new Ride();
         ride.setCompanionRequiredBelowHeightCm(new BigDecimal("130"));
-        assertThrows(ApiException.class, () -> new RideService(repository, mock(com.example.sikka.Repository.VisitorProfileRepository.class), mock(com.example.sikka.Repository.AccountRepository.class)).addRide(ride));
+        assertThrows(ApiException.class, () -> new RideService(repository, mock(com.example.sikka.Repository.VisitMemberRepository.class), mock(com.example.sikka.Repository.VisitorProfileRepository.class), mock(com.example.sikka.Repository.AccountRepository.class)).addRide(ride));
         verifyNoInteractions(repository);
     }
 
@@ -29,7 +29,7 @@ class ParkCatalogueValidationTest {
         ride.setAdultCompanionRequired(true);
         ride.setMinHeightCm(new BigDecimal("90"));
         ride.setCompanionRequiredBelowHeightCm(new BigDecimal("130"));
-        new RideService(repository, mock(com.example.sikka.Repository.VisitorProfileRepository.class), mock(com.example.sikka.Repository.AccountRepository.class)).addRide(ride);
+        new RideService(repository, mock(com.example.sikka.Repository.VisitMemberRepository.class), mock(com.example.sikka.Repository.VisitorProfileRepository.class), mock(com.example.sikka.Repository.AccountRepository.class)).addRide(ride);
         verify(repository).save(argThat(saved -> Boolean.TRUE.equals(saved.getAdultCompanionRequired()) && saved.getCompanionRequiredBelowHeightCm().compareTo(new BigDecimal("130")) == 0));
     }
 
@@ -39,7 +39,7 @@ class ParkCatalogueValidationTest {
         Place place = new Place();
         place.setKind("SHOP");
         place.setCuisineTypes(Set.of("INDIAN"));
-        assertThrows(ApiException.class, () -> new PlaceService(repository).addPlace(place));
+        assertThrows(ApiException.class, () -> new PlaceService(repository, mock(com.example.sikka.Service.MapService.class), mock(com.example.sikka.Repository.VisitRepository.class)).addPlace(place));
         verifyNoInteractions(repository);
     }
 
@@ -49,7 +49,7 @@ class ParkCatalogueValidationTest {
         Place place = new Place();
         place.setKind("SHOP");
         place.setShopTypes(Set.of("RIDE_STORE", "PHOTO_STORE"));
-        new PlaceService(repository).addPlace(place);
+        new PlaceService(repository, mock(com.example.sikka.Service.MapService.class), mock(com.example.sikka.Repository.VisitRepository.class)).addPlace(place);
         verify(repository).save(argThat(saved -> saved.getShopTypes().containsAll(Set.of("RIDE_STORE", "PHOTO_STORE"))));
     }
 }

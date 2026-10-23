@@ -85,4 +85,17 @@ public class VisitMemberController {
     public ResponseEntity<?> summary(@PathVariable Integer accountId, @PathVariable Integer visitId) {
         return ResponseEntity.status(200).body(visitMemberService.getSummary(accountId, visitId));
     }
+
+    @PostMapping("/add-family/{accountId}/{visitId}")
+    public ResponseEntity<?> addFamilyMembers(@PathVariable Integer accountId, @PathVariable Integer visitId, @RequestBody @Valid com.example.sikka.DtoIn.AddFamilyMembersDtoIn dto) {
+        visitMemberService.addFamilyMembers(accountId, visitId, dto);
+        return ResponseEntity.status(200).body(new ApiResponse("Family members added successfully"));
+    }
+
+    @PutMapping("/preferences/{accountId}/{visitMemberId}")
+    public ResponseEntity<?> saveMemberPreferences(@PathVariable Integer accountId, @PathVariable Integer visitMemberId, @RequestBody @Valid com.example.sikka.DtoIn.MemberPreferencesDtoIn dto) {
+        visitMemberService.saveMemberPreferences(accountId, visitMemberId, dto);
+        return ResponseEntity.status(200).body(new ApiResponse("Planning answers saved successfully"));
+    }
+
 }

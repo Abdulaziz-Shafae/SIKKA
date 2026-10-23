@@ -1,7 +1,11 @@
 package com.example.sikka.Controller;
 
 import com.example.sikka.Api.ApiResponse;
+import com.example.sikka.DtoIn.GeneratePlanDtoIn;
+import com.example.sikka.DtoIn.SuggestReplanDtoIn;
+import com.example.sikka.DtoOut.GenerateVisitPlansDtoOut;
 import com.example.sikka.Service.VisitPlanService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -70,4 +74,28 @@ public class VisitPlanController {
     public ResponseEntity<?> getMyCurrentSubgroup(@PathVariable Integer accountId, @PathVariable Integer visitId) {
         return ResponseEntity.status(200).body(visitPlanService.getMyCurrentSubgroup(accountId, visitId));
     }
+
+    @PostMapping("/generate/{accountId}/{visitId}")
+    public ResponseEntity<?> generatePlan(@PathVariable Integer accountId, @PathVariable Integer visitId, @RequestBody @Valid GeneratePlanDtoIn dto) {
+        GenerateVisitPlansDtoOut result = visitPlanService.generatePlan(accountId, visitId, dto);
+        return ResponseEntity.status("PROCESSING".equals(result.getRequestStatus()) ? 202 : 200).body(result);
+    }
+
+    @PostMapping("/regenerate/group/{accountId}/{visitId}")
+    public ResponseEntity<?> regeneratePlan(@PathVariable Integer accountId, @PathVariable Integer visitId, @RequestBody @Valid GeneratePlanDtoIn dto) {
+
+        GenerateVisitPlansDtoOut result = visitPlanService.regeneratePlan(accountId, visitId, dto);
+
+        if ("PROCESSING".equals(result.getRequestStatus())) {
+            return ResponseEntity.status(202).body(result);
+        }
+
+        return ResponseEntity.status(200).body(result);
+    }
+
+    @PostMapping("/suggest-replan/{accountId}/{visitId}")
+    public ResponseEntity<?> suggestReplan(@PathVariable Integer accountId, @PathVariable Integer visitId, @RequestBody @Valid SuggestReplanDtoIn dto) {
+        return ResponseEntity.status(200).body(visitPlanService.suggestReplan(accountId, visitId, dto));
+    }
+
 }

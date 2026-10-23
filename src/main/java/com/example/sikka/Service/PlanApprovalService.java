@@ -7,15 +7,18 @@ import com.example.sikka.Model.Account;
 import com.example.sikka.Model.PlanApproval;
 import com.example.sikka.Model.PlanItem;
 import com.example.sikka.Model.Visit;
+import com.example.sikka.Model.VisitMember;
 import com.example.sikka.Model.VisitPlan;
 import com.example.sikka.Repository.AccountRepository;
 import com.example.sikka.Repository.PlanApprovalRepository;
 import com.example.sikka.Repository.VisitPlanRepository;
+import com.example.sikka.Repository.VisitRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 
 @Service
 @RequiredArgsConstructor
@@ -25,18 +28,16 @@ public class PlanApprovalService {
     private final VisitPlanRepository visitPlanRepository;
     private final AccountRepository accountRepository;
     private final VisitService visitService;
+    private final VisitPlanService visitPlanService;
+    private final VisitRepository visitRepository;
+
+    @jakarta.persistence.PersistenceContext
+    private jakarta.persistence.EntityManager entityManager;
 
     @Transactional(readOnly = true)
     public PlanApprovalDtoOut getPlanApproval(Integer accountId, Integer visitPlanId) {
-        Account account = accountRepository.findAccountById(accountId);
 
-        if (account == null) {
-            throw new ApiException("Account not found");
-        }
-
-        if (!"ACTIVE".equals(account.getStatus())) {
-            throw new ApiException("Account is not active");
-        }
+        validateActiveAccount(accountId);
 
         VisitPlan visitPlan = visitPlanRepository.findVisitPlanById(visitPlanId);
 
@@ -44,31 +45,25 @@ public class PlanApprovalService {
             throw new ApiException("Visit plan not found");
         }
 
-        if (!visitPlan.getVisit().getOrganizer().getId().equals(accountId)) {
-            throw new ApiException("Only the visit organizer can view this approval");
-        }
+        PlanApproval approval = planApprovalRepository.findPlanApprovalByVisitPlan_Id(visitPlanId);
 
-        PlanApproval planApproval = planApprovalRepository.findPlanApprovalByVisitPlan_Id(visitPlanId);
-
-        if (planApproval == null) {
+        if (approval == null) {
             throw new ApiException("Plan approval not found");
         }
 
-        return new PlanApprovalDtoOut(planApproval.getId(), planApproval.getVisitPlan().getId(), planApproval.getApprovedByAccount().getId(), planApproval.getStatus(), planApproval.getRespondedAt());
+        validateApprovalReadAccess(accountId, visitPlan, approval);
 
+        Integer requestedByAccountId = approval.getRequestedByAccount() == null ? null : approval.getRequestedByAccount().getId();
+        Integer requiredApproverAccountId = approval.getRequiredApproverAccount() == null ? null : approval.getRequiredApproverAccount().getId();
+        Integer approvedByAccountId = approval.getApprovedByAccount() == null ? null : approval.getApprovedByAccount().getId();
+
+        return new PlanApprovalDtoOut(approval.getId(), approval.getVisitPlan().getId(), approval.getApprovalScope(), requestedByAccountId, requiredApproverAccountId, approvedByAccountId, approval.getStatus(), approval.getRespondedAt());
     }
 
     @Transactional
     public void createPlanApproval(Integer accountId, Integer visitPlanId) {
-        Account account = accountRepository.findAccountById(accountId);
 
-        if (account == null) {
-            throw new ApiException("Account not found");
-        }
-
-        if (!"ACTIVE".equals(account.getStatus())) {
-            throw new ApiException("Account is not active");
-        }
+        Account account = validateActiveAccount(accountId);
 
         VisitPlan visitPlan = visitPlanRepository.findVisitPlanByIdForUpdate(visitPlanId);
 
@@ -76,31 +71,8 @@ public class PlanApprovalService {
             throw new ApiException("Visit plan not found");
         }
 
-        Visit visit = visitPlan.getVisit();
-
-        if (!visit.getOrganizer().getId().equals(accountId)) {
-            throw new ApiException("Only the visit organizer can submit the group plan");
-        }
-
-        if (!"GROUP".equals(visitPlan.getPlanKind())) {
-            throw new ApiException("Approval is only required for group plans");
-        }
-
-        if (!"PLANNING".equals(visit.getStatus())) {
-            throw new ApiException("The visit must be PLANNING before submitting its plan");
-        }
-
-        if (Boolean.TRUE.equals(visitPlan.getIsActive())) {
-            throw new ApiException("This plan is already active");
-        }
-
-        if (visitPlan.getProposedItems() != null) {
-            throw new ApiException("Replanning proposals must use the replanning flow");
-        }
-
-        if (visitPlan.getPlanItems() == null || visitPlan.getPlanItems().isEmpty()) {
-            throw new ApiException("Generate the group activities before submitting the plan");
-        }
+        validateInitialGroupApprovalAccess(accountId, visitPlan);
+        validatePlanActivities(visitPlan);
 
         PlanApproval existingApproval = planApprovalRepository.findPlanApprovalByVisitPlan_Id(visitPlanId);
 
@@ -108,29 +80,27 @@ public class PlanApprovalService {
             throw new ApiException("This plan already has an approval record");
         }
 
-        PlanApproval planApproval = new PlanApproval();
-        planApproval.setVisitPlan(visitPlan);
-        planApproval.setApprovedByAccount(account);
-        planApproval.setStatus("PENDING");
-        planApproval.setRespondedAt(null);
-        planApprovalRepository.save(planApproval);
-        visitPlan.setPlanApproval(planApproval);
+        PlanApproval approval = new PlanApproval();
+        approval.setVisitPlan(visitPlan);
+        approval.setApprovalScope("GROUP");
+        approval.setRequestedByAccount(account);
+        approval.setRequiredApproverAccount(visitPlan.getVisit().getOrganizer());
+        approval.setApprovedByAccount(null);
+        approval.setStatus("PENDING");
+        approval.setRespondedAt(null);
+
+        planApprovalRepository.save(approval);
+
+        visitPlan.setPlanApproval(approval);
     }
 
-    @Transactional
+    @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED, timeout = 60)
     public void respondToPlanApproval(Integer accountId, PlanApprovalDtoIn planApprovalDtoIn) {
-        Account account = accountRepository.findAccountById(accountId);
 
-        if (account == null) {
-            throw new ApiException("Account not found");
-        }
+        Account account = validateActiveAccount(accountId);
 
-        if (!"ACTIVE".equals(account.getStatus())) {
-            throw new ApiException("Account is not active");
-        }
-
-        if (planApprovalDtoIn == null || planApprovalDtoIn.getVisitPlanId() == null) {
-            throw new ApiException("Visit plan ID is required");
+        if (planApprovalDtoIn == null || planApprovalDtoIn.getVisitPlanId() == null || planApprovalDtoIn.getVisitPlanId() <= 0) {
+            throw new ApiException("A positive visit plan ID is required");
         }
 
         String status = planApprovalDtoIn.getStatus();
@@ -139,84 +109,208 @@ public class PlanApprovalService {
             throw new ApiException("Response must be APPROVED or REJECTED");
         }
 
+        VisitPlan reference = visitPlanRepository.findVisitPlanById(planApprovalDtoIn.getVisitPlanId());
+
+        if (reference == null) {
+            throw new ApiException("Visit plan not found");
+        }
+
+        Visit visit = visitRepository.findVisitByIdForUpdate(reference.getVisit().getId());
+
+        if (visit == null) {
+            throw new ApiException("Visit not found");
+        }
+
+        entityManager.refresh(visit, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
         VisitPlan visitPlan = visitPlanRepository.findVisitPlanByIdForUpdate(planApprovalDtoIn.getVisitPlanId());
 
         if (visitPlan == null) {
             throw new ApiException("Visit plan not found");
         }
 
+        entityManager.refresh(visitPlan, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+
+        if (planApprovalDtoIn.getProposalKey() != null || visitPlan.getProposedItems() != null || visitPlan.getPendingScope() != null || visitPlan.getProposalBaseSnapshot() != null) {
+            visitPlanService.respondToReplanProposal(accountId, planApprovalDtoIn);
+            return;
+        }
+
+        validateInitialGroupApprovalAccess(accountId, visitPlan);
+
+        PlanApproval approval = planApprovalRepository.findPlanApprovalByVisitPlan_Id(visitPlan.getId());
+
+        if (approval == null) {
+            throw new ApiException("Plan approval not found");
+        }
+
+        entityManager.refresh(approval, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+
+        if (!"GROUP".equals(approval.getApprovalScope())) {
+            throw new ApiException("Initial group approval must have GROUP scope");
+        }
+
+        if (approval.getRequiredApproverAccount() == null || !approval.getRequiredApproverAccount().getId().equals(accountId)) {
+            throw new ApiException("You are not the required approver");
+        }
+
+        if (!"PENDING".equals(approval.getStatus())) {
+            throw new ApiException("This approval has already been answered");
+        }
+
+        if ("APPROVED".equals(status)) {
+
+            validatePlanActivities(visitPlan);
+
+            visitPlan.setIsActive(true);
+
+            visitService.changeStatus(visitPlan.getVisit().getId(), "READY");
+        }
+
+        approval.setStatus(status);
+        approval.setApprovedByAccount(account);
+        approval.setRespondedAt(LocalDateTime.now(ZoneId.of("Asia/Riyadh")));
+
+        planApprovalRepository.save(approval);
+    }
+
+    private Account validateActiveAccount(Integer accountId) {
+
+        Account account = accountRepository.findAccountById(accountId);
+
+        if (account == null) {
+            throw new ApiException("Account not found");
+        }
+
+        if (!"ACTIVE".equals(account.getStatus())) {
+            throw new ApiException("Account is not active");
+        }
+
+        return account;
+    }
+
+    private void validateInitialGroupApprovalAccess(Integer accountId, VisitPlan visitPlan) {
+
         Visit visit = visitPlan.getVisit();
 
         if (!visit.getOrganizer().getId().equals(accountId)) {
-            throw new ApiException("Only the visit organizer can respond to the approval");
+            throw new ApiException("Only the visit organizer can submit or respond to the initial group approval");
         }
 
         if (!"GROUP".equals(visitPlan.getPlanKind())) {
-            throw new ApiException("Approval is only required for group plans");
+            throw new ApiException("Initial approval is only supported for group plans");
         }
 
         if (!"PLANNING".equals(visit.getStatus())) {
-            throw new ApiException("The visit must be PLANNING before responding");
+            throw new ApiException("The visit must be PLANNING for initial approval");
         }
 
-        if (visitPlan.getProposedItems() != null) {
-            throw new ApiException("Replanning proposals must use the replanning flow");
+        if (visitPlan.getProposedItems() != null || visitPlan.getPendingScope() != null) {
+            throw new ApiException("Replanning proposals must use the replanning approval flow");
         }
 
         if (Boolean.TRUE.equals(visitPlan.getIsActive())) {
             throw new ApiException("This plan is already active");
         }
+    }
 
-        PlanApproval planApproval = planApprovalRepository.findPlanApprovalByVisitPlan_Id(visitPlan.getId());
+    private void validateApprovalReadAccess(Integer accountId, VisitPlan visitPlan, PlanApproval approval) {
 
-        if (planApproval == null) {
-            throw new ApiException("Plan approval not found");
-        }
+        if ("INDIVIDUAL".equals(visitPlan.getPlanKind())) {
 
-        if (!"PENDING".equals(planApproval.getStatus())) {
-            throw new ApiException("This approval has already been answered");
-        }
+            VisitMember owner = visitPlan.getOwnerVisitMember();
 
-        if ("APPROVED".equals(status)) {
-            if (visitPlan.getPlanItems() == null || visitPlan.getPlanItems().isEmpty()) {
-                throw new ApiException("An empty plan cannot be approved");
+            if (owner == null || owner.getVisitorProfile() == null) {
+                throw new ApiException("Individual plan owner not found");
             }
 
-            for (PlanItem planItem : visitPlan.getPlanItems()) {
+            if (!owner.getVisit().getId().equals(visitPlan.getVisit().getId())) {
+                throw new ApiException("The plan owner does not belong to this visit");
+            }
+
+            if (!owner.getVisitorProfile().getAccount().getId().equals(accountId)) {
+                throw new ApiException("Only the plan owner can view this individual approval");
+            }
+
+            return;
+        }
+
+        if (!"GROUP".equals(visitPlan.getPlanKind())) {
+            throw new ApiException("Invalid plan kind");
+        }
+
+        boolean isOrganizer = visitPlan.getVisit().getOrganizer().getId().equals(accountId);
+        boolean isRequester = approval.getRequestedByAccount() != null && approval.getRequestedByAccount().getId().equals(accountId);
+
+        if (!isOrganizer && !isRequester) {
+            throw new ApiException("You cannot view this approval");
+        }
+    }
+
+    private void validatePlanActivities(VisitPlan visitPlan) {
+
+        if (visitPlan.getPlanItems() == null || visitPlan.getPlanItems().isEmpty()) {
+            throw new ApiException("An empty plan cannot be submitted or approved");
+        }
+
+        String timingMode = visitPlan.getTimingMode();
+
+        if (!"RELATIVE".equals(timingMode) && !"SCHEDULED".equals(timingMode)) {
+            throw new ApiException("Invalid plan timing mode");
+        }
+
+        for (PlanItem planItem : visitPlan.getPlanItems()) {
+
+            if (planItem.getVisitPlan() == null || !planItem.getVisitPlan().getId().equals(visitPlan.getId())) {
+                throw new ApiException("An activity does not belong to this plan");
+            }
+
+            if ("RELATIVE".equals(timingMode)) {
+
+                if (planItem.getRelativeStartMinutes() == null || planItem.getRelativeEndMinutes() == null) {
+                    throw new ApiException("Relative activities must have start and end offsets");
+                }
+
+                if (planItem.getRelativeStartMinutes() < 0 || planItem.getRelativeEndMinutes() <= planItem.getRelativeStartMinutes()) {
+                    throw new ApiException("Relative activity end must be after its non-negative start");
+                }
+
+                if (planItem.getStartsAt() != null || planItem.getEndsAt() != null) {
+                    throw new ApiException("Relative activities must not contain scheduled times");
+                }
+
+            } else {
+
                 if (planItem.getStartsAt() == null || planItem.getEndsAt() == null) {
-                    throw new ApiException("All activities must have start and end times");
+                    throw new ApiException("Scheduled activities must have start and end times");
                 }
 
                 if (!planItem.getEndsAt().isAfter(planItem.getStartsAt())) {
                     throw new ApiException("Activity end time must be after its start time");
                 }
-
-                if ("RIDE".equals(planItem.getActivityKind())) {
-                    if (planItem.getRide() == null) {
-                        throw new ApiException("A ride activity must reference a ride");
-                    }
-
-                    if (!"OPEN".equals(planItem.getRide().getStatus())) {
-                        throw new ApiException("The plan contains a ride that is not open");
-                    }
-                }
-
-                if ("PLACE".equals(planItem.getActivityKind()) || "MEETING_POINT".equals(planItem.getActivityKind())) {
-                    if (planItem.getPlace() == null) {
-                        throw new ApiException("A place activity must reference a place");
-                    }
-                }
             }
 
-            visitPlan.setIsActive(true);
-            visitService.changeStatus(visit.getId(), "READY");
+            String activityKind = planItem.getActivityKind();
+
+            if ("RIDE".equals(activityKind)) {
+
+                if (planItem.getRide() == null) {
+                    throw new ApiException("A ride activity must reference a ride");
+                }
+
+                if (!"OPEN".equals(planItem.getRide().getStatus())) {
+                    throw new ApiException("The plan contains a ride that is not open");
+                }
+
+            } else if ("PLACE".equals(activityKind) || "MEETING_POINT".equals(activityKind)) {
+
+                if (planItem.getPlace() == null) {
+                    throw new ApiException("A place or meeting activity must reference a place");
+                }
+
+            } else if (!"BREAK".equals(activityKind)) {
+                throw new ApiException("Invalid activity kind");
+            }
         }
-
-        planApproval.setStatus(status);
-        planApproval.setApprovedByAccount(account);
-        planApproval.setRespondedAt(LocalDateTime.now());
-        planApprovalRepository.save(planApproval);
     }
-
 
 }

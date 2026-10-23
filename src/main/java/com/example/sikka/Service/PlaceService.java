@@ -14,6 +14,8 @@ import java.util.List;
 public class PlaceService {
 
     private final PlaceRepository placeRepository;
+    private final MapService mapService;
+    private final com.example.sikka.Repository.VisitRepository visitRepository;
 
     public List<Place> getPlaces(){
         return placeRepository.findAll();
@@ -71,7 +73,7 @@ public class PlaceService {
         if (place == null) {
             throw new ApiException("Place details are required");
         }
-        if (place.getKind() == null || !place.getKind().matches("^(RESTAURANT|SHOP|MEETING_POINT|RESTROOM|OTHER)$")) {
+        if (place.getKind() == null || !place.getKind().matches("^(RESTAURANT|SHOP|MEETING_POINT|RESTROOM|PRAYER_ROOM|FIRST_AID|OTHER)$")){
             throw new ApiException("Invalid place kind");
         }
         if (!"RESTAURANT".equals(place.getKind()) && (place.getServiceType() != null || (place.getCuisineTypes() != null && !place.getCuisineTypes().isEmpty()))) {
@@ -102,10 +104,19 @@ public class PlaceService {
     }
 
     public List<Place> getPlaces(String kind){
-        if (kind == null || (!"RESTAURANT".equals(kind) && !"SHOP".equals(kind) && !"MEETING_POINT".equals(kind) && !"RESTROOM".equals(kind) && !"OTHER".equals(kind))){
+        if (kind == null || !kind.matches("^(RESTAURANT|SHOP|MEETING_POINT|RESTROOM|PRAYER_ROOM|FIRST_AID|OTHER)$")){
             throw new ApiException("Invalid place kind");
         }
 
         return placeRepository.findPlacesByKind(kind);
     }
+
+    public java.util.Map<String, Object> getWalkingContext(Integer accountId, Integer visitId) {
+        com.example.sikka.Model.Visit visit = visitRepository.findVisitById(visitId);
+        if (visit == null || !visit.getOrganizer().getId().equals(accountId)) {
+            throw new ApiException("Only the visit organizer can prepare walking routes");
+        }
+        return mapService.getWalkingContext();
+    }
+
 }

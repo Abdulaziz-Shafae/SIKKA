@@ -28,13 +28,18 @@ public class Place {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
+    @Size(max = 150, message = "Source place ID must not exceed 150 characters")
+    @Pattern(regexp = "^[a-z0-9]+(-[a-z0-9]+)*$", message = "Invalid source place ID")
+    @Column(unique = true, length = 150)
+    private String sourcePlaceId;
+
     @NotBlank(message = "Place name cannot be blank")
     @Size(max = 150, message = "Place name must not exceed 150 characters")
     @Column(nullable = false, length = 150)
     private String name;
 
     @NotBlank(message = "Place kind cannot be blank")
-    @Pattern(regexp = "^(RESTAURANT|SHOP|MEETING_POINT|RESTROOM|OTHER)$", message = "Place kind must be RESTAURANT, SHOP, MEETING_POINT, RESTROOM or OTHER" )
+    @Pattern(regexp = "^(RESTAURANT|SHOP|MEETING_POINT|RESTROOM|PRAYER_ROOM|FIRST_AID|OTHER)$", message = "Place kind must be RESTAURANT, SHOP, MEETING_POINT, RESTROOM, PRAYER_ROOM, FIRST_AID or OTHER")
     @Column(nullable = false, length = 20)
     private String kind;
 

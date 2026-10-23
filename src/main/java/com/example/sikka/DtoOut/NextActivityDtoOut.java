@@ -15,5 +15,9 @@ public class NextActivityDtoOut {
 
     private String activityStatus;
 
+    private String timingMode;
+
     private PlanItemDtoOut activity;
+
+    private ActivitySessionDtoOut activitySession;
 }

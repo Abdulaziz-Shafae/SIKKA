@@ -98,6 +98,7 @@ public class AccountService {
         profile.setBirthDate(dto.getBirthDate());
         profile.setHeightCm(dto.getHeightCm());
         profile.setWeightKg(dto.getWeightKg());
+        profile.setGender(dto.getGender());
         profile.setThrillPreference(dto.getThrillPreference());
         profile.setPreferredRideTypes(dto.getPreferredRideTypes());
         profile.setDislikedRideFeatures(dto.getDislikedRideFeatures());
@@ -112,6 +113,11 @@ public class AccountService {
         if (account == null)
             throw new ApiException("account not found");
         return account;
+    }
+
+    // the user reads his own account (without the password)
+    public AccountDtoOut getMe(Integer accountId) {
+        return toDtoOut(getAccount(accountId));
     }
 
     private AccountDtoOut toDtoOut(Account a) {

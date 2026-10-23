@@ -37,7 +37,7 @@ class TeamAgreementValidationTest {
     void allowFilteringShops() {
         PlaceRepository repository = mock(PlaceRepository.class);
         when(repository.findPlacesByKind("SHOP")).thenReturn(List.of());
-        assertTrue(new PlaceService(repository).getPlaces("SHOP").isEmpty());
+        assertTrue(new PlaceService(repository, mock(com.example.sikka.Service.MapService.class), mock(com.example.sikka.Repository.VisitRepository.class)).getPlaces("SHOP").isEmpty());
         verify(repository).findPlacesByKind("SHOP");
     }
 
@@ -53,13 +53,13 @@ class TeamAgreementValidationTest {
         stale.setWaitObservedAt(LocalDateTime.now().minusHours(1));
         stale.setWaitSource("ADMIN");
         when(repository.findRidesByStatus("OPEN")).thenReturn(List.of(fresh, stale, new Ride()));
-        assertEquals(List.of(fresh), new RideService(repository, mock(VisitorProfileRepository.class), mock(AccountRepository.class)).getOpenRides());
+        assertEquals(List.of(fresh), new RideService(repository, mock(com.example.sikka.Repository.VisitMemberRepository.class), mock(VisitorProfileRepository.class), mock(AccountRepository.class)).getOpenRides());
     }
 
     @Test
     void completedRideLookupRequiresCompletedStatus() {
         VisitRecordRepository repository = mock(VisitRecordRepository.class);
         when(repository.existsByVisitMember_IdAndRide_IdAndStatus(1, 2, "COMPLETED")).thenReturn(true);
-        assertTrue(new VisitRecordService(repository, mock(AccountRepository.class), mock(VisitRepository.class), mock(VisitMemberRepository.class), mock(RideRepository.class), mock(VisitPlanService.class)).hasCompletedRide(1, 2));
+        assertTrue(new VisitRecordService(repository, mock(AccountRepository.class), mock(VisitRepository.class), mock(VisitMemberRepository.class), mock(com.example.sikka.Repository.ActivitySessionRepository.class), mock(com.example.sikka.Repository.PlanItemRepository.class), mock(com.example.sikka.Repository.VisitPlanRepository.class), mock(VisitPlanService.class), mock(com.example.sikka.Service.ActivityTimingService.class)).hasCompletedRide(1, 2));
     }
 }
