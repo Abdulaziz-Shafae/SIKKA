@@ -29,6 +29,9 @@ public class VisitorProfileDtoIn {
     @Positive(message = "weight must be positive")
     private BigDecimal weightKg;
 
+    @Pattern(regexp = "^(MALE|FEMALE)$", message = "gender must be MALE or FEMALE")
+    private String gender;
+
     @Pattern(regexp = "^(LOW|MILD|EXTREME)$", message = "thrill preference must be LOW, MILD or EXTREME")
     private String thrillPreference;
 

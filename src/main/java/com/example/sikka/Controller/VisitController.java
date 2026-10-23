@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import com.example.sikka.DtoIn.CreateVisitDtoIn;
+import com.example.sikka.DtoIn.ReuseVisitDtoIn;
 
 @RestController
 @RequestMapping("/api/v1/visit")
@@ -45,6 +46,15 @@ public class VisitController {
         if (code == null)
             return ResponseEntity.status(200).body(new ApiResponse("visit created"));
         return ResponseEntity.status(200).body(new ApiResponse("visit created, invite code: " + code));
+    }
+
+    @PostMapping("/reuse/{accountId}/{visitId}")
+    public ResponseEntity<?> reuse(@PathVariable Integer accountId, @PathVariable Integer visitId,
+                                   @RequestBody @Valid ReuseVisitDtoIn dto) {
+        String code = visitService.reuse(accountId, visitId, dto);
+        if (code == null)
+            return ResponseEntity.status(200).body(new ApiResponse("visit created from the previous one"));
+        return ResponseEntity.status(200).body(new ApiResponse("visit created from the previous one, invite code: " + code));
     }
 
     @GetMapping("/my-visits/{accountId}")

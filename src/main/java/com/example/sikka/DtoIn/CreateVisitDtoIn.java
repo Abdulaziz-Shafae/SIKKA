@@ -1,9 +1,6 @@
 package com.example.sikka.DtoIn;
 
-import jakarta.validation.constraints.FutureOrPresent;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Positive;
-import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -30,7 +27,24 @@ public class CreateVisitDtoIn {
 
     private LocalTime plannedEndTime;
 
-    @NotNull(message = "max participants is required")
+
     @Positive(message = "max participants must be positive")
     private Integer maxParticipants;
+
+    @NotNull(message = "trip type is required")
+    @Pattern(regexp = "^(SOLO|FRIENDS|FAMILY)$", message = "trip type must be SOLO, FRIENDS or FAMILY")
+    private String tripType;
+
+    @Pattern(regexp = "^(TOGETHER|SPLIT)$", message = "group mode must be TOGETHER or SPLIT")
+    private String groupMode;
+
+    private String goals;
+
+    @Size(max = 50, message = "top goal must not exceed 50 characters")
+    private String topGoal;
+
+    private Boolean prayerEnabled;
+
+    @Positive(message = "family count must be positive")
+    private Integer familyCount;
 }

@@ -41,6 +41,24 @@ public class Visit {
     @Column(columnDefinition = "time")
     private LocalTime plannedEndTime;
 
+    @Column(columnDefinition = "varchar(10)")
+    private String tripType;
+
+    @Column(columnDefinition = "varchar(10)")
+    private String groupMode;
+
+    @Column(columnDefinition = "json")
+    private String goals;
+
+    @Column(columnDefinition = "varchar(50)")
+    private String topGoal;
+
+    @Column(columnDefinition = "boolean not null default false")
+    private Boolean prayerEnabled = false;
+
+    @Column(columnDefinition = "time")
+    private LocalTime expectedArrivalTime;
+
     @Pattern(regexp = "^(DRAFT|PLANNING|READY|IN_PROGRESS|COMPLETED|CANCELLED)$",
             message = "invalid visit status")
     @Column(columnDefinition = "varchar(20) not null default 'DRAFT'")

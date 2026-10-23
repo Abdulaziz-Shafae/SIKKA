@@ -18,6 +18,7 @@ public class VisitorProfileDtoOut {
     private LocalDate birthDate;
     private BigDecimal heightCm;
     private BigDecimal weightKg;
+    private String gender;
     private String thrillPreference;
     private String preferredRideTypes;
     private String dislikedRideFeatures;

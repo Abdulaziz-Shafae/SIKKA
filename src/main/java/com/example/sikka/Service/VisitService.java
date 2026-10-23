@@ -14,6 +14,7 @@ import com.example.sikka.Repository.VisitMemberRepository;
 import com.example.sikka.Repository.VisitRepository;
 import com.example.sikka.Repository.VisitorProfileRepository;
 import lombok.RequiredArgsConstructor;
+import com.example.sikka.DtoIn.ReuseVisitDtoIn;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -94,8 +95,8 @@ public class VisitService {
 
         checkTimes(dto.getPlannedStartTime(), dto.getPlannedEndTime());
 
-        if ((!"DRAFT".equals(visit.getStatus()) && !"PLANNING".equals(visit.getStatus())) || Boolean.TRUE.equals(visit.getMembersLocked())) {
-            throw new ApiException("Visit details cannot be changed after planning starts or the visit closes");
+        if (!"DRAFT".equals(visit.getStatus()) || Boolean.TRUE.equals(visit.getMembersLocked())) {
+            throw new ApiException("Visit details can only be changed while the visit is in DRAFT");
         }
         validateVisitDetails(dto.getVisitDate(), dto.getMaxParticipants());
 
@@ -130,7 +131,7 @@ public class VisitService {
             visit.getGroup().setVisit(null);
         if (visit.getMembers() != null) {
             for (VisitMember member : visit.getMembers()) {
-                if (member.getVisitorProfile().getVisitMembers() != null) {
+                if (member.getVisitorProfile() != null && member.getVisitorProfile().getVisitMembers() != null) {
                     member.getVisitorProfile().getVisitMembers().remove(member);
                 }
             }
@@ -143,14 +144,15 @@ public class VisitService {
 
     // ---------- Flow 1 extras ----------
 
-    // creates the visit, adds the organizer as GOING, and a group only if groupName is sent
-    // returns the raw invite code, or null for a solo visit
+    // creates the visit and adds the organizer as GOING
+    // returns the raw invite code for a FRIENDS trip, or null for SOLO and FAMILY
     @Transactional
     public String create(Integer accountId, CreateVisitDtoIn dto) {
         if (dto == null) {
             throw new ApiException("Visit details are required");
         }
-        validateVisitDetails(dto.getVisitDate(), dto.getMaxParticipants());
+        int max = resolveMaxParticipants(dto);
+        validateVisitDetails(dto.getVisitDate(), max);
         Account organizer = accountRepository.findAccountById(accountId);
         if (organizer == null)
             throw new ApiException("account not found");
@@ -166,19 +168,20 @@ public class VisitService {
 
         Visit visit = new Visit();
         visit.setOrganizer(organizer);
-        visit.setName(dto.getName());
-        visit.setVisitDate(dto.getVisitDate());
-        visit.setPlannedStartTime(dto.getPlannedStartTime());
-        visit.setPlannedEndTime(dto.getPlannedEndTime());
-        visit.setMaxParticipants(dto.getMaxParticipants());
+        fillVisit(visit, dto, max);
         visit.setStatus("DRAFT");
         visit.setMembersLocked(false);
         visitRepository.save(visit);
 
         visitMemberService.addOrganizer(visit, profile);
 
-        if (dto.getGroupName() != null && !dto.getGroupName().isBlank())
-            return visitGroupService.attachGroup(visit, dto.getGroupName());
+        // only a FRIENDS trip has a group and an invite code
+        if ("FRIENDS".equals(dto.getTripType())) {
+            String groupName = dto.getGroupName();
+            if (groupName == null || groupName.isBlank())
+                groupName = (dto.getName() == null || dto.getName().isBlank()) ? "Friends group" : dto.getName();
+            return visitGroupService.attachGroup(visit, groupName);
+        }
         return null;
     }
 
@@ -216,20 +219,19 @@ public class VisitService {
 
         checkTimes(dto.getPlannedStartTime(), dto.getPlannedEndTime());
 
-        if ((!"DRAFT".equals(visit.getStatus()) && !"PLANNING".equals(visit.getStatus()))
-                || Boolean.TRUE.equals(visit.getMembersLocked()))
-            throw new ApiException("Visit details cannot be changed after planning starts or the visit closes");
+        if (!"DRAFT".equals(visit.getStatus()) || Boolean.TRUE.equals(visit.getMembersLocked()))
+            throw new ApiException("Visit details can only be changed while the visit is in DRAFT");
 
-        validateVisitDetails(dto.getVisitDate(), dto.getMaxParticipants());
+        if (visit.getTripType() != null && !visit.getTripType().equals(dto.getTripType()))
+            throw new ApiException("trip type cannot be changed, create a new visit");
 
-        if (dto.getMaxParticipants() < visitMemberRepository.countByVisit(visit))
+        int max = resolveMaxParticipants(dto);
+        validateVisitDetails(dto.getVisitDate(), max);
+
+        if (max < visitMemberRepository.countByVisit(visit))
             throw new ApiException("max participants is less than current members");
 
-        visit.setName(dto.getName());
-        visit.setVisitDate(dto.getVisitDate());
-        visit.setPlannedStartTime(dto.getPlannedStartTime());
-        visit.setPlannedEndTime(dto.getPlannedEndTime());
-        visit.setMaxParticipants(dto.getMaxParticipants());
+        fillVisit(visit, dto, max);
         visitRepository.save(visit);
     }
 
@@ -251,6 +253,62 @@ public class VisitService {
         changeStatus(visitId, "COMPLETED");
     }
 
+    // creates a new DRAFT visit from an old one with a new date
+    // copies the details and the organizer's selected rides, not the friends and not the plan
+    // returns the raw invite code for a FRIENDS trip, or null
+    @Transactional
+    public String reuse(Integer accountId, Integer visitId, ReuseVisitDtoIn dto) {
+        if (dto == null)
+            throw new ApiException("Visit date is required");
+
+        Visit old = visitRepository.findVisitById(visitId);
+        if (old == null)
+            throw new ApiException("visit not found");
+        if (!old.getOrganizer().getId().equals(accountId))
+            throw new ApiException("only the organizer can do this");
+        if (old.getTripType() == null)
+            throw new ApiException("this visit has no trip type, create a new visit instead");
+
+        validateVisitDetails(dto.getVisitDate(), old.getMaxParticipants());
+
+        Account organizer = old.getOrganizer();
+        if (!"ACTIVE".equals(organizer.getStatus()))
+            throw new ApiException("Account is not active");
+        VisitorProfile profile = visitorProfileRepository.findVisitorProfileByAccount_Id(accountId);
+        if (profile == null)
+            throw new ApiException("create your visitor profile first");
+
+        Visit visit = new Visit();
+        visit.setOrganizer(organizer);
+        visit.setName(old.getName());
+        visit.setVisitDate(dto.getVisitDate());
+        visit.setPlannedStartTime(old.getPlannedStartTime());
+        visit.setPlannedEndTime(old.getPlannedEndTime());
+        visit.setMaxParticipants(old.getMaxParticipants());
+        visit.setTripType(old.getTripType());
+        visit.setGroupMode(old.getGroupMode());
+        visit.setGoals(old.getGoals());
+        visit.setTopGoal(old.getTopGoal());
+        visit.setPrayerEnabled(old.getPrayerEnabled());
+        visit.setStatus("DRAFT");
+        visit.setMembersLocked(false);
+        visitRepository.save(visit);
+
+        VisitMember newMember = visitMemberService.addOrganizer(visit, profile);
+        VisitMember oldMember = visitMemberRepository.findVisitMemberByVisit_IdAndVisitorProfile_Account_Id(visitId, accountId);
+        if (oldMember != null && oldMember.getSelectedRides() != null) {
+            newMember.setSelectedRides(oldMember.getSelectedRides());
+            visitMemberRepository.save(newMember);
+        }
+
+        // friends do not carry over: a FRIENDS trip gets a new group and a new invite code
+        if ("FRIENDS".equals(old.getTripType())) {
+            String groupName = old.getGroup() != null ? old.getGroup().getName()
+                    : ((old.getName() == null || old.getName().isBlank()) ? "Friends group" : old.getName());
+            return visitGroupService.attachGroup(visit, groupName);
+        }
+        return null;
+    }
     // ---------- contract methods for the other flows ----------
 
     public Visit getVisit(Integer visitId) {
@@ -328,4 +386,46 @@ public class VisitService {
         if (start != null && end != null && !end.isAfter(start))
             throw new ApiException("end time must be after start time");
     }
+
+    // checks the rules of each trip type and returns the real maxParticipants
+    private int resolveMaxParticipants(CreateVisitDtoIn dto) {
+        String type = dto.getTripType();
+        if ("SOLO".equals(type)) {
+            if (dto.getGroupMode() != null || dto.getFamilyCount() != null)
+                throw new ApiException("SOLO trip has no group mode or family count");
+            return 1;
+        }
+        if ("FRIENDS".equals(type)) {
+            if (dto.getGroupMode() == null)
+                throw new ApiException("group mode is required for FRIENDS trip");
+            if (dto.getFamilyCount() != null)
+                throw new ApiException("family count is only for FAMILY trip");
+            if (dto.getMaxParticipants() == null)
+                throw new ApiException("max participants is required for FRIENDS trip");
+            return dto.getMaxParticipants();
+        }
+        if ("FAMILY".equals(type)) {
+            if (dto.getGroupMode() != null)
+                throw new ApiException("group mode is only for FRIENDS trip");
+            if (dto.getFamilyCount() == null)
+                throw new ApiException("family count is required for FAMILY trip");
+            return dto.getFamilyCount() + 1;
+        }
+        throw new ApiException("invalid trip type");
+    }
+
+    // copies the visit details from the dto (used by create and update)
+    private void fillVisit(Visit visit, CreateVisitDtoIn dto, int max) {
+        visit.setName(dto.getName());
+        visit.setVisitDate(dto.getVisitDate());
+        visit.setPlannedStartTime(dto.getPlannedStartTime());
+        visit.setPlannedEndTime(dto.getPlannedEndTime());
+        visit.setMaxParticipants(max);
+        visit.setTripType(dto.getTripType());
+        visit.setGroupMode(dto.getGroupMode());
+        visit.setGoals(dto.getGoals());
+        visit.setTopGoal(dto.getTopGoal());
+        visit.setPrayerEnabled(Boolean.TRUE.equals(dto.getPrayerEnabled()));
+    }
+
 }
