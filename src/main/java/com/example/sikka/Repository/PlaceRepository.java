@@ -10,5 +10,10 @@ import java.util.List;
 public interface PlaceRepository extends JpaRepository<Place, Integer> {
 
     Place findPlaceById(Integer id);
+
     List<Place> findPlacesByKind(String kind);
+
+    Place findPlaceBySourcePlaceId(String sourcePlaceId);
+
+    boolean existsByNameIgnoreCase(String name);
 }
