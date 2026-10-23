@@ -15,8 +15,7 @@ public interface VisitRepository extends JpaRepository<Visit, Integer> {
 
     Visit findVisitById(Integer id);
 
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select v from Visit v where v.id = :visitId")
+    @Query(value = "select * from visit where id = :visitId for update", nativeQuery = true)
     Visit findVisitByIdForUpdate(@Param("visitId") Integer visitId);
 
     List<Visit> findAllByOrganizer_Id(Integer accountId);

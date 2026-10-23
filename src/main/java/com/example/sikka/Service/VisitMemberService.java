@@ -36,6 +36,8 @@ public class VisitMemberService {
     private final VisitGroupService visitGroupService;
     private final RideService rideService;
     private final com.example.sikka.Repository.FamilyMemberRepository familyMemberRepository;
+    private final com.example.sikka.Repository.VisitPlanRepository visitPlanRepository;
+    private final com.example.sikka.Repository.VisitRecordRepository visitRecordRepository;
     // ---------- CRUD ----------
 
     public List<VisitMember> get() {
@@ -267,7 +269,8 @@ public class VisitMemberService {
     // ---------- helpers ----------
 
     private void validateMemberDeletion(VisitMember member) {
-        if ((member.getVisitPlans() != null && !member.getVisitPlans().isEmpty()) || (member.getVisitRecords() != null && !member.getVisitRecords().isEmpty())) {
+        if (visitPlanRepository.existsByOwnerVisitMember_Id(member.getId())
+                || visitRecordRepository.existsByVisitMember_Id(member.getId())) {
             throw new ApiException("Cannot remove a member linked to plans or ride records");
         }
     }

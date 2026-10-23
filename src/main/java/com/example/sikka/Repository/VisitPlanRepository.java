@@ -28,4 +28,5 @@ public interface VisitPlanRepository extends JpaRepository<VisitPlan, Integer> {
     VisitPlan findVisitPlanByVisit_IdAndOwnerVisitMember_IdAndPlanKind(Integer visitId, Integer visitMemberId, String planKind);
 
     List<VisitPlan> findAllByVisit_IdAndPlanKind(Integer visitId, String planKind);
+    boolean existsByOwnerVisitMember_Id(Integer visitMemberId);
 }

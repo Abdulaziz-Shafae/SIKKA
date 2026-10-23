@@ -32,4 +32,5 @@ public interface VisitRecordRepository extends JpaRepository<VisitRecord, Intege
     @Query("select a from Account a where a.id = :accountId")
     Account findRecordingAccountByIdForUpdate(@Param("accountId") Integer accountId);
 
+    boolean existsByVisitMember_Id(Integer visitMemberId);
 }
