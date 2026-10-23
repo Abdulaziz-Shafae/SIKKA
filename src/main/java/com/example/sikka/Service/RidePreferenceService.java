@@ -47,12 +47,7 @@ public class RidePreferenceService {
         List<RidePreferenceDtoOut> result = new ArrayList<>();
 
         for (RidePreference preference : preferences){
-            result.add(new RidePreferenceDtoOut(
-                    preference.getId(),
-                    preference.getRide().getId(),
-                    preference.getRide().getName(),
-                    preference.getPreference()
-            ));
+            result.add(new RidePreferenceDtoOut( preference.getId(), preference.getRide().getId(), preference.getRide().getName(), preference.getPreference() ));
         }
 
         return result;
@@ -70,12 +65,7 @@ public class RidePreferenceService {
             throw new ApiException("You cannot access another user's preference");
         }
 
-        return new RidePreferenceDtoOut(
-                preference.getId(),
-                preference.getRide().getId(),
-                preference.getRide().getName(),
-                preference.getPreference()
-        );
+        return new RidePreferenceDtoOut( preference.getId(), preference.getRide().getId(), preference.getRide().getName(), preference.getPreference() );
     }
 
     @Transactional
@@ -159,6 +149,7 @@ public class RidePreferenceService {
         ridePreferenceRepository.save(oldPreference);
     }
 
+    @org.springframework.transaction.annotation.Transactional
     public void deleteRidePreference(Integer accountId, Integer preferenceId){
         RidePreference preference = ridePreferenceRepository.findRidePreferenceById(preferenceId);
 

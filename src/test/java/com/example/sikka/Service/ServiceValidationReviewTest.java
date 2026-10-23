@@ -20,7 +20,7 @@ class ServiceValidationReviewTest {
         for (String value : new String[]{"MEDIUM", "HIGH"}) {
             Ride ride = new Ride();
             ride.setThrillLevel(value);
-            assertThrows(ApiException.class, () -> new RideService(rides, profiles).addRide(ride));
+            assertThrows(ApiException.class, () -> new RideService(rides, profiles, accounts).addRide(ride));
             RegisterDtoIn registration = new RegisterDtoIn();
             registration.setThrillPreference(value);
             assertThrows(ApiException.class, () -> new AccountService(accounts, profiles).register(registration));
@@ -31,7 +31,7 @@ class ServiceValidationReviewTest {
     @Test
     void rejectNullRsvpBeforeQueryingMembership() {
         VisitMemberRepository members = mock(VisitMemberRepository.class);
-        VisitMemberService service = new VisitMemberService(members, mock(VisitRepository.class), mock(VisitorProfileRepository.class), mock(VisitGroupService.class));
+        VisitMemberService service = new VisitMemberService(members, mock(VisitRepository.class), mock(VisitorProfileRepository.class), mock(VisitGroupService.class), mock(RideService.class));
         assertThrows(ApiException.class, () -> service.updateRsvp(1, 2, null));
         verifyNoInteractions(members);
     }
