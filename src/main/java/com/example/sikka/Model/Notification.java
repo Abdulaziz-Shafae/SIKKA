@@ -16,6 +16,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @NoArgsConstructor
 @Entity
+@Table(uniqueConstraints = @UniqueConstraint(name = "uk_notification_account_channel_event", columnNames = {"account_id", "channel", "event_key"}))
 public class Notification {
 
     @Id
@@ -48,6 +49,25 @@ public class Notification {
 
     private LocalDateTime scheduledAt;
 
+    @Size(max = 150, message = "Event key must not exceed 150 characters")
+    @Column(name = "event_key", length = 150)
+    private String eventKey;
+
+    @Size(max = 60, message = "Action type must not exceed 60 characters")
+    @Column(length = 60)
+    private String actionType;
+
+    @Column(columnDefinition = "JSON")
+    private String response;
+
+    private LocalDateTime respondedAt;
+
+    private LocalDateTime sentAt;
+
+    @Size(max = 255, message = "Provider reference must not exceed 255 characters")
+    @Column(length = 255)
+    private String providerReference;
+
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -61,4 +81,15 @@ public class Notification {
      @JoinColumn(name = "visit_id")
      @JsonIgnore
      private Visit visit;
+
+    @ManyToOne
+    @JoinColumn(name = "activity_session_id")
+    @JsonIgnore
+    private ActivitySession activitySession;
+
+    @ManyToOne
+    @JoinColumn(name = "plan_item_id")
+    @JsonIgnore
+    private PlanItem planItem;
+
 }

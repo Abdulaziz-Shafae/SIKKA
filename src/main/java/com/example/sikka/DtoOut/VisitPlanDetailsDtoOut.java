@@ -14,6 +14,12 @@ import java.util.List;
 public class VisitPlanDetailsDtoOut {
 
     private VisitPlanDtoOut plan;
+
     private String approvalStatus;
+
     private List<PlanItemDtoOut> planItems;
+
+    private List<PlanItemDtoOut> proposedPlanItems;
+
+    private ReplanProposalDtoOut pendingProposal;
 }

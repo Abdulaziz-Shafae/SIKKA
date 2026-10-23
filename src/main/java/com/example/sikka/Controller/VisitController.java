@@ -1,7 +1,11 @@
 package com.example.sikka.Controller;
 
 import com.example.sikka.Api.ApiResponse;
+import com.example.sikka.DtoIn.ReuseVisitDtoIn;
 import com.example.sikka.DtoIn.VisitDtoIn;
+import com.example.sikka.DtoIn.UpdateVisitArrivalDtoIn;
+import com.example.sikka.DtoOut.PreviewDtoOut;
+import com.example.sikka.DtoOut.ReuseVisitDtoOut;
 import com.example.sikka.Service.VisitService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -69,4 +73,22 @@ public class VisitController {
         visitService.completeVisit(accountId, visitId);
         return ResponseEntity.status(200).body(new ApiResponse("visit completed"));
     }
+
+    @GetMapping("/preview/{accountId}/{visitId}")
+    public ResponseEntity<PreviewDtoOut> getVisitPreview(@PathVariable Integer accountId, @PathVariable Integer visitId) {
+        return ResponseEntity.status(200).body(visitService.getVisitPreview(accountId, visitId));
+    }
+
+    @PutMapping("/arrival/{accountId}/{visitId}")
+    public ResponseEntity<ApiResponse> updateVisitArrival(@PathVariable Integer accountId, @PathVariable Integer visitId, @RequestBody @Valid UpdateVisitArrivalDtoIn updateVisitArrivalDtoIn) {
+        visitService.updateVisitArrival(accountId, visitId, updateVisitArrivalDtoIn);
+        return ResponseEntity.status(200).body(new ApiResponse("Arrival time updated and activity times scheduled successfully"));
+    }
+
+    @PostMapping("/reuse/{accountId}/{sourceVisitId}")
+    public ResponseEntity<ReuseVisitDtoOut> reuseVisit(@PathVariable Integer accountId, @PathVariable Integer sourceVisitId, @RequestBody @Valid ReuseVisitDtoIn reuseVisitDtoIn) {
+        return ResponseEntity.status(201).body(visitService.reuseVisit(accountId, sourceVisitId, reuseVisitDtoIn));
+    }
+
+
 }

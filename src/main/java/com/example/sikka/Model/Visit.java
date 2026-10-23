@@ -82,4 +82,8 @@ public class Visit {
     @OneToMany(mappedBy = "visit")
     @JsonIgnore
     private Set<PaymentOrder> paymentOrders;
+
+    @OneToMany(mappedBy = "visit")
+    @JsonIgnore
+    private Set<PlanHistory> planHistories;
 }

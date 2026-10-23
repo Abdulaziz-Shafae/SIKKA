@@ -10,13 +10,12 @@ import org.hibernate.annotations.CreationTimestamp;
 import java.time.LocalDateTime;
 import java.util.Set;
 
-
 @Getter
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
 @Entity
- @Table(uniqueConstraints = @UniqueConstraint(name = "uk_visit_plan_visit_owner", columnNames = {"visit_id", "owner_visit_member_id"}))
+@Table(uniqueConstraints = @UniqueConstraint(name = "uk_visit_plan_visit_owner_history", columnNames = {"visit_id", "owner_visit_member_id", "generated_by_history_id"}))
 public class VisitPlan {
 
     @Id
@@ -28,6 +27,11 @@ public class VisitPlan {
     @Column(columnDefinition = "VARCHAR(20) not null")
     private String planKind;
 
+    @NotNull(message = "Timing mode is required")
+    @Pattern(regexp = "^(RELATIVE|SCHEDULED)$", message = "Timing mode must be RELATIVE or SCHEDULED")
+    @Column(columnDefinition = "VARCHAR(20) not null default 'RELATIVE'")
+    private String timingMode = "RELATIVE";
+
     @NotNull(message = "Active status is required")
     @Column(name = "is_active", columnDefinition = "BOOLEAN not null")
     private Boolean isActive = false;
@@ -35,25 +39,51 @@ public class VisitPlan {
     @Column(columnDefinition = "JSON")
     private String proposedItems;
 
+    @Pattern(regexp = "^(INDIVIDUAL|GROUP)$", message = "Pending scope must be INDIVIDUAL or GROUP")
+    @Column(columnDefinition = "VARCHAR(20)")
+    private String pendingScope;
+
+    @Column(columnDefinition = "JSON")
+    private String affectedMemberIds;
+
+    @jakarta.validation.constraints.Size(max = 500, message = "Proposal reason must not exceed 500 characters")
+    @Column(length = 500)
+    private String proposalReason;
+
+    private LocalDateTime proposedAt;
+
+    @Column(columnDefinition = "JSON")
+    private String proposalBaseSnapshot;
+
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-     @ManyToOne
-     @JoinColumn(name = "visit_id", nullable = false)
-     @JsonIgnore
-     private Visit visit;
+    @ManyToOne
+    @JoinColumn(name = "visit_id", nullable = false)
+    @JsonIgnore
+    private Visit visit;
 
-     @ManyToOne
-     @JoinColumn(name = "owner_visit_member_id")
-     @JsonIgnore
-     private VisitMember ownerVisitMember;
+    @ManyToOne
+    @JoinColumn(name = "owner_visit_member_id")
+    @JsonIgnore
+    private VisitMember ownerVisitMember;
 
-     @OneToMany(mappedBy = "visitPlan")
-     @JsonIgnore
-     private Set<PlanItem> planItems;
+    @ManyToOne
+    @JoinColumn(name = "generated_by_history_id")
+    @JsonIgnore
+    private PlanHistory generatedByHistory;
 
-     @OneToOne(mappedBy = "visitPlan")
-     @JsonIgnore
-     private PlanApproval planApproval;
+    @ManyToOne
+    @JoinColumn(name = "requested_by_visit_member_id")
+    @JsonIgnore
+    private VisitMember requestedByVisitMember;
+
+    @OneToMany(mappedBy = "visitPlan")
+    @JsonIgnore
+    private Set<PlanItem> planItems;
+
+    @OneToOne(mappedBy = "visitPlan")
+    @JsonIgnore
+    private PlanApproval planApproval;
 }

@@ -14,8 +14,18 @@ import java.time.LocalDateTime;
 public class PlanApprovalDtoOut {
 
     private Integer id;
+
     private Integer visitPlanId;
+
+    private String approvalScope;
+
+    private Integer requestedByAccountId;
+
+    private Integer requiredApproverAccountId;
+
     private Integer approvedByAccountId;
+
     private String status;
+
     private LocalDateTime respondedAt;
 }

@@ -27,9 +27,35 @@ public class PlanItem {
     @Column(columnDefinition = "VARCHAR(150)")
     private String title;
 
+    @PositiveOrZero(message = "Relative start must be zero or greater")
+    private Integer relativeStartMinutes;
+
+    @PositiveOrZero(message = "Relative end must be zero or greater")
+    private Integer relativeEndMinutes;
+
     private LocalDateTime startsAt;
 
     private LocalDateTime endsAt;
+
+    @JsonIgnore
+    private LocalDateTime executionReleasedAt;
+
+    @PositiveOrZero(message = "Walking minutes must be zero or greater")
+    private Integer walkingMinutes;
+
+    @PositiveOrZero(message = "Waiting minutes must be zero or greater")
+    private Integer waitingMinutes;
+
+    @PositiveOrZero(message = "Activity minutes must be zero or greater")
+    private Integer activityMinutes;
+
+    @Size(max = 20, message = "Break type must not exceed 20 characters")
+    @Column(columnDefinition = "VARCHAR(20)")
+    private String breakType;
+
+    @NotNull(message = "Rateable status is required")
+    @Column(name = "is_rateable", columnDefinition = "BOOLEAN not null default false")
+    private Boolean isRateable = false;
 
     @NotNull(message = "Sort order is required")
     @PositiveOrZero(message = "Sort order must be zero or greater")
@@ -56,13 +82,13 @@ public class PlanItem {
     @JsonIgnore
     private VisitPlan visitPlan;
 
-     @ManyToOne
-     @JoinColumn(name = "ride_id")
-     @JsonIgnore
-     private Ride ride;
+    @ManyToOne
+    @JoinColumn(name = "ride_id")
+    @JsonIgnore
+    private Ride ride;
 
-     @ManyToOne
-     @JoinColumn(name = "place_id")
-     @JsonIgnore
-     private Place place;
+    @ManyToOne
+    @JoinColumn(name = "place_id")
+    @JsonIgnore
+    private Place place;
 }

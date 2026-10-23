@@ -1,6 +1,7 @@
 package com.example.sikka.Controller;
 
 import com.example.sikka.Api.ApiResponse;
+import com.example.sikka.DtoIn.RespondDelayDtoIn;
 import com.example.sikka.Service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -38,5 +39,10 @@ public class NotificationController {
     @GetMapping("/unread-count/{accountId}")
     public ResponseEntity<?> getUnreadNotificationsCount(@PathVariable Integer accountId) {
         return ResponseEntity.status(200).body(notificationService.getUnreadNotificationsCount(accountId));
+    }
+
+    @PutMapping("/respond-delay/{accountId}/{notificationId}")
+    public ResponseEntity<NotificationDtoOut> respondToDelay(@PathVariable Integer accountId, @PathVariable Integer notificationId, @RequestBody @Valid RespondDelayDtoIn respondDelayDtoIn) {
+        return ResponseEntity.status(200).body(notificationService.respondToDelay(accountId, notificationId, respondDelayDtoIn));
     }
 }

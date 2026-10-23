@@ -20,4 +20,14 @@ public class VisitProgressDtoOut {
     private Integer remainingRidesCount;
 
     private Double completionPercentage;
+
+    private Integer plannedActivitiesCount;
+
+    private Integer completedActivitiesCount;
+
+    private Integer skippedActivitiesCount;
+
+    private Integer remainingActivitiesCount;
+
+    private Double activityCompletionPercentage;
 }

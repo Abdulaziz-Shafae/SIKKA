@@ -12,10 +12,12 @@ import lombok.Setter;
 public class GenerateVisitPlansDtoOut {
 
     private Integer visitId;
-
     private String planStatus;
-
     private Integer individualPlansCount;
-
     private Integer groupPlanId;
+    private Integer planHistoryId;
+    private String requestStatus;
+    private String failureReason;
+    private AiPlanDtoOut generatedResult;
+
 }

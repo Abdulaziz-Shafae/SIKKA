@@ -24,6 +24,11 @@ public class PlanApproval {
     @Column(columnDefinition = "VARCHAR(20) not null")
     private String status = "PENDING";
 
+    @NotNull(message = "Approval scope is required")
+    @Pattern(regexp = "^(INDIVIDUAL|GROUP)$", message = "Approval scope must be INDIVIDUAL or GROUP")
+    @Column(columnDefinition = "VARCHAR(20) not null default 'GROUP'")
+    private String approvalScope = "GROUP";
+
     private LocalDateTime respondedAt;
 
     @OneToOne
@@ -31,8 +36,18 @@ public class PlanApproval {
     @JsonIgnore
     private VisitPlan visitPlan;
 
-     @ManyToOne
-     @JoinColumn(name = "approved_by_account_id", nullable = false)
-     @JsonIgnore
-     private Account approvedByAccount;
+    @ManyToOne
+    @JoinColumn(name = "requested_by_account_id")
+    @JsonIgnore
+    private Account requestedByAccount;
+
+    @ManyToOne
+    @JoinColumn(name = "required_approver_account_id")
+    @JsonIgnore
+    private Account requiredApproverAccount;
+
+    @ManyToOne
+    @JoinColumn(name = "approved_by_account_id")
+    @JsonIgnore
+    private Account approvedByAccount;
 }
