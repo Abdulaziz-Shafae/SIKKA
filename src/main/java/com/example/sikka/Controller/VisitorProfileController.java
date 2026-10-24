@@ -8,7 +8,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import com.example.sikka.DtoIn.UpdateProfileDtoIn;
-
+import com.example.sikka.Model.Account;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 @RestController
 @RequestMapping("/api/v1/visitor-profile")
 @RequiredArgsConstructor
@@ -39,14 +40,14 @@ public class VisitorProfileController {
         return ResponseEntity.status(200).body(new ApiResponse("deleted successfully"));
     }
 
-    @GetMapping("/get-by-account/{accountId}")
-    public ResponseEntity<?> getByAccount(@PathVariable Integer accountId) {
-        return ResponseEntity.status(200).body(visitorProfileService.getByAccount(accountId));
+    @GetMapping("/my-profile")
+    public ResponseEntity<?> getMyProfile(@AuthenticationPrincipal Account account) {
+        return ResponseEntity.status(200).body(visitorProfileService.getByAccount(account.getId()));
     }
 
-    @PutMapping("/update-by-account/{accountId}")
-    public ResponseEntity<?> updateByAccount(@PathVariable Integer accountId, @RequestBody @Valid UpdateProfileDtoIn dto) {
-        visitorProfileService.updateByAccount(accountId, dto);
+    @PutMapping("/update-my-profile")
+    public ResponseEntity<?> updateMyProfile(@AuthenticationPrincipal Account account, @RequestBody @Valid UpdateProfileDtoIn dto) {
+        visitorProfileService.updateByAccount(account.getId(), dto);
         return ResponseEntity.status(200).body(new ApiResponse("profile updated successfully"));
     }
 }

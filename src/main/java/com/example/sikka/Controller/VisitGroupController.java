@@ -1,5 +1,6 @@
 package com.example.sikka.Controller;
-
+import com.example.sikka.Model.Account;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.example.sikka.Api.ApiResponse;
 import com.example.sikka.DtoIn.VisitGroupDtoIn;
 import com.example.sikka.Service.VisitGroupService;
@@ -38,22 +39,23 @@ public class VisitGroupController {
         return ResponseEntity.status(200).body(new ApiResponse("deleted successfully"));
     }
 
-    @PostMapping("/add-group/{accountId}/{visitId}")
-    public ResponseEntity<?> addGroupToVisit(@PathVariable Integer accountId, @PathVariable Integer visitId,
+    @PostMapping("/add-group/{visitId}")
+    public ResponseEntity<?> addGroupToVisit(@AuthenticationPrincipal Account account, @PathVariable Integer visitId,
                                              @RequestParam String groupName) {
-        String code = visitGroupService.addGroupToVisit(accountId, visitId, groupName);
+        String code = visitGroupService.addGroupToVisit(account.getId(), visitId, groupName);
         return ResponseEntity.status(200).body(new ApiResponse("group added, invite code: " + code));
     }
 
-    @PutMapping("/regenerate-code/{accountId}/{visitId}")
-    public ResponseEntity<?> regenerateCode(@PathVariable Integer accountId, @PathVariable Integer visitId) {
-        String code = visitGroupService.regenerateCode(accountId, visitId);
+    @PutMapping("/regenerate-code/{visitId}")
+    public ResponseEntity<?> regenerateCode(@AuthenticationPrincipal Account account, @PathVariable Integer visitId) {
+        String code = visitGroupService.regenerateCode(account.getId(), visitId);
         return ResponseEntity.status(200).body(new ApiResponse("new invite code: " + code));
     }
 
-    @PutMapping("/toggle-invitations/{accountId}/{visitId}")
-    public ResponseEntity<?> toggleInvitations(@PathVariable Integer accountId, @PathVariable Integer visitId) {
-        boolean enabled = visitGroupService.toggleInvitations(accountId, visitId);
+    @PutMapping("/toggle-invitations/{visitId}")
+    public ResponseEntity<?> toggleInvitations(@AuthenticationPrincipal Account account, @PathVariable Integer visitId) {
+        boolean enabled = visitGroupService.toggleInvitations(account.getId(), visitId);
         return ResponseEntity.status(200).body(new ApiResponse(enabled ? "invitations enabled" : "invitations disabled"));
     }
+
 }

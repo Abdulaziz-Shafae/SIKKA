@@ -20,6 +20,7 @@ public class AccountService {
 
     private final AccountRepository accountRepository;
     private final VisitorProfileRepository visitorProfileRepository;
+    private final org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
     public List<AccountDtoOut> get() {
         List<AccountDtoOut> list = new ArrayList<>();
         for (Account a : accountRepository.findAll())
@@ -34,7 +35,7 @@ public class AccountService {
         Account account = new Account();
         account.setName(dto.getName());
         account.setEmail(dto.getEmail());
-        account.setPasswordHash(dto.getPassword());
+        account.setPasswordHash(passwordEncoder.encode(dto.getPassword()));
         account.setRole("USER");
         account.setStatus("ACTIVE");
         account.setEmailVerified(false);
@@ -52,7 +53,7 @@ public class AccountService {
 
         account.setName(dto.getName());
         account.setEmail(dto.getEmail());
-        account.setPasswordHash(dto.getPassword());
+        account.setPasswordHash(passwordEncoder.encode(dto.getPassword()));
         accountRepository.save(account);
     }
 
@@ -87,7 +88,7 @@ public class AccountService {
         Account account = new Account();
         account.setName(dto.getName());
         account.setEmail(dto.getEmail());
-        account.setPasswordHash(dto.getPassword());
+        account.setPasswordHash(passwordEncoder.encode(dto.getPassword()));
         account.setRole("USER");
         account.setStatus("ACTIVE");
         account.setEmailVerified(false);

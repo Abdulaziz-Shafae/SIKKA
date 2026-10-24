@@ -9,6 +9,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import com.example.sikka.Service.VisitorProfileService;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import com.example.sikka.Model.Account;
 
 @RestController
 @RequestMapping("/api/v1/account")
@@ -47,9 +49,9 @@ public class AccountController {
         return ResponseEntity.status(200).body(new ApiResponse("registered successfully"));
     }
 
-    @GetMapping("/me/{accountId}")
-    public ResponseEntity<?> me(@PathVariable Integer accountId) {
-        return ResponseEntity.status(200).body(accountService.getMe(accountId));
+    @GetMapping("/me")
+    public ResponseEntity<?> me(@AuthenticationPrincipal Account account) {
+        return ResponseEntity.status(200).body(accountService.getMe(account.getId()));
     }
 
 
