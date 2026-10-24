@@ -71,4 +71,15 @@ public class RideController {
         rideService.updateRideStatus(accountId, rideId, dto);
         return ResponseEntity.status(200).body(new ApiResponse("Ride status updated successfully"));
     }
+
+    @GetMapping("/eligibility/{accountId}/{memberId}/{rideId}")
+    public ResponseEntity<?> checkEligibilityForMember(
+            @PathVariable Integer accountId,
+            @PathVariable Integer memberId,
+            @PathVariable Integer rideId){
+
+        return ResponseEntity.status(200).body(
+                rideService.checkEligibilityForMember(accountId, memberId, rideId)
+        );
+    }
 }

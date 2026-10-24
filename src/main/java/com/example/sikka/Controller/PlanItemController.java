@@ -6,6 +6,8 @@ import com.example.sikka.Service.PlanItemService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import com.example.sikka.Model.Account;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -15,19 +17,19 @@ public class PlanItemController {
 
     private final PlanItemService planItemService;
 
-    @GetMapping("/get/items/{accountId}/{visitPlanId}")
-    public ResponseEntity<?> getPlanItems(@PathVariable Integer accountId, @PathVariable Integer visitPlanId) {
-        return ResponseEntity.status(200).body(planItemService.getPlanItems(accountId, visitPlanId));
+    @GetMapping("/get/items/{visitPlanId}")
+    public ResponseEntity<?> getPlanItems(@AuthenticationPrincipal Account account, @PathVariable Integer visitPlanId) {
+        return ResponseEntity.status(200).body(planItemService.getPlanItems(account.getId(), visitPlanId));
     }
 
-    @GetMapping("/get/details/{accountId}/{planItemId}")
-    public ResponseEntity<?> getPlanItemDetails(@PathVariable Integer accountId, @PathVariable Integer planItemId) {
-        return ResponseEntity.status(200).body(planItemService.getPlanItemDetails(accountId, planItemId));
+    @GetMapping("/get/details/{planItemId}")
+    public ResponseEntity<?> getPlanItemDetails(@AuthenticationPrincipal Account account, @PathVariable Integer planItemId) {
+        return ResponseEntity.status(200).body(planItemService.getPlanItemDetails(account.getId(), planItemId));
     }
 
-    @PutMapping("/update/preferences/{accountId}")
-    public ResponseEntity<?> updatePlanItemPreferences(@PathVariable Integer accountId, @RequestBody @Valid PlanItemDtoIn planItemDtoIn) {
-        planItemService.updatePlanItemPreferences(accountId, planItemDtoIn);
+    @PutMapping("/update/preferences")
+    public ResponseEntity<?> updatePlanItemPreferences(@AuthenticationPrincipal Account account, @RequestBody @Valid PlanItemDtoIn planItemDtoIn) {
+        planItemService.updatePlanItemPreferences(account.getId(), planItemDtoIn);
         return ResponseEntity.status(200).body(new ApiResponse("Plan item preferences updated successfully"));
     }
 }

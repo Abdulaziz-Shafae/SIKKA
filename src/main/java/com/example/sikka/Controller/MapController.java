@@ -71,4 +71,9 @@ public class MapController {
     public ResponseEntity<?> getMapData(){
         return ResponseEntity.status(200).body(mapService.getMapData());
     }
+
+    @GetMapping("/get/walking-context")
+    public ResponseEntity<?> getWalkingContext(){
+        return ResponseEntity.status(200).body(mapService.getWalkingContext());
+    }
 }

@@ -18,7 +18,7 @@ class ParkCatalogueValidationTest {
         RideRepository repository = mock(RideRepository.class);
         Ride ride = new Ride();
         ride.setCompanionRequiredBelowHeightCm(new BigDecimal("130"));
-        assertThrows(ApiException.class, () -> new RideService(repository, mock(com.example.sikka.Repository.VisitMemberRepository.class), mock(com.example.sikka.Repository.VisitorProfileRepository.class), mock(com.example.sikka.Repository.AccountRepository.class)).addRide(ride));
+        assertThrows(ApiException.class, () -> new RideService(repository, mock(com.example.sikka.Repository.VisitMemberRepository.class), mock(com.example.sikka.Repository.VisitorProfileRepository.class), mock(com.example.sikka.Repository.AccountRepository.class), mock(com.example.sikka.Service.PrivacyConsentService.class), tools.jackson.databind.json.JsonMapper.builder().build()).addRide(ride));
         verifyNoInteractions(repository);
     }
 
@@ -29,7 +29,7 @@ class ParkCatalogueValidationTest {
         ride.setAdultCompanionRequired(true);
         ride.setMinHeightCm(new BigDecimal("90"));
         ride.setCompanionRequiredBelowHeightCm(new BigDecimal("130"));
-        new RideService(repository, mock(com.example.sikka.Repository.VisitMemberRepository.class), mock(com.example.sikka.Repository.VisitorProfileRepository.class), mock(com.example.sikka.Repository.AccountRepository.class)).addRide(ride);
+        new RideService(repository, mock(com.example.sikka.Repository.VisitMemberRepository.class), mock(com.example.sikka.Repository.VisitorProfileRepository.class), mock(com.example.sikka.Repository.AccountRepository.class), mock(com.example.sikka.Service.PrivacyConsentService.class), tools.jackson.databind.json.JsonMapper.builder().build()).addRide(ride);
         verify(repository).save(argThat(saved -> Boolean.TRUE.equals(saved.getAdultCompanionRequired()) && saved.getCompanionRequiredBelowHeightCm().compareTo(new BigDecimal("130")) == 0));
     }
 

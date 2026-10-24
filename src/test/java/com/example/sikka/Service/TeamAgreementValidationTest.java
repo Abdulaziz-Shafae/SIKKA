@@ -53,7 +53,7 @@ class TeamAgreementValidationTest {
         stale.setWaitObservedAt(LocalDateTime.now().minusHours(1));
         stale.setWaitSource("ADMIN");
         when(repository.findRidesByStatus("OPEN")).thenReturn(List.of(fresh, stale, new Ride()));
-        assertEquals(List.of(fresh), new RideService(repository, mock(com.example.sikka.Repository.VisitMemberRepository.class), mock(VisitorProfileRepository.class), mock(AccountRepository.class)).getOpenRides());
+        assertEquals(List.of(fresh), new RideService(repository, mock(com.example.sikka.Repository.VisitMemberRepository.class), mock(VisitorProfileRepository.class), mock(AccountRepository.class), mock(com.example.sikka.Service.PrivacyConsentService.class), tools.jackson.databind.json.JsonMapper.builder().build()).getOpenRides());
     }
 
     @Test

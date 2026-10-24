@@ -181,6 +181,27 @@ public class VisitPlanService {
 
         Integer ownerVisitMemberId = plan.getOwnerVisitMember() == null ? null : plan.getOwnerVisitMember().getId();
 
+        Map<Integer, String> personalPriorities = new HashMap<>();
+
+        if ("INDIVIDUAL".equals(plan.getPlanKind()) && plan.getOwnerVisitMember() != null && plan.getOwnerVisitMember().getSelectedRides() != null && !plan.getOwnerVisitMember().getSelectedRides().isBlank()) {
+            JsonNode selectedRides = readGenerationJson(plan.getOwnerVisitMember().getSelectedRides());
+
+            if (!selectedRides.isArray()) {
+                throw new ApiException("Member selected rides must be an array");
+            }
+
+            for (JsonNode selection : selectedRides) {
+                Integer rideId = requirePositiveInteger(selection, "rideId");
+                String priority = requireText(selection, "priority");
+
+                if (!Set.of("MUST_RIDE", "PREFERRED", "OPTIONAL").contains(priority)) {
+                    throw new ApiException("Invalid member ride priority");
+                }
+
+                personalPriorities.put(rideId, priority);
+            }
+        }
+
         for (PlanItem item : items) {
 
             HashSet<Integer> participantIds = parseActivityParticipantIds(item.getParticipantVisitMemberIds());
@@ -189,7 +210,13 @@ public class VisitPlanService {
                 continue;
             }
 
-            activityResults.add(convertPlanItemToDtoOut(item));
+            PlanItemDtoOut activityResult = convertPlanItemToDtoOut(item);
+
+            if ("INDIVIDUAL".equals(plan.getPlanKind()) && "RIDE".equals(activityResult.getActivityKind())) {
+                activityResult.setPriority(personalPriorities.getOrDefault(activityResult.getRideId(), "OPTIONAL"));
+            }
+
+            activityResults.add(activityResult);
         }
 
         VisitPlanDtoOut planResult = convertVisitPlanToDtoOut(plan);
@@ -212,6 +239,10 @@ public class VisitPlanService {
 
                 if ("INDIVIDUAL".equals(plan.getPlanKind()) && !participantIds.contains(ownerVisitMemberId)) {
                     continue;
+                }
+
+                if ("INDIVIDUAL".equals(plan.getPlanKind()) && "RIDE".equals(proposedItem.getActivityKind())) {
+                    proposedItem.setPriority(personalPriorities.getOrDefault(proposedItem.getRideId(), "OPTIONAL"));
                 }
 
                 proposedResults.add(proposedItem);
@@ -2044,14 +2075,14 @@ public class VisitPlanService {
                     break;
                 } catch (ApiException invalidCandidate) {
                     String reason = invalidCandidate.getMessage();
-                    boolean repairable = reason != null && (reason.startsWith("Timing mismatch:") || "Activity interval must equal walking, waiting and activity minutes".equals(reason) || "The generated plan repeats a ride without explicit repeat permission".equals(reason) || "The plan contains an unknown or incorrect walking route".equals(reason) || reason.startsWith("Waiting time mismatch for ride "));
+                    boolean repairable = reason != null && (reason.startsWith("Timing mismatch:") || "Activity interval must equal walking, waiting and activity minutes".equals(reason) || "The generated plan repeats a ride without explicit repeat permission".equals(reason) || ("The plan contains an unknown or incorrect walking route".equals(reason) || reason.startsWith("Walking route mismatch:")) || reason.startsWith("Waiting time mismatch for ride ") || "Initial prayer scheduling must be deferred until arrival supplies verified prayer events".equals(reason) || "The selected ride sequence exceeds the visit duration using supplied walking, waiting and activity times".equals(reason) || "A shared ride requires separate approach activities when participant walking durations differ".equals(reason));
 
                     if (attempt == 1 || !repairable) {
                         throw invalidCandidate;
                     }
 
                     ObjectNode repairInput = (ObjectNode) readGenerationJson(writeGenerationJson(generationInput));
-                    repairInput.put("validationFeedback", reason);
+                    repairInput.put("validationFeedback", reason + (generationInput.path("allowSplit").asBoolean() ? ". SPLIT is allowed: reconsider participant assignments, not only timestamps. Schedule each member's own required rides with that member; independent adult subgroups may run concurrently from the entrance using their own supplied routes and clocks. Shared membership is optional unless explicitly required. Omit optional rides when they do not fit. Do not duplicate a ride without explicit repeat permission, invent travel or wait times, change requirements, or exceed the visit duration. Preserve supervision constraints. If no valid assignment exists, return feasible=false with a precise reason." : ""));
 
                     if (attemptCandidate != null) {
                         repairInput.set("previousRejectedCandidate", participantJsonMapper.valueToTree(attemptCandidate));
@@ -2727,7 +2758,8 @@ public class VisitPlanService {
             routes.put(walkingRouteKey(requireText(route, "fromNodeKey"), requireText(route, "toNodeKey")), requireNonNegativeInteger(route, "minutes"));
         }
 
-        for (List<AiPlanItemDtoOut> activities : byMember.values()) {
+        for (Map.Entry<Integer, List<AiPlanItemDtoOut>> memberActivities : byMember.entrySet()) {
+            List<AiPlanItemDtoOut> activities = memberActivities.getValue();
             activities.sort(Comparator.comparing(AiPlanItemDtoOut::getRelativeStartMinutes));
             String previousNode = requireText(walking, "entranceNodeKey");
 
@@ -2743,7 +2775,7 @@ public class VisitPlanService {
                 Integer expectedWalking = previousNode.equals(nextNode) ? Integer.valueOf(0) : routes.get(walkingRouteKey(previousNode, nextNode));
 
                 if (expectedWalking == null || !expectedWalking.equals(activity.getWalkingMinutes())) {
-                    throw new ApiException("The plan contains an unknown or incorrect walking route");
+                    throw new ApiException("Walking route mismatch: member=" + memberActivities.getKey() + ", from=" + previousNode + ", to=" + nextNode + ", expected=" + expectedWalking + ", actual=" + activity.getWalkingMinutes() + ", start=" + activity.getRelativeStartMinutes() + ", kind=" + activity.getActivityKind() + ", ride=" + activity.getRideId() + ", place=" + activity.getPlaceId());
                 }
 
                 previousNode = nextNode;
@@ -2938,23 +2970,66 @@ public class VisitPlanService {
     }
 
     private void mergeGenerationWarnings(AiPlanDtoOut candidate, JsonNode input) {
+        Set<String> warnings = new LinkedHashSet<>();
+        Set<Integer> plannedRideIds = new HashSet<>();
 
-        Set<String> warnings = new LinkedHashSet<>(candidate.getWarnings());
+        for (JsonNode member : input.path("members")) {
+            int memberId = requirePositiveInteger(member, "visitMemberId");
 
-        for (JsonNode warning : input.path("inputWarnings")) {
-            warnings.add(warning.asString());
-        }
+            if (!member.path("ageKnown").isBoolean() || !member.path("ageKnown").asBoolean()) {
+                warnings.add("عمر العضو " + memberId + " غير معروف؛ يلزم مراعاة الإشراف والتحقق من متطلبات الألعاب.");
+            }
 
-        for (JsonNode ride : input.path("rides")) {
-
-            if (ride.path("planningWaitMinutes").isNull()) {
-                warnings.add("وقت انتظار اللعبة " + ride.path("id").asInt() + " غير متاح؛ لا يُفترض أنه صفر.");
-            } else if (ride.path("waitIsEstimate").asBoolean()) {
-                warnings.add("انتظار اللعبة " + ride.path("id").asInt() + " تقدير تخطيطي من المصدر وليس قراءة مباشرة مضمونة ليوم الزيارة.");
+            if ("SKIPPED".equals(member.path("answerStatus").asString(""))) {
+                warnings.add("العضو " + memberId + " تخطّى إجابات التخطيط؛ استُخدمت المعلومات المتاحة.");
             }
         }
 
-        if ("DEFERRED".equals(input.path("mealPolicy").path("choice").asString())) {
+        boolean includesPrayer = input.path("includePrayer").isBoolean() && input.path("includePrayer").asBoolean();
+        boolean prayerTimesVerified = input.path("prayerTimesVerified").isBoolean() && input.path("prayerTimesVerified").asBoolean();
+
+        if (includesPrayer && !prayerTimesVerified) {
+            warnings.add("تُضاف بريكات الصلاة بعد تحديد وقت الوصول والتحقق من مواقيتها ليوم الزيارة.");
+        }
+
+        if (candidate.getActivities() != null) {
+            for (AiPlanItemDtoOut activity : candidate.getActivities()) {
+                if (!"RIDE".equals(activity.getActivityKind()) || activity.getRideId() == null) {
+                    continue;
+                }
+
+                int rideId = activity.getRideId();
+                plannedRideIds.add(rideId);
+
+                if (activity.getParticipantVisitMemberIds() == null) {
+                    continue;
+                }
+
+                for (Integer memberId : activity.getParticipantVisitMemberIds()) {
+                    String eligibility = input.path("eligibilityByRideAndMember").path(String.valueOf(rideId)).path(String.valueOf(memberId)).asString("");
+
+                    if ("UNKNOWN".equals(eligibility)) {
+                        warnings.add("أهلية العضو " + memberId + " للعبة " + rideId + " غير مؤكدة؛ تحقق من المتطلبات قبل الركوب.");
+                    }
+                }
+            }
+        }
+
+        for (JsonNode ride : input.path("rides")) {
+            int rideId = requirePositiveInteger(ride, "id");
+
+            if (!plannedRideIds.contains(rideId)) {
+                continue;
+            }
+
+            if (!ride.path("planningWaitMinutes").isIntegralNumber()) {
+                warnings.add("وقت انتظار اللعبة " + rideId + " غير متاح؛ لا يُفترض أنه صفر.");
+            } else if (ride.path("waitIsEstimate").isBoolean() && ride.path("waitIsEstimate").asBoolean()) {
+                warnings.add("انتظار اللعبة " + rideId + " تقدير تخطيطي من المصدر وليس قراءة مباشرة مضمونة ليوم الزيارة.");
+            }
+        }
+
+        if ("DEFERRED".equals(input.path("mealPolicy").path("choice").asString(""))) {
             warnings.add("اختيار الأكل مؤجل؛ يظهر سؤاله يوم الزيارة وقد يؤثر اختياره على الجدول.");
         }
 
@@ -3623,6 +3698,7 @@ public class VisitPlanService {
 
             ObjectNode input = (ObjectNode) readGenerationJson(planning.inputJson());
             input.put("operationType", "REPLAN");
+            input.set("planningEligibilityPolicy", participantJsonMapper.valueToTree(Map.of("existingEditableRideUnknown", "ALLOW_PROVISIONAL_WITH_WARNING", "replacementRide", "REQUIRE_CONFIRMED_ELIGIBLE", "missingEligibility", "FORBID", "notEligible", "FORBID", "estimatedWait", "USE_SUPPLIED_KNOWN_ESTIMATE")));
             input.put("reason", reason);
             input.set("executionRules", readGenerationJson(executionExtras));
             input.put("approvalScope", scope);
@@ -3638,7 +3714,73 @@ public class VisitPlanService {
             throw new ApiException("The OpenAI call must run outside the database transaction");
         }
 
-        AiPlanDtoOut candidate = aiPlanService.generatePlanCandidate(prepared.aiInput());
+        JsonNode timingInput = readGenerationJson(prepared.aiInput());
+        boolean directTiming = !replaceUnavailableRides && timingInput.path("allowSplit").isBoolean() && !timingInput.path("allowSplit").asBoolean();
+        boolean editableSeen = false;
+        for (int index = 0; index < prepared.originalActivities().size(); index++) {
+            AiPlanItemDtoOut original = prepared.originalActivities().get(index);
+            boolean editable = prepared.editableIndexes().contains(index);
+            if (!"RIDE".equals(original.getActivityKind()) || original.getPlaceId() != null || original.getBreakType() != null || !new HashSet<>(original.getParticipantVisitMemberIds()).equals(prepared.planning().memberIds()) || (editableSeen && !editable)) {
+                directTiming = false;
+            }
+            editableSeen = editableSeen || editable;
+        }
+
+        AiPlanDtoOut candidate;
+        if (directTiming) {
+            Map<Integer, JsonNode> timingRides = indexSnapshotResources(timingInput.path("rides"));
+            List<AiPlanItemDtoOut> timedActivities = new ArrayList<>();
+            long availableMinute = 0;
+            int currentMinute = requireNonNegativeInteger(timingInput, "currentRelativeMinute");
+            for (int index = 0; index < prepared.originalActivities().size(); index++) {
+                AiPlanItemDtoOut original = prepared.originalActivities().get(index);
+                AiPlanItemDtoOut timed = new AiPlanItemDtoOut();
+                timed.setActivityKind(original.getActivityKind());
+                timed.setRideId(original.getRideId());
+                timed.setPlaceId(original.getPlaceId());
+                timed.setBreakType(original.getBreakType());
+                timed.setParticipantVisitMemberIds(new ArrayList<>(original.getParticipantVisitMemberIds()));
+                timed.setSubgroupKey(original.getSubgroupKey());
+                timed.setWalkingMinutes(original.getWalkingMinutes());
+                timed.setWaitingMinutes(original.getWaitingMinutes());
+                timed.setActivityMinutes(original.getActivityMinutes());
+                timed.setRelativeStartMinutes(original.getRelativeStartMinutes());
+                timed.setRelativeEndMinutes(original.getRelativeEndMinutes());
+                timed.setExecutionEndMinutes(original.getExecutionEndMinutes());
+                if (prepared.editableIndexes().contains(index)) {
+                    JsonNode ride = timingRides.get(original.getRideId());
+                    if (ride == null || !"OPEN".equals(ride.path("status").asString())) {
+                        throw new ApiException("An editable ride is unavailable; request an authorized replacement or review the plan");
+                    }
+                    int waiting = requireNonNegativeInteger(ride, "planningWaitMinutes");
+                    long begins = Math.max(availableMinute, currentMinute);
+                    long ends = begins + timed.getWalkingMinutes() + waiting + timed.getActivityMinutes();
+                    if (ends > prepared.planning().durationMinutes()) {
+                        throw new ApiException("The remaining activities exceed the visit duration; review the duration or requested activities");
+                    }
+                    timed.setWaitingMinutes(waiting);
+                    timed.setRelativeStartMinutes(Math.toIntExact(begins));
+                    timed.setRelativeEndMinutes(Math.toIntExact(ends));
+                }
+                availableMinute = Math.max(availableMinute, timed.getExecutionEndMinutes() == null ? timed.getRelativeEndMinutes() : timed.getExecutionEndMinutes());
+                timedActivities.add(timed);
+            }
+            candidate = new AiPlanDtoOut();
+            candidate.setFeasible(true);
+            candidate.setActivities(timedActivities);
+            candidate.setWarnings(new ArrayList<>());
+        } else {
+            AiPlanDtoOut generatedCandidate = aiPlanService.generatePlanCandidate(prepared.aiInput());
+
+            if (!Boolean.TRUE.equals(generatedCandidate.getFeasible()) && !replaceUnavailableRides) {
+                ObjectNode reviewInput = (ObjectNode) readGenerationJson(prepared.aiInput());
+                reviewInput.put("validationFeedback", "Review infeasibility once for timing-only REPLAN. Existing approved rides with explicit UNKNOWN eligibility may remain provisionally scheduled with warnings; do not reject solely because confirmation is absent. Use supplied known planning wait estimates even when estimated. Preserve every frozen activity and every actual prohibition, missing-data restriction, editable index, walking duration, activity duration, order and deadline. If a real conflict remains return feasible=false with the concrete conflict. Do not force a feasible result or invent data.");
+                reviewInput.set("previousRejectedCandidate", participantJsonMapper.valueToTree(generatedCandidate));
+                generatedCandidate = aiPlanService.generatePlanCandidate(writeGenerationJson(reviewInput));
+            }
+
+            candidate = generatedCandidate;
+        }
 
         if (!Boolean.TRUE.equals(candidate.getFeasible())) {
             throw new ApiException(candidate.getInfeasibilityReason() == null || candidate.getInfeasibilityReason().isBlank() ? "The remaining activities cannot fit without changing fixed commitments or your choices" : candidate.getInfeasibilityReason());
@@ -4771,7 +4913,112 @@ public class VisitPlanService {
             candidate.setActivities(arrivalActivities);
             candidate.setWarnings(new ArrayList<>());
         } else {
-            candidate = aiPlanService.generatePlanCandidate(writeGenerationJson(input));
+            candidate = null;
+            boolean scheduleSimplePrayerVisit = prepared.includePrayer() && !prayerEvents.isEmpty() && fixedActivities.isEmpty() && input.path("allowSplit").isBoolean() && !input.path("allowSplit").asBoolean() && input.path("mealPolicy").path("breaks").isArray() && input.path("mealPolicy").path("breaks").isEmpty() && !approvedActivities.isEmpty();
+            for (AiPlanItemDtoOut activity : approvedActivities) {
+                if (!"RIDE".equals(activity.getActivityKind()) || activity.getPlaceId() != null || activity.getBreakType() != null || !new HashSet<>(activity.getParticipantVisitMemberIds()).equals(prepared.planning().memberIds())) {
+                    scheduleSimplePrayerVisit = false;
+                }
+            }
+            if (scheduleSimplePrayerVisit) {
+                Map<Integer, JsonNode> prayerVisitRides = indexSnapshotResources(input.path("rides"));
+                Map<String, Integer> prayerVisitRoutes = new HashMap<>();
+                for (JsonNode route : input.path("walking").path("routes")) {
+                    prayerVisitRoutes.put(walkingRouteKey(requireText(route, "fromNodeKey"), requireText(route, "toNodeKey")), requireNonNegativeInteger(route, "minutes"));
+                }
+                String prayerVisitNode = requireText(input.path("walking"), "entranceNodeKey");
+                List<AiPlanItemDtoOut> prayerVisitActivities = new ArrayList<>();
+                List<AiPlanItemDtoOut> prayerVisitApprovedOrder = new ArrayList<>(approvedActivities);
+                prayerVisitApprovedOrder.sort(Comparator.comparing(AiPlanItemDtoOut::getRelativeStartMinutes).thenComparing(AiPlanItemDtoOut::getRelativeEndMinutes));
+                long prayerVisitAvailable = 0;
+                for (AiPlanItemDtoOut original : prayerVisitApprovedOrder) {
+                    JsonNode ride = prayerVisitRides.get(original.getRideId());
+                    if (ride == null || !"OPEN".equals(ride.path("status").asString())) {
+                        throw new ApiException("An approved ride is unavailable at arrival; review the plan");
+                    }
+                    String destination = requireText(ride, "nodeKey");
+                    Integer walk = prayerVisitNode.equals(destination) ? Integer.valueOf(0) : prayerVisitRoutes.get(walkingRouteKey(prayerVisitNode, destination));
+                    if (walk == null) {
+                        throw new ApiException("No supplied arrival walking route to approved ride " + original.getRideId());
+                    }
+                    int wait = requireNonNegativeInteger(ride, "planningWaitMinutes");
+                    int activityMinutes = requirePositiveInteger(ride, "planningActivityMinutes");
+                    if (!Objects.equals(original.getActivityMinutes(), activityMinutes)) {
+                        throw new ApiException("Approved ride duration changed; review the plan before arrival");
+                    }
+                    long end = prayerVisitAvailable + walk + wait + activityMinutes;
+                    if (end > prepared.durationMinutes()) {
+                        scheduleSimplePrayerVisit = false;
+                        break;
+                    }
+                    AiPlanItemDtoOut timed = new AiPlanItemDtoOut();
+                    timed.setActivityKind("RIDE");
+                    timed.setRideId(original.getRideId());
+                    timed.setParticipantVisitMemberIds(new ArrayList<>(original.getParticipantVisitMemberIds()));
+                    timed.setSubgroupKey(original.getSubgroupKey());
+                    timed.setRelativeStartMinutes(Math.toIntExact(prayerVisitAvailable));
+                    timed.setRelativeEndMinutes(Math.toIntExact(end));
+                    timed.setWalkingMinutes(walk);
+                    timed.setWaitingMinutes(wait);
+                    timed.setActivityMinutes(activityMinutes);
+                    prayerVisitActivities.add(timed);
+                    prayerVisitAvailable = end;
+                    prayerVisitNode = destination;
+                }
+                JsonNode selectedPrayerRoom = null;
+                Integer selectedPrayerWalk = null;
+                int firstPrayerMinute = (Integer) prayerEvents.get(0).get("relativePrayerMinute");
+                if (scheduleSimplePrayerVisit) {
+                    for (JsonNode place : input.path("places")) {
+                        if (!"PRAYER_ROOM".equals(place.path("kind").asString()) || !"OPEN".equals(place.path("status").asString())) {
+                            continue;
+                        }
+                        String destination = requireText(place, "nodeKey");
+                        Integer walk = prayerVisitNode.equals(destination) ? Integer.valueOf(0) : prayerVisitRoutes.get(walkingRouteKey(prayerVisitNode, destination));
+                        if (walk != null && prayerVisitAvailable + walk <= firstPrayerMinute && (selectedPrayerWalk == null || walk < selectedPrayerWalk)) {
+                            selectedPrayerRoom = place;
+                            selectedPrayerWalk = walk;
+                        }
+                    }
+                    if (selectedPrayerRoom == null) {
+                        scheduleSimplePrayerVisit = false;
+                    }
+                }
+                if (scheduleSimplePrayerVisit) {
+                    for (Map<String, Object> event : prayerEvents) {
+                        int minute = (Integer) event.get("relativePrayerMinute");
+                        int walk = prayerVisitActivities.size() == prayerVisitApprovedOrder.size() ? selectedPrayerWalk : 0;
+                        long start = (long) minute - walk;
+                        long end = (long) minute + 20;
+                        if (start < prayerVisitAvailable || end > prepared.durationMinutes()) {
+                            scheduleSimplePrayerVisit = false;
+                            break;
+                        }
+                        AiPlanItemDtoOut prayer = new AiPlanItemDtoOut();
+                        prayer.setActivityKind("BREAK");
+                        prayer.setPlaceId(requirePositiveInteger(selectedPrayerRoom, "id"));
+                        prayer.setBreakType("PRAYER");
+                        prayer.setParticipantVisitMemberIds(new ArrayList<>(prayerVisitApprovedOrder.get(0).getParticipantVisitMemberIds()));
+                        prayer.setSubgroupKey(prayerVisitApprovedOrder.get(0).getSubgroupKey());
+                        prayer.setRelativeStartMinutes(Math.toIntExact(start));
+                        prayer.setRelativeEndMinutes(Math.toIntExact(end));
+                        prayer.setWalkingMinutes(walk);
+                        prayer.setWaitingMinutes(0);
+                        prayer.setActivityMinutes(20);
+                        prayerVisitActivities.add(prayer);
+                        prayerVisitAvailable = end;
+                    }
+                }
+                if (scheduleSimplePrayerVisit) {
+                    candidate = new AiPlanDtoOut();
+                    candidate.setFeasible(true);
+                    candidate.setActivities(prayerVisitActivities);
+                    candidate.setWarnings(new ArrayList<>());
+                }
+            }
+            if (candidate == null) {
+                candidate = aiPlanService.generatePlanCandidate(writeGenerationJson(input));
+            }
         }
 
         if (!Boolean.TRUE.equals(candidate.getFeasible())) {
@@ -4860,6 +5107,7 @@ public class VisitPlanService {
             }
         }
 
+        AiPlanDtoOut arrivalCandidate = candidate;
         runGenerationTransaction(() -> {
 
             validateActiveAccount(accountId);
@@ -4957,10 +5205,10 @@ public class VisitPlanService {
                 }
             }
 
-            aiPlanService.validatePlanCandidateTiming(candidate, current.durationMinutes(), current.memberIds(), current.tripType());
-            aiPlanService.validatePlanCandidateSupervision(candidate, current.ages());
-            aiPlanService.validatePlanCandidateActivityKinds(candidate);
-            aiPlanService.validatePlanCandidateEligibility(candidate, current.eligibility());
+            aiPlanService.validatePlanCandidateTiming(arrivalCandidate, current.durationMinutes(), current.memberIds(), current.tripType());
+            aiPlanService.validatePlanCandidateSupervision(arrivalCandidate, current.ages());
+            aiPlanService.validatePlanCandidateActivityKinds(arrivalCandidate);
+            aiPlanService.validatePlanCandidateEligibility(arrivalCandidate, current.eligibility());
             ObjectNode currentInput = (ObjectNode) readGenerationJson(current.inputJson());
 
             if (prepared.resolvedMealPolicy() != null) {
@@ -4968,7 +5216,7 @@ public class VisitPlanService {
             }
 
             GenerationSnapshot finalPlanning = new GenerationSnapshot(writeGenerationJson(currentInput), current.durationMinutes(), current.tripType(), current.memberIds(), current.ages(), current.eligibility(), current.priorities(), current.pinnedRideIds(), current.rateablePlaceIds());
-            validateInitialCandidateAgainstSnapshot(candidate, finalPlanning);
+            validateInitialCandidateAgainstSnapshot(arrivalCandidate, finalPlanning);
             Map<Integer, List<AiPlanItemDtoOut>> foodActivitiesByMember = new HashMap<>();
 
             for (AiPlanItemDtoOut activity : activities) {
@@ -4977,8 +5225,8 @@ public class VisitPlanService {
                 }
             }
 
-            Map<AiPlanItemDtoOut, String> foodKeys = validateSnapshotMeals(candidate, currentInput.path("mealPolicy"), foodActivitiesByMember);
-            validateCandidateResources(candidate);
+            Map<AiPlanItemDtoOut, String> foodKeys = validateSnapshotMeals(arrivalCandidate, currentInput.path("mealPolicy"), foodActivitiesByMember);
+            validateCandidateResources(arrivalCandidate);
 
             Map<String, String> prayerTitles = Map.of("Fajr", "صلاة الفجر", "Dhuhr", "صلاة الظهر", "Asr", "صلاة العصر", "Maghrib", "صلاة المغرب", "Isha", "صلاة العشاء");
             List<PlanItem> scheduled = new ArrayList<>();

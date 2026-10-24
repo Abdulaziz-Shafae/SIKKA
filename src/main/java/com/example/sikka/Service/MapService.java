@@ -50,6 +50,9 @@ public class MapService {
 
     private JsonNode mapData;
 
+    @org.springframework.beans.factory.annotation.Value("${sikka.park.ride-seed-resource:maps/rides-seed.json}")
+    private String rideSeedResource = "maps/rides-seed.json";
+
     @org.springframework.beans.factory.annotation.Value("${sikka.map.walking-meters-per-minute:70}")
     private double walkingMetersPerMinute;
 
@@ -159,14 +162,13 @@ public class MapService {
 
         JsonNode seedData;
 
-        ClassPathResource resource =
-                new ClassPathResource("maps/rides-seed.json");
+        ClassPathResource resource = new ClassPathResource(rideSeedResource);
 
         try (InputStream inputStream = resource.getInputStream()){
             seedData = jsonMapper.readTree(inputStream);
         } catch (IOException exception){
             throw new IllegalStateException(
-                    "Could not read maps/rides-seed.json",
+                    "Could not read ride seed resource: " + rideSeedResource,
                     exception
             );
         }
@@ -175,7 +177,8 @@ public class MapService {
             throw new ApiException("Ride seed file is empty or invalid");
         }
 
-        int addedCount = 0;
+        int processedCount = 0;
+        Set<String> importedSourceIds = new HashSet<>();
 
         for (JsonNode rideData : seedData){
             Ride ride = jsonMapper.treeToValue(rideData, Ride.class);
@@ -189,6 +192,31 @@ public class MapService {
                 throw new ApiException(
                         "Invalid seed data for ride: " + ride.getName()
                 );
+            }
+
+            if (!importedSourceIds.add(ride.getSourceRideId())){
+                throw new ApiException("Duplicate source ride ID in seed file");
+            }
+
+            if (ride.getHeightRuleStatus() == null || ride.getWeightRuleStatus() == null
+                    || ride.getAgeRuleStatus() == null || ride.getHealthRuleStatus() == null
+                    || ride.getHealthRestrictions() == null
+                    || ride.getAdditionalSafetyReviewRequired() == null){
+                throw new ApiException("Incomplete requirements in seed: " + ride.getSourceRideId());
+            }
+
+            boolean hasVerifiedRules = !"UNKNOWN".equals(ride.getHeightRuleStatus())
+                    || !"UNKNOWN".equals(ride.getWeightRuleStatus())
+                    || !"UNKNOWN".equals(ride.getAgeRuleStatus())
+                    || !"UNKNOWN".equals(ride.getHealthRuleStatus())
+                    || ride.getAdultCompanionRequired() != null
+                    || Boolean.FALSE.equals(ride.getAdditionalSafetyReviewRequired());
+            if (hasVerifiedRules && (ride.getRequirementsVerifiedAt() == null
+                    || ride.getSourceUrl() == null || ride.getSourceUrl().isBlank())){
+                throw new ApiException("Verified requirements need a source and review date");
+            }
+            if ("SPECIFIED".equals(ride.getHealthRuleStatus()) == ride.getHealthRestrictions().isEmpty()){
+                throw new ApiException("Health rule status does not match restrictions");
             }
 
             boolean foundInMap = false;
@@ -212,6 +240,41 @@ public class MapService {
             );
 
             if (existingRide != null){
+                // Only replace reviewed requirements. Preserve ID, map link, coordinates,
+                // operating status, live waits, timing fields and all relationships.
+                existingRide.setCategory(ride.getCategory());
+                existingRide.setLand(ride.getLand());
+                existingRide.setThrillLevel(ride.getThrillLevel());
+                if (existingRide.getRideFeatures() == null){
+                    existingRide.setRideFeatures(new HashSet<>());
+                }
+                existingRide.getRideFeatures().clear();
+                existingRide.getRideFeatures().addAll(ride.getRideFeatures());
+                existingRide.setHeightRuleStatus(ride.getHeightRuleStatus());
+                existingRide.setMinHeightCm(ride.getMinHeightCm());
+                existingRide.setMaxHeightCm(ride.getMaxHeightCm());
+                existingRide.setWeightRuleStatus(ride.getWeightRuleStatus());
+                existingRide.setMinWeightKg(ride.getMinWeightKg());
+                existingRide.setMaxWeightKg(ride.getMaxWeightKg());
+                existingRide.setAgeRuleStatus(ride.getAgeRuleStatus());
+                existingRide.setMinAgeYears(ride.getMinAgeYears());
+                existingRide.setMaxAgeYears(ride.getMaxAgeYears());
+                existingRide.setAdultCompanionRequired(ride.getAdultCompanionRequired());
+                existingRide.setCompanionRequiredBelowHeightCm(ride.getCompanionRequiredBelowHeightCm());
+                existingRide.setRecommendedMinAgeYears(ride.getRecommendedMinAgeYears());
+                existingRide.setRecommendedUnaccompaniedAgeYears(ride.getRecommendedUnaccompaniedAgeYears());
+                existingRide.setHealthRuleStatus(ride.getHealthRuleStatus());
+                existingRide.setAdditionalSafetyReviewRequired(ride.getAdditionalSafetyReviewRequired());
+                existingRide.setRequirementsVerifiedAt(ride.getRequirementsVerifiedAt());
+                existingRide.setSourceUrl(ride.getSourceUrl());
+                existingRide.setWarnings(ride.getWarnings());
+                if (existingRide.getHealthRestrictions() == null){
+                    existingRide.setHealthRestrictions(new HashSet<>());
+                }
+                existingRide.getHealthRestrictions().clear();
+                existingRide.getHealthRestrictions().addAll(ride.getHealthRestrictions());
+                rideRepository.save(existingRide);
+                processedCount++;
                 continue;
             }
 
@@ -225,11 +288,13 @@ public class MapService {
             ride.setId(null);
             rideRepository.save(ride);
 
-            addedCount++;
+            processedCount++;
         }
 
-        return addedCount;
+        return processedCount;
     }
+
+
 
     @Transactional
     public int importMapPlaces(Integer accountId){

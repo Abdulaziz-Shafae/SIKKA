@@ -32,7 +32,7 @@ public class ActivityTimingService {
 
         VisitPlan executionPlan = completedItem.getVisitPlan();
 
-        if (!Boolean.TRUE.equals(completedItem.getPinned()) && !"MEETING_POINT".equals(completedItem.getActivityKind()) && !java.util.Set.of("PRAYER", "MEAL", "SNACK").contains(completedItem.getBreakType() == null ? "" : completedItem.getBreakType()) && "IN_PROGRESS".equals(visit.getStatus()) && Boolean.TRUE.equals(executionPlan.getIsActive()) && "SCHEDULED".equals(executionPlan.getTimingMode()) && executionPlan.getProposedItems() == null && executionPlan.getPendingScope() == null && executionPlan.getPlanApproval() != null && "APPROVED".equals(executionPlan.getPlanApproval().getStatus()) && completedItem.getStartsAt() != null && completedItem.getEndsAt() != null && completionNow.isBefore(completedItem.getEndsAt())) {
+        if (!Boolean.TRUE.equals(completedItem.getPinned()) && !"MEETING_POINT".equals(completedItem.getActivityKind()) && !"PRAYER".equals(completedItem.getBreakType())  && "IN_PROGRESS".equals(visit.getStatus()) && Boolean.TRUE.equals(executionPlan.getIsActive()) && "SCHEDULED".equals(executionPlan.getTimingMode()) && executionPlan.getProposedItems() == null && executionPlan.getPendingScope() == null && executionPlan.getPlanApproval() != null && "APPROVED".equals(executionPlan.getPlanApproval().getStatus()) && completedItem.getStartsAt() != null && completedItem.getEndsAt() != null && completionNow.isBefore(completedItem.getEndsAt())) {
 
             java.util.Set<Integer> completedParticipants = participantParser.apply(completedItem.getParticipantVisitMemberIds());
             boolean everyoneFinished = !completedParticipants.isEmpty();

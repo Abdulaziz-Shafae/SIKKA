@@ -79,7 +79,7 @@ class MergedFlowValidationTest {
         dto.setWaitObservedAt(LocalDateTime.now().minusHours(1));
         dto.setWaitMinutes(10);
         dto.setWaitSource("ADMIN");
-        RideService service = new RideService(rides, mock(com.example.sikka.Repository.VisitMemberRepository.class), mock(VisitorProfileRepository.class), accounts);
+        RideService service = new RideService(rides, mock(com.example.sikka.Repository.VisitMemberRepository.class), mock(VisitorProfileRepository.class), accounts, mock(com.example.sikka.Service.PrivacyConsentService.class), tools.jackson.databind.json.JsonMapper.builder().build());
         assertThrows(ApiException.class, () -> service.updateRideWait(1, 3, dto));
         verify(rides, never()).save(any());
     }

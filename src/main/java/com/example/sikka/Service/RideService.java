@@ -13,6 +13,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.example.sikka.Model.VisitorProfile;
 import com.example.sikka.Repository.VisitorProfileRepository;
+import java.util.HashSet;
+import com.example.sikka.Model.VisitMember;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
+
+import java.util.Map;
+import java.util.Set;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -29,6 +36,21 @@ public class RideService {
     private final com.example.sikka.Repository.VisitMemberRepository visitMemberRepository;
     private final VisitorProfileRepository visitorProfileRepository;
     private final AccountRepository accountRepository;
+    private final PrivacyConsentService privacyConsentService;
+    private final JsonMapper jsonMapper;
+    private static final Set<String> HEALTH_CONDITION_CODES = Set.of(
+            "HEART_CONDITION",
+            "HIGH_BLOOD_PRESSURE",
+            "BACK_CONDITION",
+            "NECK_CONDITION",
+            "PREGNANCY",
+            "RECENT_SURGERY",
+            "MOTION_SICKNESS",
+            "VERTIGO",
+            "FEAR_OF_HEIGHTS",
+            "ARM_OR_LEG_CAST",
+            "UNDER_INFLUENCE"
+    );
 
     @org.springframework.beans.factory.annotation.Value("${sikka.park.wait-freshness-minutes:15}")
     private long waitFreshnessMinutes = 15;
@@ -50,8 +72,53 @@ public class RideService {
     public void addRide(Ride ride) {
         validateRide(ride);
 
+        if (ride.getHealthRuleStatus() == null){
+            ride.setHealthRuleStatus("UNKNOWN");
+        }
+
+        if (!ride.getHealthRuleStatus().matches("^(UNKNOWN|NONE|SPECIFIED)$")){
+            throw new ApiException("Invalid health rule status");
+        }
+
+        if (ride.getHealthRestrictions() == null){
+            ride.setHealthRestrictions(new HashSet<>());
+        }
+
+        if ("SPECIFIED".equals(ride.getHealthRuleStatus())
+                && ride.getHealthRestrictions().isEmpty()){
+            throw new ApiException("Health restrictions are required when health rule status is SPECIFIED");
+        }
+
+        if (!"SPECIFIED".equals(ride.getHealthRuleStatus())
+                && !ride.getHealthRestrictions().isEmpty()){
+            throw new ApiException("Health restrictions must be empty when health rule status is UNKNOWN or NONE");
+        }
+
+        for (String condition : ride.getHealthRestrictions()){
+            if (condition == null || !HEALTH_CONDITION_CODES.contains(condition)){
+                throw new ApiException("Unsupported health restriction code: " + condition);
+            }
+        }
+
+        if (!"UNKNOWN".equals(ride.getHealthRuleStatus())){
+            if (ride.getSourceUrl() == null || ride.getSourceUrl().isBlank()
+                    || ride.getRequirementsVerifiedAt() == null){
+                throw new ApiException("Source URL and verification time are required for documented health rules");
+            }
+
+            if (ride.getRequirementsVerifiedAt().isAfter(LocalDateTime.now())){
+                throw new ApiException("Requirements verification time cannot be in the future");
+            }
+        }
+
         Ride newRide = new Ride();
         copyRideFields(newRide, ride);
+        newRide.setHealthRuleStatus(ride.getHealthRuleStatus());
+        newRide.setHealthRestrictions(new HashSet<>(ride.getHealthRestrictions()));
+
+        newRide.setAdditionalSafetyReviewRequired(
+                !Boolean.FALSE.equals(ride.getAdditionalSafetyReviewRequired())
+        );
 
         rideRepository.save(newRide);
     }
@@ -65,7 +132,53 @@ public class RideService {
         }
 
         validateRide(ride);
+        if (ride.getHealthRuleStatus() == null){
+            ride.setHealthRuleStatus("UNKNOWN");
+        }
+
+        if (!ride.getHealthRuleStatus().matches("^(UNKNOWN|NONE|SPECIFIED)$")){
+            throw new ApiException("Invalid health rule status");
+        }
+
+        if (ride.getHealthRestrictions() == null){
+            ride.setHealthRestrictions(new HashSet<>());
+        }
+
+        if ("SPECIFIED".equals(ride.getHealthRuleStatus())
+                && ride.getHealthRestrictions().isEmpty()){
+            throw new ApiException("Health restrictions are required when health rule status is SPECIFIED");
+        }
+
+        if (!"SPECIFIED".equals(ride.getHealthRuleStatus())
+                && !ride.getHealthRestrictions().isEmpty()){
+            throw new ApiException("Health restrictions must be empty when health rule status is UNKNOWN or NONE");
+        }
+
+        for (String condition : ride.getHealthRestrictions()){
+            if (condition == null || !HEALTH_CONDITION_CODES.contains(condition)){
+                throw new ApiException("Unsupported health restriction code: " + condition);
+            }
+        }
+
+        if (!"UNKNOWN".equals(ride.getHealthRuleStatus())){
+            if (ride.getSourceUrl() == null || ride.getSourceUrl().isBlank()
+                    || ride.getRequirementsVerifiedAt() == null){
+                throw new ApiException("Source URL and verification time are required for documented health rules");
+            }
+
+            if (ride.getRequirementsVerifiedAt().isAfter(LocalDateTime.now())){
+                throw new ApiException("Requirements verification time cannot be in the future");
+            }
+        }
+
         copyRideFields(oldRide, ride);
+        oldRide.setHealthRuleStatus(ride.getHealthRuleStatus());
+        oldRide.getHealthRestrictions().clear();
+        oldRide.getHealthRestrictions().addAll(ride.getHealthRestrictions());
+
+        oldRide.setAdditionalSafetyReviewRequired(
+                !Boolean.FALSE.equals(ride.getAdditionalSafetyReviewRequired())
+        );
 
         rideRepository.save(oldRide);
     }
@@ -151,11 +264,21 @@ public class RideService {
             throw new ApiException("At least one age limit is required when age rule status is SPECIFIED");
         }
 
-        if (!"UNKNOWN".equals(heightRuleStatus) || !"UNKNOWN".equals(weightRuleStatus) || !"UNKNOWN".equals(ageRuleStatus)){
+        if (!"UNKNOWN".equals(heightRuleStatus)
+                || !"UNKNOWN".equals(weightRuleStatus)
+                || !"UNKNOWN".equals(ageRuleStatus)
+                || ride.getAdultCompanionRequired() != null
+                || Boolean.FALSE.equals(ride.getAdditionalSafetyReviewRequired())){
 
-            if (ride.getSourceUrl() == null || ride.getSourceUrl().isBlank() || ride.getRequirementsVerifiedAt() == null){
+            if (ride.getSourceUrl() == null || ride.getSourceUrl().isBlank()
+                    || ride.getRequirementsVerifiedAt() == null){
                 throw new ApiException("Source URL and verification time are required for documented rules");
             }
+        }
+
+        if (ride.getRequirementsVerifiedAt() != null
+                && ride.getRequirementsVerifiedAt().isAfter(LocalDateTime.now())){
+            throw new ApiException("Requirements verification time cannot be in the future");
         }
 
         if (ride.getCompanionRequiredBelowHeightCm() != null && !Boolean.TRUE.equals(ride.getAdultCompanionRequired())){
@@ -262,13 +385,10 @@ public class RideService {
         return rideRepository.findAllById(uniqueRideIds).size() == uniqueRideIds.size();
     }
 
-    // TODO: فحص الأهلية غير مكتمل؛ حاليًا يتحقق من قيود الطول والوزن والعمر المعروفة فقط.
-    // نحتاج التمييز بين القيد غير المعروف وعدم وجود قيد، واستكمال شروط المرافق والسلامة.
-    // نحتاج توحيد صيغة healthData وقواعد مقارنتها، والتحقق من الموافقة قبل استخدامها.
-    // العمر يُحسب بتاريخ اليوم؛ نحتاج احتسابه بتاريخ الزيارة عند استخدام الدالة للتخطيط.
-    // حاليًا: مخالفة قيد معروف ترجع NOT_ELIGIBLE، وما عدا ذلك UNKNOWN.
-    // لا نرجع ELIGIBLE حتى تكتمل الفحوصات المطلوبة، ولا نعامل UNKNOWN كإثبات أهلية.
-    // حالة تشغيل اللعبة تُفحص بشكل منفصل باستخدام getOpenRides().
+    // Legacy physical-only check using today's date.
+    // Use checkEligibilityForMember for visit-date, health and companion checks.
+    // This method never confirms full eligibility.
+    @Deprecated
     public String checkEligibility(Integer rideId, Integer profileId){
         Ride ride = rideRepository.findRideById(rideId);
 
@@ -434,40 +554,337 @@ public class RideService {
         // بعد تنفيذها، لفحص الخطط المتأثرة واقتراح بديل دون تغيير الخطة المعتمدة مباشرة.
     }
 
-    public java.util.Map<String, Object> checkEligibilityForMember(Integer accountId, Integer memberId, Integer rideId) {
-        com.example.sikka.Model.VisitMember member = visitMemberRepository.findVisitMemberById(memberId);
-        if (member == null || !member.getVisit().getOrganizer().getId().equals(accountId) && (member.getVisitorProfile() == null || !member.getVisitorProfile().getAccount().getId().equals(accountId))) {
+    @Transactional(readOnly = true)
+    public Map<String, Object> checkEligibilityForMember(
+            Integer accountId, Integer memberId, Integer rideId){
+
+        VisitMember member = visitMemberRepository.findVisitMemberById(memberId);
+
+        if (member == null){
+            throw new ApiException("Visit member not found");
+        }
+
+        boolean isOrganizer = member.getVisit().getOrganizer()
+                .getId().equals(accountId);
+
+        boolean isMember = member.getVisitorProfile() != null
+                && member.getVisitorProfile().getAccount()
+                .getId().equals(accountId);
+
+        if (!isOrganizer && !isMember){
             throw new ApiException("You cannot access this visit member");
         }
+
+        if (member.getVisit().getVisitDate() == null){
+            throw new ApiException("Visit date is required to check eligibility");
+        }
+
+        if (member.getBirthDate() != null
+                && member.getBirthDate().isAfter(member.getVisit().getVisitDate())){
+            throw new ApiException("Member birth date cannot be after the visit date");
+        }
+
+        if (member.getHeightCm() != null && member.getHeightCm().signum() <= 0){
+            throw new ApiException("Member height must be positive");
+        }
+
+        if (member.getWeightKg() != null && member.getWeightKg().signum() <= 0){
+            throw new ApiException("Member weight must be positive");
+        }
+
         Ride ride = getRideById(rideId);
+
         List<String> reasons = new ArrayList<>();
         List<String> missing = new ArrayList<>();
-        java.math.BigDecimal height = member.getHeightCm();
-        java.math.BigDecimal weight = member.getWeightKg();
-        if (height == null) {
-            missing.add("heightCm");
-        } else if (ride.getMinHeightCm() != null && height.compareTo(ride.getMinHeightCm()) < 0 || ride.getMaxHeightCm() != null && height.compareTo(ride.getMaxHeightCm()) > 0) {
-            reasons.add("Height is outside the known ride limits");
-        }
-        if (weight == null) {
-            missing.add("weightKg");
-        } else if (ride.getMinWeightKg() != null && weight.compareTo(ride.getMinWeightKg()) < 0 || ride.getMaxWeightKg() != null && weight.compareTo(ride.getMaxWeightKg()) > 0) {
-            reasons.add("Weight is outside the known ride limits");
-        }
-        if (member.getBirthDate() == null) {
-            missing.add("birthDate");
+
+        // Check height.
+        if (member.getHeightCm() == null){
+            if (!"NONE".equals(ride.getHeightRuleStatus())){
+                missing.add("heightCm");
+            }
         } else {
-            int age = Period.between(member.getBirthDate(), member.getVisit().getVisitDate()).getYears();
-            if (age < 0 || ride.getMinAgeYears() != null && age < ride.getMinAgeYears() || ride.getMaxAgeYears() != null && age > ride.getMaxAgeYears()) {
+            if ((ride.getMinHeightCm() != null
+                    && member.getHeightCm().compareTo(ride.getMinHeightCm()) < 0)
+                    || (ride.getMaxHeightCm() != null
+                    && member.getHeightCm().compareTo(ride.getMaxHeightCm()) > 0)){
+
+                reasons.add("Height is outside the known ride limits");
+            }
+        }
+
+        if (!"NONE".equals(ride.getHeightRuleStatus())
+                && !"SPECIFIED".equals(ride.getHeightRuleStatus())){
+            missing.add("ride.heightRuleStatus");
+        }
+
+        // Check weight.
+        if (member.getWeightKg() == null){
+            if (!"NONE".equals(ride.getWeightRuleStatus())){
+                missing.add("weightKg");
+            }
+        } else {
+            if ((ride.getMinWeightKg() != null
+                    && member.getWeightKg().compareTo(ride.getMinWeightKg()) < 0)
+                    || (ride.getMaxWeightKg() != null
+                    && member.getWeightKg().compareTo(ride.getMaxWeightKg()) > 0)){
+
+                reasons.add("Weight is outside the known ride limits");
+            }
+        }
+
+        if (!"NONE".equals(ride.getWeightRuleStatus())
+                && !"SPECIFIED".equals(ride.getWeightRuleStatus())){
+            missing.add("ride.weightRuleStatus");
+        }
+
+        // Check age on the visit date.
+        if (member.getBirthDate() == null){
+            if (!"NONE".equals(ride.getAgeRuleStatus())){
+                missing.add("birthDate");
+            }
+        } else {
+            int age = Period.between(
+                    member.getBirthDate(),
+                    member.getVisit().getVisitDate()
+            ).getYears();
+
+            if (age < 0
+                    || (ride.getMinAgeYears() != null
+                    && age < ride.getMinAgeYears())
+                    || (ride.getMaxAgeYears() != null
+                    && age > ride.getMaxAgeYears())){
+
                 reasons.add("Age is outside the known ride limits on the visit date");
             }
         }
-        if (reasons.isEmpty()) {
-            reasons.add("Eligibility is unconfirmed; health and companion requirements still need verification");
-        } else {
-            return java.util.Map.of("status", "NOT_ELIGIBLE", "reasons", reasons, "missingFields", missing);
+
+        if (!"NONE".equals(ride.getAgeRuleStatus())
+                && !"SPECIFIED".equals(ride.getAgeRuleStatus())){
+            missing.add("ride.ageRuleStatus");
         }
-        return java.util.Map.of("status", "UNKNOWN", "reasons", reasons, "missingFields", missing);
+
+        // A known physical restriction is enough to reject the ride.
+        if (!reasons.isEmpty()){
+            return Map.of(
+                    "status", "NOT_ELIGIBLE",
+                    "reasons", reasons,
+                    "missingFields", missing
+            );
+        }
+
+        String healthRuleStatus = ride.getHealthRuleStatus();
+
+        boolean documentedHealthRules =
+                ("NONE".equals(healthRuleStatus)
+                        || "SPECIFIED".equals(healthRuleStatus))
+                        && ride.getSourceUrl() != null
+                        && !ride.getSourceUrl().isBlank()
+                        && ride.getRequirementsVerifiedAt() != null
+                        && !ride.getRequirementsVerifiedAt().isAfter(LocalDateTime.now());
+
+        if (!documentedHealthRules){
+            missing.add("ride.healthRules");
+        } else if ("NONE".equals(healthRuleStatus)){
+            // NONE must not contain restrictions.
+            if (ride.getHealthRestrictions() != null
+                    && !ride.getHealthRestrictions().isEmpty()){
+                missing.add("ride.healthRules");
+            }
+        } else {
+            boolean validRestrictions = ride.getHealthRestrictions() != null
+                    && !ride.getHealthRestrictions().isEmpty();
+
+            if (validRestrictions){
+                for (String restriction : ride.getHealthRestrictions()){
+                    if (restriction == null
+                            || !HEALTH_CONDITION_CODES.contains(restriction)){
+                        validRestrictions = false;
+                        break;
+                    }
+                }
+            }
+
+            if (!validRestrictions){
+                missing.add("ride.healthRestrictions");
+            } else {
+                VisitorProfile profile = member.getVisitorProfile();
+
+                // Do not use the organizer's health data for a family member.
+                if (profile == null){
+                    missing.add("healthData");
+                } else if (!privacyConsentService.hasConsent(
+                        profile.getId(), "HEALTH_STORAGE")){
+
+                    missing.add("healthConsent");
+                } else {
+                    String healthData = profile.getHealthData();
+                    JsonNode healthNode = null;
+
+                    if (healthData != null && !healthData.isBlank()){
+                        try {
+                            healthNode = jsonMapper.readTree(healthData);
+                        } catch (RuntimeException exception){
+                            // Invalid stored JSON remains unknown.
+                            healthNode = null;
+                        }
+                    }
+
+                    boolean validHealthData = healthNode != null
+                            && healthNode.isObject()
+                            && healthNode.size() == 1
+                            && healthNode.has("conditions")
+                            && healthNode.get("conditions").isArray();
+
+                    Set<String> visitorConditions = new HashSet<>();
+
+                    if (validHealthData){
+                        for (JsonNode condition : healthNode.get("conditions")){
+                            if (!condition.isTextual()){
+                                validHealthData = false;
+                                break;
+                            }
+
+                            String code = condition.asText();
+
+                            if (!HEALTH_CONDITION_CODES.contains(code)){
+                                validHealthData = false;
+                                break;
+                            }
+
+                            visitorConditions.add(code);
+                        }
+                    }
+
+                    if (!validHealthData){
+                        missing.add("healthData");
+                    } else {
+                        for (String condition : visitorConditions){
+                            if (ride.getHealthRestrictions().contains(condition)){
+                                // Avoid exposing the visitor's medical condition.
+                                reasons.add(
+                                        "The visitor does not meet the documented health requirements"
+                                );
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (!reasons.isEmpty()){
+            return Map.of(
+                    "status", "NOT_ELIGIBLE",
+                    "reasons", reasons,
+                    "missingFields", missing
+            );
+        }
+
+        // Confirm that the physical rules are complete and consistent.
+        if ("SPECIFIED".equals(ride.getHeightRuleStatus())
+                && ride.getMinHeightCm() == null
+                && ride.getMaxHeightCm() == null){
+            missing.add("ride.heightLimits");
+        }
+
+        if ("NONE".equals(ride.getHeightRuleStatus())
+                && (ride.getMinHeightCm() != null
+                || ride.getMaxHeightCm() != null)){
+            missing.add("ride.heightRules");
+        }
+
+        if ("SPECIFIED".equals(ride.getWeightRuleStatus())
+                && ride.getMinWeightKg() == null
+                && ride.getMaxWeightKg() == null){
+            missing.add("ride.weightLimits");
+        }
+
+        if ("NONE".equals(ride.getWeightRuleStatus())
+                && (ride.getMinWeightKg() != null
+                || ride.getMaxWeightKg() != null)){
+            missing.add("ride.weightRules");
+        }
+
+        if ("SPECIFIED".equals(ride.getAgeRuleStatus())
+                && ride.getMinAgeYears() == null
+                && ride.getMaxAgeYears() == null){
+            missing.add("ride.ageLimits");
+        }
+
+        if ("NONE".equals(ride.getAgeRuleStatus())
+                && (ride.getMinAgeYears() != null
+                || ride.getMaxAgeYears() != null)){
+            missing.add("ride.ageRules");
+        }
+
+        boolean documentedRequirements = ride.getSourceUrl() != null
+                && !ride.getSourceUrl().isBlank()
+                && ride.getRequirementsVerifiedAt() != null
+                && !ride.getRequirementsVerifiedAt().isAfter(LocalDateTime.now());
+
+        if (!documentedRequirements){
+            missing.add("ride.requirementsVerification");
+        }
+
+        if (!Boolean.FALSE.equals(ride.getAdditionalSafetyReviewRequired())) {
+            missing.add("ride.additionalSafetyReview");
+            reasons.add("Additional ride safety requirements need review before eligibility can be confirmed");
+        }
+
+        // Determine whether this visitor requires an adult companion.
+        boolean companionRequired = false;
+
+        if (!documentedRequirements
+                || ride.getAdultCompanionRequired() == null){
+
+            missing.add("ride.companionRules");
+        } else if (Boolean.FALSE.equals(ride.getAdultCompanionRequired())){
+            if (ride.getCompanionRequiredBelowHeightCm() != null){
+                missing.add("ride.companionRules");
+            }
+        } else {
+            if (ride.getCompanionRequiredBelowHeightCm() == null){
+                companionRequired = true;
+            } else if (ride.getCompanionRequiredBelowHeightCm().signum() <= 0
+                    || (ride.getMinHeightCm() != null
+                    && ride.getCompanionRequiredBelowHeightCm()
+                    .compareTo(ride.getMinHeightCm()) < 0)){
+
+                missing.add("ride.companionRules");
+            } else if (member.getHeightCm() == null){
+                if (!missing.contains("heightCm")){
+                    missing.add("heightCm");
+                }
+            } else {
+                companionRequired = member.getHeightCm()
+                        .compareTo(ride.getCompanionRequiredBelowHeightCm()) < 0;
+            }
+        }
+
+        if (companionRequired){
+            missing.add("companionAssignment");
+            reasons.add(
+                    "An eligible adult companion must be confirmed for the same ride activity"
+            );
+        }
+
+        if (!missing.isEmpty()){
+            reasons.add("Eligibility is unconfirmed because required information is missing or unverified");
+
+            return Map.of(
+                    "status", "UNKNOWN",
+                    "reasons", reasons,
+                    "missingFields", missing
+            );
+        }
+
+        reasons.add("The visitor meets the documented eligibility rules checked by the system");
+
+        return Map.of(
+                "status", "ELIGIBLE",
+                "reasons", reasons,
+                "missingFields", missing
+        );
     }
 
     public java.util.Map<String, Object> getRideSnapshot(Integer rideId) {

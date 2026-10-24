@@ -10,6 +10,8 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import com.example.sikka.Model.Account;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 
 @RestController
 @RequestMapping("/api/v1/visit-member")
@@ -39,79 +41,80 @@ public class VisitMemberController {
 
     // ---------- Flow 1 extras ----------
 
-    @PostMapping("/join/{accountId}")
-    public ResponseEntity<?> join(@PathVariable Integer accountId, @RequestBody @Valid JoinDtoIn dto) {
-        visitMemberService.join(accountId, dto);
+    @PostMapping("/join")
+    public ResponseEntity<?> join(@AuthenticationPrincipal Account account, @RequestBody @Valid JoinDtoIn dto) {
+        visitMemberService.join(account.getId(), dto);
         return ResponseEntity.status(200).body(new ApiResponse("joined successfully"));
     }
 
-    @PutMapping("/rsvp/going/{accountId}/{visitId}")
-    public ResponseEntity<?> confirmAttendance(@PathVariable Integer accountId, @PathVariable Integer visitId) {
-        visitMemberService.updateRsvp(accountId, visitId, 1);
+    @PutMapping("/rsvp/going/{visitId}")
+    public ResponseEntity<?> confirmAttendance(@AuthenticationPrincipal Account account, @PathVariable Integer visitId) {
+        visitMemberService.updateRsvp(account.getId(), visitId, 1);
         return ResponseEntity.status(200).body(new ApiResponse("rsvp updated successfully"));
     }
 
-    @PutMapping("/rsvp/maybe/{accountId}/{visitId}")
-    public ResponseEntity<?> markAttendanceAsMaybe(@PathVariable Integer accountId, @PathVariable Integer visitId) {
-        visitMemberService.updateRsvp(accountId, visitId, 2);
+    @PutMapping("/rsvp/maybe/{visitId}")
+    public ResponseEntity<?> markAttendanceAsMaybe(@AuthenticationPrincipal Account account, @PathVariable Integer visitId) {
+        visitMemberService.updateRsvp(account.getId(), visitId, 2);
         return ResponseEntity.status(200).body(new ApiResponse("rsvp updated successfully"));
     }
 
-    @PutMapping("/rsvp/not-going/{accountId}/{visitId}")
-    public ResponseEntity<?> declineAttendance(@PathVariable Integer accountId, @PathVariable Integer visitId) {
-        visitMemberService.updateRsvp(accountId, visitId, 3);
+    @PutMapping("/rsvp/not-going/{visitId}")
+    public ResponseEntity<?> declineAttendance(@AuthenticationPrincipal Account account, @PathVariable Integer visitId) {
+        visitMemberService.updateRsvp(account.getId(), visitId, 3);
         return ResponseEntity.status(200).body(new ApiResponse("rsvp updated successfully"));
     }
 
-    @PutMapping("/update-selected-rides/{accountId}/{visitId}")
-    public ResponseEntity<?> updateSelectedRides(@PathVariable Integer accountId, @PathVariable Integer visitId, @RequestBody @Valid SelectedRidesDtoIn dto) {
-        visitMemberService.updateSelectedRides(accountId, visitId, dto);
+    @PutMapping("/update-selected-rides/{visitId}")
+    public ResponseEntity<?> updateSelectedRides(@AuthenticationPrincipal Account account, @PathVariable Integer visitId, @RequestBody @Valid SelectedRidesDtoIn dto) {
+        visitMemberService.updateSelectedRides(account.getId(), visitId, dto);
         return ResponseEntity.status(200).body(new ApiResponse("selected rides updated successfully"));
     }
 
-    @PutMapping("/check-in/{accountId}/{visitId}")
-    public ResponseEntity<?> checkIn(@PathVariable Integer accountId, @PathVariable Integer visitId) {
-        visitMemberService.checkIn(accountId, visitId);
+    @PutMapping("/check-in/{visitId}")
+    public ResponseEntity<?> checkIn(@AuthenticationPrincipal Account account, @PathVariable Integer visitId) {
+        visitMemberService.checkIn(account.getId(), visitId);
         return ResponseEntity.status(200).body(new ApiResponse("checked in successfully"));
     }
 
-    @PutMapping("/review/{accountId}/{visitId}")
-    public ResponseEntity<?> review(@PathVariable Integer accountId, @PathVariable Integer visitId, @RequestBody @Valid ReviewDtoIn dto) {
-        visitMemberService.review(accountId, visitId, dto);
+    @PutMapping("/review/{visitId}")
+    public ResponseEntity<?> review(@AuthenticationPrincipal Account account, @PathVariable Integer visitId, @RequestBody @Valid ReviewDtoIn dto) {
+        visitMemberService.review(account.getId(), visitId, dto);
         return ResponseEntity.status(200).body(new ApiResponse("review saved successfully"));
     }
 
-    @DeleteMapping("/leave/{accountId}/{visitId}")
-    public ResponseEntity<?> leave(@PathVariable Integer accountId, @PathVariable Integer visitId) {
-        visitMemberService.leave(accountId, visitId);
+    @DeleteMapping("/leave/{visitId}")
+    public ResponseEntity<?> leave(@AuthenticationPrincipal Account account, @PathVariable Integer visitId) {
+        visitMemberService.leave(account.getId(), visitId);
         return ResponseEntity.status(200).body(new ApiResponse("left the visit successfully"));
     }
 
-    @DeleteMapping("/remove/{organizerId}/{visitId}/{memberId}")
-    public ResponseEntity<?> remove(@PathVariable Integer organizerId, @PathVariable Integer visitId, @PathVariable Integer memberId) {
-        visitMemberService.remove(organizerId, visitId, memberId);
+    @DeleteMapping("/remove/{visitId}/{memberId}")
+    public ResponseEntity<?> remove(@AuthenticationPrincipal Account account, @PathVariable Integer visitId, @PathVariable Integer memberId) {
+        visitMemberService.remove(account.getId(), visitId, memberId);
         return ResponseEntity.status(200).body(new ApiResponse("member removed successfully"));
     }
 
-    @GetMapping("/summary/{accountId}/{visitId}")
-    public ResponseEntity<?> summary(@PathVariable Integer accountId, @PathVariable Integer visitId) {
-        return ResponseEntity.status(200).body(visitMemberService.getSummary(accountId, visitId));
+    @GetMapping("/summary/{visitId}")
+    public ResponseEntity<?> summary(@AuthenticationPrincipal Account account, @PathVariable Integer visitId) {
+        return ResponseEntity.status(200).body(visitMemberService.getSummary(account.getId(), visitId));
     }
 
-    @PostMapping("/add-family/{accountId}/{visitId}")
-    public ResponseEntity<?> addFamilyMembers(@PathVariable Integer accountId, @PathVariable Integer visitId, @RequestBody @Valid com.example.sikka.DtoIn.AddFamilyMembersDtoIn dto) {
-        visitMemberService.addFamilyMembers(accountId, visitId, dto);
+    @PostMapping("/add-family/{visitId}")
+    public ResponseEntity<?> addFamilyMembers(@AuthenticationPrincipal Account account, @PathVariable Integer visitId, @RequestBody @Valid com.example.sikka.DtoIn.AddFamilyMembersDtoIn dto) {
+        visitMemberService.addFamilyMembers(account.getId(), visitId, dto);
         return ResponseEntity.status(200).body(new ApiResponse("Family members added successfully"));
     }
 
-    @PutMapping("/preferences/{accountId}/{visitMemberId}")
-    public ResponseEntity<?> saveMemberPreferences(@PathVariable Integer accountId, @PathVariable Integer visitMemberId, @RequestBody @Valid com.example.sikka.DtoIn.MemberPreferencesDtoIn dto) {
-        visitMemberService.saveMemberPreferences(accountId, visitMemberId, dto, 1);
+    @PutMapping("/preferences/{visitMemberId}")
+    public ResponseEntity<?> saveMemberPreferences(@AuthenticationPrincipal Account account, @PathVariable Integer visitMemberId, @RequestBody @Valid com.example.sikka.DtoIn.MemberPreferencesDtoIn dto) {
+        visitMemberService.saveMemberPreferences(account.getId(), visitMemberId, dto, 1);
         return ResponseEntity.status(200).body(new ApiResponse("Planning answers saved successfully"));
     }
-    @PutMapping("/preferences/skip/{accountId}/{visitMemberId}")
-    public ResponseEntity<?> skipMemberPreferences(@PathVariable Integer accountId, @PathVariable Integer visitMemberId) {
-        visitMemberService.saveMemberPreferences(accountId, visitMemberId, new com.example.sikka.DtoIn.MemberPreferencesDtoIn(), 2);
+
+    @PutMapping("/preferences/skip/{visitMemberId}")
+    public ResponseEntity<?> skipMemberPreferences(@AuthenticationPrincipal Account account, @PathVariable Integer visitMemberId) {
+        visitMemberService.saveMemberPreferences(account.getId(), visitMemberId, new com.example.sikka.DtoIn.MemberPreferencesDtoIn(), 2);
         return ResponseEntity.status(200).body(new ApiResponse("Planning answers skipped successfully"));
     }
 

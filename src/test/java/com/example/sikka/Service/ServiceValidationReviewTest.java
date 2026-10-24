@@ -20,19 +20,19 @@ class ServiceValidationReviewTest {
         for (String value : new String[]{"MEDIUM", "HIGH"}) {
             Ride ride = new Ride();
             ride.setThrillLevel(value);
-            assertThrows(ApiException.class, () -> new RideService(rides, mock(com.example.sikka.Repository.VisitMemberRepository.class), profiles, accounts).addRide(ride));
+            assertThrows(ApiException.class, () -> new RideService(rides, mock(com.example.sikka.Repository.VisitMemberRepository.class), profiles, accounts, mock(com.example.sikka.Service.PrivacyConsentService.class), tools.jackson.databind.json.JsonMapper.builder().build()).addRide(ride));
             RegisterDtoIn registration = new RegisterDtoIn();
             registration.setThrillPreference(value);
-            assertThrows(ApiException.class, () -> new AccountService(accounts, profiles).register(registration));
+            assertThrows(ApiException.class, () -> new AccountService(accounts, profiles, mock(org.springframework.security.crypto.password.PasswordEncoder.class)).register(registration));
         }
         verifyNoInteractions(rides, accounts, profiles);
     }
 
     @Test
-    void rejectInvalidRsvpActionBeforeQueryingMembership() {
+    void rejectNullRsvpBeforeQueryingMembership() {
         VisitMemberRepository members = mock(VisitMemberRepository.class);
         VisitMemberService service = new VisitMemberService(members, mock(VisitRepository.class), mock(VisitorProfileRepository.class), mock(VisitGroupService.class), mock(RideService.class), mock(com.example.sikka.Repository.FamilyMemberRepository.class), mock(com.example.sikka.Repository.VisitPlanRepository.class), mock(com.example.sikka.Repository.VisitRecordRepository.class));
-        assertThrows(ApiException.class, () -> service.updateRsvp(1, 2, 0));
+        assertThrows(ApiException.class, () -> service.updateRsvp(1, 2, null));
         verifyNoInteractions(members);
     }
 
