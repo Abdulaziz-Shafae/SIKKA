@@ -48,4 +48,9 @@ public class ActivitySessionController {
     public ResponseEntity<ActivitySessionDtoOut> updateActivityLocation(@PathVariable Integer accountId, @PathVariable Integer visitId, @RequestBody @Valid UpdateActivityLocationDtoIn dto) {
         return ResponseEntity.status(200).body(activitySessionService.updateActivityLocation(accountId, visitId, dto));
     }
+    @PostMapping("/start/gps/{accountId}/{visitMemberId}/{planItemId}")
+    public ResponseEntity<ActivitySessionDtoOut> startGpsActivity(@PathVariable Integer accountId, @PathVariable Integer visitMemberId, @PathVariable Integer planItemId) {
+        return ResponseEntity.status(200).body(activitySessionService.startGpsActivity(accountId, visitMemberId, planItemId));
+    }
+
 }

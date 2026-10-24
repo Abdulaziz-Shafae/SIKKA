@@ -1,6 +1,7 @@
 package com.example.sikka.DtoIn;
 
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.Valid;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -16,4 +17,7 @@ public class UpdateVisitArrivalDtoIn {
 
     @NotNull(message = "Expected arrival time is required")
     private LocalTime expectedArrivalTime;
+
+    @Valid
+    private MealPreferencesDtoIn mealPreferences;
 }

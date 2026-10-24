@@ -41,6 +41,21 @@ import java.util.Objects;
 public class NotificationService {
 
     private final NotificationRepository notificationRepository;
+    private final com.example.sikka.Repository.PlanItemRepository planItemRepository;
+    private final com.example.sikka.Repository.VisitRecordRepository visitRecordRepository;
+
+    @org.springframework.beans.factory.annotation.Value("${sikka.replan.wait-change-minutes:10}")
+    private long rideWaitChangeMinutes;
+
+    @org.springframework.beans.factory.annotation.Value("${sikka.park.wait-freshness-minutes:15}")
+    private long rideWaitFreshnessMinutes;
+    private final com.example.sikka.Repository.VisitPlanRepository visitPlanRepository;
+
+    @jakarta.persistence.PersistenceContext
+    private jakarta.persistence.EntityManager entityManager;
+
+    @org.springframework.beans.factory.annotation.Value("${sikka.delay.grace-minutes:5}")
+    private long delayGraceMinutes;
     private final VisitPlanService visitPlanService;
     private final PlatformTransactionManager transactionManager;
     private final AccountRepository accountRepository;
@@ -215,6 +230,190 @@ public class NotificationService {
         activitySessionRepository.save(session);
 
         return convertNotificationToDtoOut(notification);
+    }
+
+    @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
+    public NotificationDtoOut checkActivityDelay(Integer accountId, Integer activitySessionId) {
+        if (accountId == null || accountId <= 0 || activitySessionId == null || activitySessionId <= 0) {
+            throw new ApiException("Positive account and activity session IDs are required");
+        }
+        validateActiveAccount(accountId);
+        if (delayGraceMinutes <= 0 || delayGraceMinutes > 1440) {
+            throw new ApiException("Delay grace minutes must be between 1 and 1440");
+        }
+        ActivitySession reference = activitySessionRepository.findActivitySessionById(activitySessionId);
+        if (reference == null) {
+            throw new ApiException("Activity session not found");
+        }
+        Visit visit = visitRepository.findVisitByIdForUpdate(reference.getVisitMember().getVisit().getId());
+        if (visit == null) {
+            throw new ApiException("Visit not found");
+        }
+        entityManager.refresh(visit, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+        com.example.sikka.Model.VisitPlan plan = visitPlanRepository.findVisitPlanByIdForUpdate(reference.getPlanItem().getVisitPlan().getId());
+        if (plan == null) {
+            throw new ApiException("Visit plan not found");
+        }
+        entityManager.refresh(plan, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+        VisitMember member = activitySessionRepository.findVisitMemberByIdForActivityUpdate(reference.getVisitMember().getId());
+        if (member == null) {
+            throw new ApiException("Visit member not found");
+        }
+        entityManager.refresh(member, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+        ActivitySession session = activitySessionRepository.findActivitySessionByIdForUpdate(activitySessionId);
+        if (session == null) {
+            throw new ApiException("Activity session not found");
+        }
+        entityManager.refresh(session, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+        validateSessionRecipient(accountId, session);
+        if (!session.getVisitMember().getId().equals(member.getId()) || !member.getVisit().getId().equals(visit.getId()) || !session.getPlanItem().getVisitPlan().getId().equals(plan.getId()) || !plan.getVisit().getId().equals(visit.getId())) {
+            throw new ApiException("The activity session changed while checking delay");
+        }
+        com.example.sikka.Model.PlanItem item = session.getPlanItem();
+        entityManager.refresh(item, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+        if (!"IN_PROGRESS".equals(visit.getStatus()) || !"GOING".equals(member.getRsvpStatus()) || !Boolean.TRUE.equals(plan.getIsActive()) || !"SCHEDULED".equals(plan.getTimingMode()) || (!"WAITING".equals(session.getStatus()) && !"ACTIVE".equals(session.getStatus()))) {
+            return null;
+        }
+        if (item.getStartsAt() == null || item.getEndsAt() == null || !item.getEndsAt().isAfter(item.getStartsAt())) {
+            return null;
+        }
+        LocalDateTime now = LocalDateTime.now(ZoneId.of("Asia/Riyadh"));
+        LocalDateTime expectedEnd = item.getEndsAt();
+        if ("RIDE".equals(item.getActivityKind()) && session.getQueueStartedAt() != null && session.getExpectedWaitMinutes() != null && session.getExpectedRideMinutes() != null && session.getBufferMinutes() != null) {
+            if (session.getExpectedWaitMinutes() < 0 || session.getExpectedRideMinutes() < 0 || session.getBufferMinutes() < 0) {
+                throw new ApiException("Expected activity durations cannot be negative");
+            }
+            long expectedMinutes = (long) session.getExpectedWaitMinutes() + session.getExpectedRideMinutes() + session.getBufferMinutes();
+            LocalDateTime queueExpectedEnd = session.getQueueStartedAt().plusMinutes(expectedMinutes);
+            if (queueExpectedEnd.isAfter(expectedEnd)) {
+                expectedEnd = queueExpectedEnd;
+            }
+        }
+        if (now.isBefore(expectedEnd.plusMinutes(delayGraceMinutes))) {
+            return null;
+        }
+        String eventKey = "ACTIVITY_DELAY:" + visit.getId() + ":" + member.getId() + ":" + item.getId();
+        Notification existing = notificationRepository.findNotificationByAccount_IdAndChannelAndEventKey(accountId, "IN_APP", eventKey);
+        if (existing != null) {
+            if (existing.getActivitySession() == null || !existing.getActivitySession().getId().equals(session.getId())) {
+                throw new ApiException("The delay event belongs to another activity session");
+            }
+            return convertNotificationToDtoOut(existing);
+        }
+        String message = "تأخرت عن الوقت المتوقع للنشاط. وش سبب التأخير؟ أخذت راحة أو لعبت لعبة خارج الخطة؟ تقدر تكتب السبب وتختار إذا تبي نضبط الجدول.";
+        return createActivityDelayNotification(accountId, session.getId(), "وش أخرك؟", message);
+    }
+
+    @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
+    public int notifyActivityRideChange(Integer planItemId) {
+        if (planItemId == null || planItemId <= 0) {
+            throw new ApiException("A positive plan item ID is required");
+        }
+        if (rideWaitChangeMinutes <= 0 || rideWaitChangeMinutes > 1440 || rideWaitFreshnessMinutes <= 0) {
+            throw new ApiException("Ride change thresholds are invalid");
+        }
+        com.example.sikka.Model.PlanItem reference = planItemRepository.findPlanItemById(planItemId);
+        if (reference == null || reference.getRide() == null) {
+            return 0;
+        }
+        Visit visit = visitRepository.findVisitByIdForUpdate(reference.getVisitPlan().getVisit().getId());
+        if (visit == null) {
+            return 0;
+        }
+        entityManager.refresh(visit, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+        com.example.sikka.Model.VisitPlan plan = visitPlanRepository.findVisitPlanByIdForUpdate(reference.getVisitPlan().getId());
+        if (plan == null) {
+            return 0;
+        }
+        entityManager.refresh(plan, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+        entityManager.refresh(reference, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+        if ((!"READY".equals(visit.getStatus()) && !"IN_PROGRESS".equals(visit.getStatus())) || !Boolean.TRUE.equals(plan.getIsActive()) || !"GROUP".equals(plan.getPlanKind()) || !"SCHEDULED".equals(plan.getTimingMode()) || !plan.getVisit().getId().equals(visit.getId()) || !reference.getVisitPlan().getId().equals(plan.getId()) || !"RIDE".equals(reference.getActivityKind()) || reference.getRide() == null || reference.getStartsAt() == null || reference.getEndsAt() == null || !reference.getEndsAt().isAfter(reference.getStartsAt())) {
+            return 0;
+        }
+        com.example.sikka.Model.Ride ride = reference.getRide();
+        entityManager.refresh(ride);
+        LocalDateTime now = LocalDateTime.now(ZoneId.of("Asia/Riyadh"));
+        boolean unavailable = "CLOSED".equals(ride.getStatus()) || "UNAVAILABLE".equals(ride.getStatus());
+        boolean recentWait = ride.getWaitMinutes() != null && ride.getWaitMinutes() >= 0 && ride.getWaitObservedAt() != null && !ride.getWaitObservedAt().isAfter(now) && !ride.getWaitObservedAt().isBefore(now.minusMinutes(rideWaitFreshnessMinutes)) && ride.getWaitSource() != null && !ride.getWaitSource().isBlank() && !"UNKNOWN".equals(ride.getWaitSource());
+        long difference = recentWait && reference.getWaitingMinutes() != null && reference.getWaitingMinutes() >= 0 ? (long) ride.getWaitMinutes() - reference.getWaitingMinutes() : 0;
+        if (!unavailable && (!"OPEN".equals(ride.getStatus()) || !recentWait || Math.abs(difference) < rideWaitChangeMinutes)) {
+            return 0;
+        }
+
+        if (reference.getParticipantVisitMemberIds() == null || reference.getParticipantVisitMemberIds().isBlank()) {
+            throw new ApiException("Explicit activity participants are required");
+        }
+        JsonNode participants;
+        try {
+            participants = responseJsonMapper.readTree(reference.getParticipantVisitMemberIds());
+        } catch (JacksonException exception) {
+            throw new ApiException("Activity participants must contain valid JSON");
+        }
+        if (participants == null || !participants.isArray() || participants.isEmpty()) {
+            throw new ApiException("Explicit activity participants are required");
+        }
+        java.util.Set<Integer> participantIds = new java.util.TreeSet<>();
+        for (JsonNode participant : participants) {
+            if (!participant.isIntegralNumber() || !participant.canConvertToInt() || participant.asInt() <= 0 || !participantIds.add(participant.asInt())) {
+                throw new ApiException("Activity participants must be unique positive IDs");
+            }
+        }
+        java.util.Set<Integer> recipients = new java.util.TreeSet<>();
+        for (Integer memberId : participantIds) {
+            VisitMember member = activitySessionRepository.findVisitMemberByIdForActivityUpdate(memberId);
+            if (member == null) {
+                return 0;
+            }
+            entityManager.refresh(member, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+            if (!member.getVisit().getId().equals(visit.getId()) || !"GOING".equals(member.getRsvpStatus())) {
+                return 0;
+            }
+            for (ActivitySession session : activitySessionRepository.findAllByVisitMember_IdAndPlanItem_IdOrderByIdAsc(memberId, reference.getId())) {
+                if (!"WAITING".equals(session.getStatus()) || session.getEnteredAreaAt() != null || session.getQueueStartedAt() != null) {
+                    return 0;
+                }
+            }
+            for (com.example.sikka.Model.VisitRecord record : visitRecordRepository.findAllByVisitMember_IdOrderByCreatedAtDescIdDesc(memberId)) {
+                if (record.getPlanItem() != null && reference.getId().equals(record.getPlanItem().getId())) {
+                    return 0;
+                }
+            }
+            if (member.getVisitorProfile() != null) {
+                recipients.add(member.getVisitorProfile().getAccount().getId());
+            } else if (visit.getOrganizer() != null && (member.getFamilyMember() != null && member.getFamilyMember().getOwnerAccount().getId().equals(visit.getOrganizer().getId()) || member.getFamilyMember() == null && member.getSnapshotAt() != null && "FAMILY".equals(visit.getTripType()))) {
+                recipients.add(visit.getOrganizer().getId());
+            }
+        }
+
+        String type = unavailable ? "RIDE_STATUS_CHANGED" : "RIDE_WAIT_CHANGED";
+        String changeKey = unavailable ? ride.getStatus() : (difference > 0 ? "UP:" : "DOWN:") + Math.floorDiv(ride.getWaitMinutes(), rideWaitChangeMinutes);
+        String eventKey = type + ":" + reference.getId() + ":" + ride.getId() + ":" + changeKey;
+        boolean canSuggest = "IN_PROGRESS".equals(visit.getStatus()) && visit.getStartedAt() != null && !Boolean.TRUE.equals(reference.getPinned()) && plan.getProposedItems() == null && plan.getPendingScope() == null && plan.getProposalBaseSnapshot() == null;
+        String message = unavailable ? "اللعبة الموجودة في خطتك صارت مغلقة أو غير متاحة. راجع الخطة، وتقدر تطلب اقتراح بديل مناسب إذا النشاط قابل للتعديل." : "تغير انتظار لعبة في خطتك من " + reference.getWaitingMinutes() + " إلى " + ride.getWaitMinutes() + " دقيقة حسب أحدث قراءة متاحة من المصدر. راجع إذا تحتاج تعديل الجدول.";
+        if (Boolean.TRUE.equals(reference.getPinned())) {
+            message += " النشاط مثبت؛ راجع التثبيت قبل طلب استبداله.";
+        }
+        int created = 0;
+        for (Integer accountId : recipients) {
+            Account account = accountRepository.findAccountById(accountId);
+            if (account == null || !"ACTIVE".equals(account.getStatus()) || notificationRepository.findNotificationByAccount_IdAndChannelAndEventKey(accountId, "IN_APP", eventKey) != null) {
+                continue;
+            }
+            Notification notification = new Notification();
+            notification.setAccount(account);
+            notification.setVisit(visit);
+            notification.setPlanItem(reference);
+            notification.setChannel("IN_APP");
+            notification.setType(type);
+            notification.setTitle(unavailable ? "تغيرت حالة لعبة في خطتك" : "تغير وقت انتظار لعبة");
+            notification.setMessage(message);
+            notification.setEventKey(eventKey);
+            notification.setActionType(canSuggest ? "SUGGEST_REPLAN" : "VIEW_PLAN");
+            setInitialDeliveryStatus(notification);
+            notificationRepository.save(notification);
+            created++;
+        }
+        return created;
     }
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)

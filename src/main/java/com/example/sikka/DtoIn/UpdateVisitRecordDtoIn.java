@@ -16,7 +16,4 @@ public class UpdateVisitRecordDtoIn {
     @Positive(message = "Visit record ID must be positive")
     private Integer visitRecordId;
 
-    @NotBlank(message = "Record status is required")
-    @Pattern(regexp = "^(COMPLETED|SKIPPED)$", message = "Status must be COMPLETED or SKIPPED")
-    private String status;
 }

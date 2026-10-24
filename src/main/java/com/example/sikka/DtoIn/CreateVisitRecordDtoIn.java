@@ -32,9 +32,6 @@ public class CreateVisitRecordDtoIn {
     @Positive(message = "Activity session ID must be positive")
     private Integer activitySessionId;
 
-    @NotBlank(message = "Record status is required")
-    @Pattern(regexp = "^(COMPLETED|SKIPPED)$", message = "Status must be COMPLETED or SKIPPED")
-    private String status;
 
     @JsonIgnore
     @AssertTrue(message = "Plan item ID or activity session ID is required")

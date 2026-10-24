@@ -36,6 +36,8 @@ public class VisitMemberService {
     private final VisitGroupService visitGroupService;
     private final RideService rideService;
     private final com.example.sikka.Repository.FamilyMemberRepository familyMemberRepository;
+    private final com.example.sikka.Repository.VisitPlanRepository visitPlanRepository;
+    private final com.example.sikka.Repository.VisitRecordRepository visitRecordRepository;
     // ---------- CRUD ----------
 
     public List<VisitMember> get() {
@@ -102,9 +104,11 @@ public class VisitMemberService {
     }
 
     @Transactional
-    public void updateRsvp(Integer accountId, Integer visitId, String rsvp) {
-        if (rsvp == null || !rsvp.matches("^(GOING|MAYBE|NOT_GOING)$"))
-            throw new ApiException("rsvp must be GOING, MAYBE or NOT_GOING");
+    public void updateRsvp(Integer accountId, Integer visitId, int statusInt) {
+        if (statusInt < 1 || statusInt > 3) {
+            throw new ApiException("Attendance action must be 1, 2 or 3");
+        }
+        String rsvp = statusInt == 1 ? "GOING" : statusInt == 2 ? "MAYBE" : "NOT_GOING";
 
         VisitMember member = getMemberLocked(accountId, visitId);
         checkOpenForChanges(member.getVisit());
@@ -267,7 +271,7 @@ public class VisitMemberService {
     // ---------- helpers ----------
 
     private void validateMemberDeletion(VisitMember member) {
-        if ((member.getVisitPlans() != null && !member.getVisitPlans().isEmpty()) || (member.getVisitRecords() != null && !member.getVisitRecords().isEmpty())) {
+        if (visitPlanRepository.existsByOwnerVisitMember_Id(member.getId()) || visitRecordRepository.existsByVisitMember_Id(member.getId())) {
             throw new ApiException("Cannot remove a member linked to plans or ride records");
         }
     }
@@ -402,7 +406,12 @@ public class VisitMemberService {
     }
 
     @Transactional
-    public void saveMemberPreferences(Integer accountId, Integer visitMemberId, com.example.sikka.DtoIn.MemberPreferencesDtoIn dto) {
+    public void saveMemberPreferences(Integer accountId, Integer visitMemberId, com.example.sikka.DtoIn.MemberPreferencesDtoIn dto, int statusInt) {
+        if (statusInt != 1 && statusInt != 2) {
+            throw new ApiException("Planning answer action must be 1 or 2");
+        }
+        String answerStatus = statusInt == 1 ? "ANSWERED" : "SKIPPED";
+
         VisitMember member = visitMemberRepository.findVisitMemberById(visitMemberId);
         if (member == null) {
             throw new ApiException("Visit member not found");
@@ -414,11 +423,11 @@ public class VisitMemberService {
         if (!own && !managed || !"GOING".equals(member.getRsvpStatus())) {
             throw new ApiException("You cannot edit this participant's planning answers");
         }
-        if (dto == null || !java.util.Set.of("ANSWERED", "SKIPPED").contains(dto.getAnswerStatus())) {
-            throw new ApiException("Answer status must be ANSWERED or SKIPPED");
+        if (dto == null) {
+            throw new ApiException("Planning answers are required");
         }
         tools.jackson.databind.json.JsonMapper mapper = tools.jackson.databind.json.JsonMapper.builder().build();
-        List<com.example.sikka.DtoIn.SelectedRideDtoIn> selections = dto.getSelectedRides() == null ? List.of() : dto.getSelectedRides();
+        List<com.example.sikka.DtoIn.SelectedRideDtoIn> selections = statusInt == 2 || dto.getSelectedRides() == null ? List.of() : dto.getSelectedRides();
         List<Integer> rideIds = new ArrayList<>();
         for (com.example.sikka.DtoIn.SelectedRideDtoIn selection : selections) {
             if (selection == null || selection.getRideId() == null || selection.getRideId() <= 0 || selection.getPriority() == null || !java.util.Set.of("MUST_RIDE", "PREFERRED", "OPTIONAL").contains(selection.getPriority()) || rideIds.contains(selection.getRideId())) {
@@ -430,8 +439,8 @@ public class VisitMemberService {
             throw new ApiException("One or more selected rides do not exist");
         }
         member.setSelectedRides(mapper.writeValueAsString(selections));
-        member.setPreferences(mapper.writeValueAsString(java.util.Map.of("dislikedFeatures", dto.getDislikedFeatures() == null ? List.of() : dto.getDislikedFeatures())));
-        member.setAnswerStatus(dto.getAnswerStatus());
+        member.setPreferences(mapper.writeValueAsString(java.util.Map.of("dislikedFeatures", statusInt == 2 || dto.getDislikedFeatures() == null ? List.of() : dto.getDislikedFeatures())));
+        member.setAnswerStatus(answerStatus);
         visitMemberRepository.save(member);
     }
 

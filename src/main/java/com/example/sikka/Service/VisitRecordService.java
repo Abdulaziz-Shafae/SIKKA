@@ -99,7 +99,13 @@ public class VisitRecordService {
     }
 
     @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
-    public void createVisitRecords(Integer accountId, Integer visitId, CreateVisitRecordDtoIn dto) {
+    public void createVisitRecords(Integer accountId, Integer visitId, CreateVisitRecordDtoIn dto, int statusInt) {
+
+        if (statusInt != 1 && statusInt != 2) {
+            throw new ApiException("Ride record action must be 1 or 2");
+        }
+        String status = statusInt == 1 ? "COMPLETED" : "SKIPPED";
+
 
         if (accountId == null || accountId <= 0 || visitId == null || visitId <= 0) {
             throw new ApiException("Positive account and visit IDs are required");
@@ -231,7 +237,7 @@ public class VisitRecordService {
 
         if (!previousRecords.isEmpty()) {
 
-            validateRepeatedRideRecordRequest(previousRecords, dto, visitId, planItem.getId(), selectedMemberIds);
+            validateRepeatedRideRecordRequest(previousRecords, dto, visitId, planItem.getId(), selectedMemberIds, status);
 
             return;
         }
@@ -297,8 +303,8 @@ public class VisitRecordService {
                     throw new ApiException("The activity session has already been completed or skipped");
                 }
 
-                session.setStatus(dto.getStatus());
-                session.setCompletedAt("COMPLETED".equals(dto.getStatus()) ? recordedAt : null);
+                session.setStatus(status);
+                session.setCompletedAt("COMPLETED".equals(status) ? recordedAt : null);
 
                 activitySessionRepository.save(session);
             }
@@ -310,31 +316,33 @@ public class VisitRecordService {
             record.setActivitySession(session);
             record.setRide(planItem.getRide());
             record.setRecordedByAccount(account);
-            record.setStatus(dto.getStatus());
-            record.setCompletedAt("COMPLETED".equals(dto.getStatus()) ? recordedAt : null);
-            record.setSkippedAt("SKIPPED".equals(dto.getStatus()) ? recordedAt : null);
+            record.setStatus(status);
+            record.setCompletedAt("COMPLETED".equals(status) ? recordedAt : null);
+            record.setSkippedAt("SKIPPED".equals(status) ? recordedAt : null);
 
             records.add(record);
         }
 
         visitRecordRepository.saveAll(records);
 
-        if ("COMPLETED".equals(dto.getStatus())) {
+        if ("COMPLETED".equals(status)) {
             activityTimingService.advanceRemainingActivitiesAfterCompletion(visit, planItem, recordedAt, this::parseRideActivityParticipantIds);
         }
     }
 
     @Transactional
-    public void updateVisitRecordStatus(Integer accountId, UpdateVisitRecordDtoIn dto) {
+    public void updateVisitRecordStatus(Integer accountId, UpdateVisitRecordDtoIn dto, int statusInt) {
+
+        if (statusInt != 1 && statusInt != 2) {
+            throw new ApiException("Ride record correction action must be 1 or 2");
+        }
+        String status = statusInt == 1 ? "COMPLETED" : "SKIPPED";
+
 
         validateActiveAccount(accountId);
 
         if (dto == null || dto.getVisitRecordId() == null || dto.getVisitRecordId() <= 0) {
             throw new ApiException("A positive visit record ID is required");
-        }
-
-        if (!"COMPLETED".equals(dto.getStatus()) && !"SKIPPED".equals(dto.getStatus())) {
-            throw new ApiException("Status must be COMPLETED or SKIPPED");
         }
 
         VisitRecord record = visitRecordRepository.findVisitRecordByIdForUpdate(dto.getVisitRecordId());
@@ -362,7 +370,7 @@ public class VisitRecordService {
             throw new ApiException("Records can only be corrected during or after a completed visit");
         }
 
-        if (dto.getStatus().equals(record.getStatus())) {
+        if (status.equals(record.getStatus())) {
             return;
         }
 
@@ -378,18 +386,18 @@ public class VisitRecordService {
 
             validateRideSessionReference(session, member.getId(), record.getPlanItem().getId(), record.getRide().getId());
 
-            session.setStatus(dto.getStatus());
-            session.setCompletedAt("COMPLETED".equals(dto.getStatus()) ? correctedAt : null);
+            session.setStatus(status);
+            session.setCompletedAt("COMPLETED".equals(status) ? correctedAt : null);
 
             activitySessionRepository.save(session);
         }
 
-        record.setStatus(dto.getStatus());
+        record.setStatus(status);
         record.setCorrectedAt(correctedAt);
-        record.setCompletedAt("COMPLETED".equals(dto.getStatus()) ? correctedAt : null);
-        record.setSkippedAt("SKIPPED".equals(dto.getStatus()) ? correctedAt : null);
+        record.setCompletedAt("COMPLETED".equals(status) ? correctedAt : null);
+        record.setSkippedAt("SKIPPED".equals(status) ? correctedAt : null);
 
-        if ("SKIPPED".equals(dto.getStatus())) {
+        if ("SKIPPED".equals(status)) {
             record.setRating(null);
             record.setReviewNote(null);
         }
@@ -690,10 +698,6 @@ public class VisitRecordService {
             throw new ApiException("A positive ride ID is required");
         }
 
-        if (!"COMPLETED".equals(dto.getStatus()) && !"SKIPPED".equals(dto.getStatus())) {
-            throw new ApiException("Status must be COMPLETED or SKIPPED");
-        }
-
         if (dto.getVisitMemberIds() == null || dto.getVisitMemberIds().isEmpty()) {
             throw new ApiException("Select at least one visit member");
         }
@@ -728,13 +732,13 @@ public class VisitRecordService {
         }
     }
 
-    private void validateRepeatedRideRecordRequest(List<VisitRecord> records, CreateVisitRecordDtoIn dto, Integer visitId, Integer planItemId, HashSet<Integer> selectedMemberIds) {
+    private void validateRepeatedRideRecordRequest(List<VisitRecord> records, CreateVisitRecordDtoIn dto, Integer visitId, Integer planItemId, HashSet<Integer> selectedMemberIds, String status) {
 
         HashSet<Integer> recordedMemberIds = new HashSet<>();
 
         for (VisitRecord record : records) {
 
-            if (!record.getVisitMember().getVisit().getId().equals(visitId) || record.getPlanItem() == null || !record.getPlanItem().getId().equals(planItemId) || !record.getRide().getId().equals(dto.getRideId()) || !record.getStatus().equals(dto.getStatus())) {
+            if (!record.getVisitMember().getVisit().getId().equals(visitId) || record.getPlanItem() == null || !record.getPlanItem().getId().equals(planItemId) || !record.getRide().getId().equals(dto.getRideId()) || !record.getStatus().equals(status)) {
                 throw new ApiException("The request key was already used with different ride record details");
             }
 

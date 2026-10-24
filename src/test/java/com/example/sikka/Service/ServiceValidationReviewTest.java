@@ -29,10 +29,10 @@ class ServiceValidationReviewTest {
     }
 
     @Test
-    void rejectNullRsvpBeforeQueryingMembership() {
+    void rejectInvalidRsvpActionBeforeQueryingMembership() {
         VisitMemberRepository members = mock(VisitMemberRepository.class);
-        VisitMemberService service = new VisitMemberService(members, mock(VisitRepository.class), mock(VisitorProfileRepository.class), mock(VisitGroupService.class), mock(RideService.class), mock(com.example.sikka.Repository.FamilyMemberRepository.class));
-        assertThrows(ApiException.class, () -> service.updateRsvp(1, 2, null));
+        VisitMemberService service = new VisitMemberService(members, mock(VisitRepository.class), mock(VisitorProfileRepository.class), mock(VisitGroupService.class), mock(RideService.class), mock(com.example.sikka.Repository.FamilyMemberRepository.class), mock(com.example.sikka.Repository.VisitPlanRepository.class), mock(com.example.sikka.Repository.VisitRecordRepository.class));
+        assertThrows(ApiException.class, () -> service.updateRsvp(1, 2, 0));
         verifyNoInteractions(members);
     }
 

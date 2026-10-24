@@ -15,6 +15,7 @@ import com.example.sikka.DtoIn.SharedMealBreakDtoIn;
 public class VisitMealBreakController {
 
     private final VisitMealBreakService visitMealBreakService;
+    private final com.example.sikka.Service.VisitPlanService visitPlanService;
 
     @GetMapping("/get/visit/{accountId}/{visitId}")
     public ResponseEntity<?> getVisitMealBreaks(
@@ -107,6 +108,12 @@ public class VisitMealBreakController {
     public ResponseEntity<?> saveMealPreferences(@PathVariable Integer accountId, @PathVariable Integer visitId, @RequestBody @Valid com.example.sikka.DtoIn.MealPreferencesDtoIn dto) {
         visitMealBreakService.saveMealPreferences(accountId, visitId, dto);
         return ResponseEntity.status(200).body(new ApiResponse("Meal preferences saved successfully"));
+    }
+
+    @PutMapping("/restaurant/{accountId}/{visitId}/{breakKey}")
+    public ResponseEntity<?> selectMealRestaurant(@PathVariable Integer accountId, @PathVariable Integer visitId, @PathVariable String breakKey, @RequestBody @Valid com.example.sikka.DtoIn.SelectMealRestaurantDtoIn dto) {
+        visitPlanService.selectMealRestaurant(accountId, visitId, breakKey, dto);
+        return ResponseEntity.status(200).body(new ApiResponse("Restaurant selected and walking times updated successfully"));
     }
 
 }

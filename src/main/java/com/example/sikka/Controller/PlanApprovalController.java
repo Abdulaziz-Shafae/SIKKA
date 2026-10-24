@@ -26,9 +26,15 @@ public class PlanApprovalController {
         return ResponseEntity.status(201).body(new ApiResponse("Plan approval created successfully"));
     }
 
-    @PutMapping("/respond/{accountId}")
-    public ResponseEntity<?> respondToPlanApproval(@PathVariable Integer accountId, @RequestBody @Valid PlanApprovalDtoIn planApprovalDtoIn) {
-        planApprovalService.respondToPlanApproval(accountId, planApprovalDtoIn);
+    @PutMapping("/approve/{accountId}")
+    public ResponseEntity<?> approvePlan(@PathVariable Integer accountId, @RequestBody @Valid PlanApprovalDtoIn dto) {
+        planApprovalService.respondToPlanApproval(accountId, dto, 1);
+        return ResponseEntity.status(200).body(new ApiResponse("Plan approval response saved successfully"));
+    }
+
+    @PutMapping("/reject/{accountId}")
+    public ResponseEntity<?> rejectPlan(@PathVariable Integer accountId, @RequestBody @Valid PlanApprovalDtoIn dto) {
+        planApprovalService.respondToPlanApproval(accountId, dto, 2);
         return ResponseEntity.status(200).body(new ApiResponse("Plan approval response saved successfully"));
     }
 }
