@@ -17,7 +17,6 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -40,7 +39,7 @@ public class VisitGroupService {
         if (organizer == null)
             throw new ApiException("organizer not found");
 
-        String code = UUID.randomUUID().toString().replace("-", "").substring(0, 12).toUpperCase();
+        String code = newCode();
 
         VisitGroup group = new VisitGroup();
         group.setName(dto.getName());
@@ -179,6 +178,24 @@ public class VisitGroupService {
     }
 
     private String newCode() {
-        return UUID.randomUUID().toString().replace("-", "").substring(0, 12).toUpperCase();
+        String characters = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+        java.security.SecureRandom random = new java.security.SecureRandom();
+
+        for (int attempt = 0; attempt < 50; attempt++) {
+            StringBuilder code = new StringBuilder();
+
+            for (int index = 0; index < 5; index++) {
+                code.append(characters.charAt(random.nextInt(characters.length())));
+            }
+
+            String inviteCode = code.toString();
+
+            if (visitGroupRepository.findVisitGroupByInviteCodeHash(hash(inviteCode)) == null) {
+                return inviteCode;
+            }
+        }
+
+        throw new ApiException("Unable to generate an available invite code; try again");
     }
+
 }

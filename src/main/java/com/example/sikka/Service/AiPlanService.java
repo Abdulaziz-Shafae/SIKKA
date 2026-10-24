@@ -63,7 +63,7 @@ public class AiPlanService {
         instructions.append("Do not overlap activities for the same participant. All activities must fit within durationMinutes. ");
         instructions.append("A meal lasts 60 activity minutes, a snack lasts 30, and a prayer break lasts 20. Walking is additional. ");
         instructions.append("Use the breakType values and prayer constraints supplied in the input. ");
-        instructions.append("When arrival time is unknown, prayer scheduling remains provisional and must be checked after arrival is specified. ");
+        instructions.append("When prayerTimesVerified is not true or arrivalTimeKnown is false, do not emit any PRAYER activity, even when includePrayer=true. Defer prayer insertion until ARRIVAL supplies verified prayerEvents and add a warning explaining this deferral. Missing prayer times alone do not make initial ride planning infeasible. ");
         instructions.append("Do not claim prayer times were checked unless actual prayer time constraints were supplied. ");
         instructions.append("Do not repeat a ride unless explicitly allowed by the supplied preferences. ");
         instructions.append("MAX_RIDES means maximize distinct permitted rides, not repetitions. For each participant, include a ride at most once unless ridePreferencesByRideAndMember explicitly says REPEAT for that participant and ride. NEUTRAL, PREFERRED and MUST_RIDE do not grant repeat permission. For FAMILY use one shared activity per ride with all family participant IDs, never one copy of that ride for each member. Unused visit time is allowed. ");
@@ -86,6 +86,7 @@ public class AiPlanService {
         instructions.append("ridePreferencesByRideAndMember contains permanent or family visit preferences. AVOID forbids that ride for that member. Only REPEAT allows scheduling that ride more than once for that member. ");
         instructions.append("When allowSplit=true, explicitly cover every minor or unknown-age member from relative minute zero to the itinerary end with contiguous supervised activities, including waiting; do not leave implicit idle gaps. ");
         if ("REPLAN".equals(operationType)) {
+            instructions.append("For REPLAN without ride replacement, explicit UNKNOWN remains allowed for provisional scheduling of the existing approved rides with an unconfirmed-eligibility warning. Do not demand confirmed ELIGIBLE for these unchanged rides. Missing eligibility and NOT_ELIGIBLE remain prohibited for editable rides. Confirmed eligibility is required only for a newly substituted ride. Supplied non-null planningWaitMinutes are usable even when waitIsEstimate=true; never require live observations instead of supplied estimates. Frozen completed or ongoing entries retain their historical data and must not be rejected merely because current eligibility or estimates differ. ");
             instructions.append("When operationType=REPLAN, modify only the activities explicitly marked editable in the supplied execution context. ");
             instructions.append("Preserve completed, skipped and ongoing activities exactly as supplied. ");
             instructions.append("Preserve every activity outside the requester's authorized scope. ");
@@ -358,12 +359,20 @@ public class AiPlanService {
             throw new ApiException("Planning input must contain valid JSON");
         }
 
-        // Only compact initial, unified ride-only plans without fixed commitments.
-        boolean initialRideOnlyPlan = planningInput.isObject() && planningInput.path("operationType").asString("").isEmpty() && planningInput.path("allowSplit").isBoolean() && !planningInput.path("allowSplit").asBoolean() && planningInput.path("includePrayer").isBoolean() && !planningInput.path("includePrayer").asBoolean() && planningInput.path("mealPolicy").path("breaks").isArray() && planningInput.path("mealPolicy").path("breaks").isEmpty() && !planningInput.has("executionContext") && !planningInput.has("fixedActivities") && !planningInput.has("prayerEvents");
+        if (planningInput.path("operationType").asString("").isEmpty() && !planningInput.path("prayerTimesVerified").asBoolean()) {
+            for (AiPlanItemDtoOut activity : plan.getActivities()) {
+                if ("PRAYER".equals(activity.getBreakType())) {
+                    throw new ApiException("Initial prayer scheduling must be deferred until arrival supplies verified prayer events");
+                }
+            }
+        }
+
+        // Compact initial ride-only plans using a separate route and clock for each participant.
+        boolean initialRideOnlyPlan = planningInput.isObject() && planningInput.path("operationType").asString("").isEmpty() && planningInput.path("allowSplit").isBoolean() && planningInput.path("includePrayer").isBoolean() && (!planningInput.path("includePrayer").asBoolean() || !planningInput.path("prayerTimesVerified").asBoolean()) && planningInput.path("mealPolicy").path("breaks").isArray() && planningInput.path("mealPolicy").path("breaks").isEmpty() && !planningInput.has("executionContext") && !planningInput.has("fixedActivities") && !planningInput.has("prayerEvents");
 
         for (AiPlanItemDtoOut activity : plan.getActivities()) {
 
-            if (!"RIDE".equals(activity.getActivityKind()) || activity.getPlaceId() != null || activity.getBreakType() != null || activity.getExecutionEndMinutes() != null || !new HashSet<>(activity.getParticipantVisitMemberIds()).equals(allowedMemberIds)) {
+            if (!"RIDE".equals(activity.getActivityKind()) || activity.getPlaceId() != null || activity.getBreakType() != null || activity.getExecutionEndMinutes() != null || activity.getParticipantVisitMemberIds() == null || activity.getParticipantVisitMemberIds().isEmpty() || !allowedMemberIds.containsAll(activity.getParticipantVisitMemberIds()) || new HashSet<>(activity.getParticipantVisitMemberIds()).size() != activity.getParticipantVisitMemberIds().size() || (!planningInput.path("allowSplit").asBoolean() && !new HashSet<>(activity.getParticipantVisitMemberIds()).equals(allowedMemberIds))) {
                 initialRideOnlyPlan = false;
                 break;
             }
@@ -401,7 +410,8 @@ public class AiPlanService {
 
             List<AiPlanItemDtoOut> orderedActivities = new ArrayList<>(plan.getActivities());
             orderedActivities.sort(Comparator.comparing(AiPlanItemDtoOut::getRelativeStartMinutes));
-            long nextStartMinutes = 0;
+            Map<Integer, Long> availableMinutesByMember = new HashMap<>();
+            Map<Integer, String> previousNodesByMember = new HashMap<>();
 
             for (AiPlanItemDtoOut activity : orderedActivities) {
                 JsonNode ride = ridesById.get(activity.getRideId());
@@ -415,10 +425,23 @@ public class AiPlanService {
                 }
 
                 String nextNode = ride.path("nodeKey").asString();
-                Integer walkingMinutes = previousNode.equals(nextNode) ? Integer.valueOf(0) : walkingRoutes.getOrDefault(previousNode, Map.of()).get(nextNode);
+                Integer walkingMinutes = null;
+                long nextStartMinutes = 0;
 
-                if (walkingMinutes == null) {
-                    throw new ApiException("No supplied walking route from " + previousNode + " to " + nextNode);
+                for (Integer memberId : activity.getParticipantVisitMemberIds()) {
+                    String memberPreviousNode = previousNodesByMember.getOrDefault(memberId, previousNode);
+                    Integer memberWalkingMinutes = memberPreviousNode.equals(nextNode) ? Integer.valueOf(0) : walkingRoutes.getOrDefault(memberPreviousNode, Map.of()).get(nextNode);
+
+                    if (memberWalkingMinutes == null) {
+                        throw new ApiException("No supplied walking route from " + memberPreviousNode + " to " + nextNode);
+                    }
+
+                    if (walkingMinutes != null && !walkingMinutes.equals(memberWalkingMinutes)) {
+                        throw new ApiException("A shared ride requires separate approach activities when participant walking durations differ");
+                    }
+
+                    walkingMinutes = memberWalkingMinutes;
+                    nextStartMinutes = Math.max(nextStartMinutes, availableMinutesByMember.getOrDefault(memberId, 0L));
                 }
 
                 int waitingMinutes = ride.path("planningWaitMinutes").asInt();
@@ -434,8 +457,10 @@ public class AiPlanService {
                 activity.setActivityMinutes(activityMinutes);
                 activity.setRelativeStartMinutes((int) nextStartMinutes);
                 activity.setRelativeEndMinutes((int) nextEndMinutes);
-                nextStartMinutes = nextEndMinutes;
-                previousNode = nextNode;
+                for (Integer memberId : activity.getParticipantVisitMemberIds()) {
+                    availableMinutesByMember.put(memberId, nextEndMinutes);
+                    previousNodesByMember.put(memberId, nextNode);
+                }
             }
         }
 
@@ -573,5 +598,3 @@ public class AiPlanService {
 
 
 }
-
-

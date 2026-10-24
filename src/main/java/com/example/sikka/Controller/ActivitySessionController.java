@@ -1,8 +1,6 @@
 package com.example.sikka.Controller;
 
-import com.example.sikka.DtoIn.CompleteActivityDtoIn;
-import com.example.sikka.DtoIn.RateActivityDtoIn;
-import com.example.sikka.DtoIn.UpdateActivityLocationDtoIn;
+import com.example.sikka.DtoIn.*;
 import com.example.sikka.DtoOut.ActivitySessionDtoOut;
 import com.example.sikka.Service.ActivitySessionService;
 import jakarta.validation.Valid;
@@ -31,12 +29,11 @@ public class ActivitySessionController {
 
     @PostMapping("/start/manual/{accountId}/{visitMemberId}/{planItemId}")
     public ResponseEntity<ActivitySessionDtoOut> startManualActivity(@PathVariable Integer accountId, @PathVariable Integer visitMemberId, @PathVariable Integer planItemId) {
-        return ResponseEntity.status(200).body(activitySessionService.startManualActivity(accountId, visitMemberId, planItemId));
-    }
+        return ResponseEntity.status(200).body(activitySessionService.startManualActivity(accountId, visitMemberId, planItemId, null).get(0));    }
 
     @PostMapping("/complete/{accountId}/{activitySessionId}")
     public ResponseEntity<ActivitySessionDtoOut> completeActivity(@PathVariable Integer accountId, @PathVariable Integer activitySessionId, @RequestBody @Valid CompleteActivityDtoIn completeActivityDtoIn) {
-        return ResponseEntity.status(200).body(activitySessionService.completeActivity(accountId, activitySessionId, completeActivityDtoIn));
+        return ResponseEntity.status(200).body(activitySessionService.completeActivity(accountId, activitySessionId, completeActivityDtoIn, null).get(0));
     }
 
     @PutMapping("/rate/{accountId}/{activitySessionId}")
@@ -51,6 +48,18 @@ public class ActivitySessionController {
     @PostMapping("/start/gps/{accountId}/{visitMemberId}/{planItemId}")
     public ResponseEntity<ActivitySessionDtoOut> startGpsActivity(@PathVariable Integer accountId, @PathVariable Integer visitMemberId, @PathVariable Integer planItemId) {
         return ResponseEntity.status(200).body(activitySessionService.startGpsActivity(accountId, visitMemberId, planItemId));
+    }
+
+    @PostMapping("/start/manual/family/{accountId}/{planItemId}")
+    public ResponseEntity<List<ActivitySessionDtoOut>> startFamilyActivity(@PathVariable Integer accountId, @PathVariable Integer planItemId, @RequestBody @Valid StartFamilyActivityDtoIn dto) {
+        return ResponseEntity.status(200).body(activitySessionService.startManualActivity(accountId, null, planItemId, dto.getVisitMemberIds()));
+    }
+
+    @PostMapping("/complete/family/{accountId}/{activitySessionId}")
+    public ResponseEntity<List<ActivitySessionDtoOut>> completeFamilyActivity(@PathVariable Integer accountId, @PathVariable Integer activitySessionId, @RequestBody @Valid CompleteFamilyActivityDtoIn dto) {
+        CompleteActivityDtoIn completion = new CompleteActivityDtoIn();
+        completion.setRequestKey(dto.getRequestKey());
+        return ResponseEntity.status(200).body(activitySessionService.completeActivity(accountId, activitySessionId, completion, dto.getVisitMemberIds()));
     }
 
 }
