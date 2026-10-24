@@ -77,4 +77,12 @@ public class PaymentOrder {
     public void setCreatedAt() {
         createdAt = LocalDateTime.now();
     }
+
+    private LocalDateTime consumedAt;
+
+    @OneToOne
+    @JoinColumn(name = "consumed_by_plan_history_id", unique = true)
+    @JsonIgnore
+    private PlanHistory consumedByPlanHistory;
+
 }

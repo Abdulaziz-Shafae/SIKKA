@@ -673,7 +673,7 @@ public class VisitRecordService {
     }
 
     private boolean isManagedFamilyMember(Integer accountId, VisitMember member) {
-        return member.getVisit().getOrganizer().getId().equals(accountId) && member.getVisitorProfile() == null && member.getFamilyMember() != null && member.getFamilyMember().getOwnerAccount().getId().equals(accountId);
+        return member.getVisit().getOrganizer().getId().equals(accountId) && member.getVisitorProfile() == null && (member.getFamilyMember() != null && member.getFamilyMember().getOwnerAccount().getId().equals(accountId) || member.getFamilyMember() == null && member.getSnapshotAt() != null && "FAMILY".equals(member.getVisit().getTripType()));
     }
 
     private void validateCreateVisitRecordRequest(CreateVisitRecordDtoIn dto) {

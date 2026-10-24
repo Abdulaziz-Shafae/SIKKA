@@ -1,6 +1,8 @@
 package com.example.sikka.Controller;
 
 import com.example.sikka.Api.ApiResponse;
+import com.example.sikka.DtoOut.NotificationDtoOut;
+import jakarta.validation.Valid;
 import com.example.sikka.DtoIn.RespondDelayDtoIn;
 import com.example.sikka.Service.NotificationService;
 import lombok.RequiredArgsConstructor;
@@ -45,4 +47,13 @@ public class NotificationController {
     public ResponseEntity<NotificationDtoOut> respondToDelay(@PathVariable Integer accountId, @PathVariable Integer notificationId, @RequestBody @Valid RespondDelayDtoIn respondDelayDtoIn) {
         return ResponseEntity.status(200).body(notificationService.respondToDelay(accountId, notificationId, respondDelayDtoIn));
     }
+    @PostMapping("/check-delay/{accountId}/{activitySessionId}")
+    public ResponseEntity<?> checkActivityDelay(@PathVariable Integer accountId, @PathVariable Integer activitySessionId) {
+        NotificationDtoOut result = notificationService.checkActivityDelay(accountId, activitySessionId);
+        if (result == null) {
+            return ResponseEntity.status(200).body(new com.example.sikka.Api.ApiResponse("No activity delay detected"));
+        }
+        return ResponseEntity.status(200).body(result);
+    }
+
 }

@@ -2,8 +2,10 @@ package com.example.sikka.Advice;
 import com.example.sikka.Api.ApiException;
 import com.example.sikka.Api.ApiResponse;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.InvalidDataAccessResourceUsageException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.orm.jpa.JpaSystemException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -52,6 +54,18 @@ public class ControllerAdvice {
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<?> handleTypeMismatch(NoResourceFoundException e){
         return ResponseEntity.status(400).body(new ApiResponse( e.getMessage() ));
+    }
+
+    //Handle invalid database queries and SQL syntax errors
+    @ExceptionHandler(InvalidDataAccessResourceUsageException.class)
+    public ResponseEntity<ApiResponse> handleInvalidDataAccessResourceUsageException(InvalidDataAccessResourceUsageException exception) {
+        return ResponseEntity.status(500).body(new ApiResponse("A database error occurred. Please try again later"));
+    }
+
+    // Handle JPA persistence errors
+    @ExceptionHandler(JpaSystemException.class)
+    public ResponseEntity<ApiResponse> handleJpaSystemException(JpaSystemException exception) {
+        return ResponseEntity.status(500).body(new ApiResponse("A database error occurred. Please try again later"));
     }
 
 }

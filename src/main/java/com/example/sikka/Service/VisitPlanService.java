@@ -29,6 +29,8 @@ import com.example.sikka.Model.PlanApproval;
 import com.example.sikka.Model.PlanHistory;
 import com.example.sikka.Model.PlanItem;
 import com.example.sikka.Model.Visit;
+import com.example.sikka.Model.VisitMealBreak;
+import com.example.sikka.Repository.VisitMealBreakRepository;
 import com.example.sikka.Model.VisitMember;
 import com.example.sikka.Model.VisitPlan;
 import com.example.sikka.Model.VisitRecord;
@@ -72,6 +74,7 @@ import java.util.LinkedHashMap;
 public class VisitPlanService {
 
     private final VisitPlanRepository visitPlanRepository;
+    private final VisitMemberService visitMemberService;
     private final AccountRepository accountRepository;
     private final VisitRepository visitRepository;
     private final VisitMemberRepository visitMemberRepository;
@@ -88,6 +91,7 @@ public class VisitPlanService {
     private final RideService rideService;
     private final PlaceService placeService;
     private final VisitMealBreakService visitMealBreakService;
+    private final VisitMealBreakRepository visitMealBreakRepository;
     private final RidePreferenceRepository ridePreferenceRepository;
     private final PlatformTransactionManager transactionManager;
     private final PlanApprovalRepository planApprovalRepository;
@@ -99,7 +103,7 @@ public class VisitPlanService {
     @Value("${sikka.planning.together-mode-value:TOGETHER}")
     private String togetherModeValue;
 
-    @Value("${sikka.planning.split-allowed-mode-value:SPLIT_ALLOWED}")
+    @Value("${sikka.planning.split-allowed-mode-value:SPLIT}")
     private String splitAllowedModeValue;
 
     @Value("${sikka.park.latitude:${SIKKA_PARK_LATITUDE:#{null}}}")
@@ -834,8 +838,8 @@ public class VisitPlanService {
         boolean hasProfile = member.getVisitorProfile() != null;
         boolean hasFamilyMember = member.getFamilyMember() != null;
 
-        if (hasProfile == hasFamilyMember) {
-            throw new ApiException("A visit member must reference exactly one person identity");
+        if (hasProfile && hasFamilyMember || !hasProfile && !hasFamilyMember && member.getSnapshotAt() == null) {
+            throw new ApiException("A visit member must reference one person or a historical snapshot");
         }
     }
 
@@ -843,7 +847,7 @@ public class VisitPlanService {
 
         validateMemberIdentity(member);
 
-        return member.getVisitorProfile() != null ? member.getVisitorProfile().getName() : member.getFamilyMember().getName();
+        return member.getName();
     }
 
     private void validatePlanReadAccess(Integer accountId, VisitPlan plan) {
@@ -1365,6 +1369,20 @@ public class VisitPlanService {
             context.put("sharedSelectedRideIds", readPositiveIntegerArray(readGenerationJson(visit.getSharedSelectedRides()), "Shared selected rides", true));
         }
 
+        if (!isSplitAllowedForInitialPlan(visit) && !"SOLO".equals(visit.getTripType())) {
+            VisitMember organizer = getRequiredAccountMember(visit.getOrganizer().getId(), visit.getId());
+            List<Integer> required = new ArrayList<>();
+            if (organizer.getSelectedRides() != null) {
+                JsonNode selected = readGenerationJson(organizer.getSelectedRides());
+                context.put("sharedSelectedRides", selected);
+                for (JsonNode ride : selected) {
+                    if ("MUST_RIDE".equals(ride.path("priority").asString())) {
+                        required.add(requirePositiveInteger(ride, "rideId"));
+                    }
+                }
+            }
+            context.put("sharedSelectedRideIds", required);
+        }
         return context;
     }
 
@@ -1414,7 +1432,7 @@ public class VisitPlanService {
                     throw new ApiException("Planning participants must have active accounts");
                 }
 
-                birthDate = member.getVisitorProfile().getBirthDate();
+                birthDate = member.getBirthDate();
 
             } else {
 
@@ -1422,11 +1440,8 @@ public class VisitPlanService {
                     throw new ApiException("Family member must belong to the visit organizer");
                 }
 
-                if (Boolean.TRUE.equals(member.getFamilyMember().getArchived())) {
-                    throw new ApiException("Archived family members cannot participate in planning");
-                }
 
-                birthDate = member.getFamilyMember().getBirthDate();
+                birthDate = member.getBirthDate();
 
                 if (birthDate == null) {
                     throw new ApiException("Family member birth date is required");
@@ -1468,8 +1483,12 @@ public class VisitPlanService {
 
                 HashSet<Integer> uniqueRideIds = new HashSet<>();
 
-                for (JsonNode rideIdNode : selectedRidesNode) {
-
+                for (JsonNode selectedRide : selectedRidesNode) {
+                    JsonNode rideIdNode = selectedRide.path("rideId");
+                    String priority = selectedRide.path("priority").asString("");
+                    if (!Set.of("MUST_RIDE", "PREFERRED", "OPTIONAL").contains(priority)) {
+                        throw new ApiException("Every selected ride requires a valid priority");
+                    }
                     if (!rideIdNode.isIntegralNumber() || !rideIdNode.canConvertToInt() || rideIdNode.intValue() <= 0) {
                         throw new ApiException("Selected ride IDs must be positive integers");
                     }
@@ -1478,7 +1497,9 @@ public class VisitPlanService {
                         throw new ApiException("Selected ride IDs must not be repeated");
                     }
 
-                    selectedRideIds.add(rideIdNode.intValue());
+                    if ("MUST_RIDE".equals(priority)) {
+                        selectedRideIds.add(rideIdNode.intValue());
+                    }
                 }
             }
 
@@ -1491,6 +1512,7 @@ public class VisitPlanService {
             memberContext.put("answerStatus", answerStatus);
             selectedRideIds.sort(Integer::compareTo);
             memberContext.put("selectedRideIds", selectedRideIds);
+            memberContext.put("selectedRides", member.getSelectedRides() == null ? List.of() : readGenerationJson(member.getSelectedRides()));
             List<String> dislikedFeatures = buildDislikedFeaturesContext(member);
 
             memberContext.put("dislikedFeatures", dislikedFeatures);
@@ -1700,7 +1722,7 @@ public class VisitPlanService {
                 throw new ApiException("A meal or snack place must be a restaurant");
             }
 
-            if ("PRAYER".equals(activity.getBreakType()) && !"PRAYER_AREA".equals(place.getKind())) {
+            if ("PRAYER".equals(activity.getBreakType()) && !"PRAYER_ROOM".equals(place.getKind())) {
                 throw new ApiException("A prayer place must be a prayer area");
             }
         }
@@ -1994,12 +2016,56 @@ public class VisitPlanService {
                 throw new ApiException("The OpenAI call must run outside the database transaction");
             }
 
-            AiPlanDtoOut candidate = aiPlanService.generateValidatedPlanCandidate(snapshot.inputJson(), snapshot.durationMinutes(), snapshot.memberIds(), snapshot.tripType(), snapshot.eligibility(), snapshot.ages());
-            mergeGenerationWarnings(candidate, readGenerationJson(snapshot.inputJson()));
+            AiPlanDtoOut validatedCandidate = null;
+            ObjectNode generationInput = (ObjectNode) readGenerationJson(snapshot.inputJson());
+            generationInput.set("planningEligibilityPolicy", participantJsonMapper.valueToTree(Map.of("UNKNOWN", "ALLOW_PROVISIONAL_WITH_WARNING", "ELIGIBLE", "ALLOW", "NOT_ELIGIBLE", "FORBID", "MISSING", "FORBID")));
+            String attemptInput = writeGenerationJson(generationInput);
 
-            if (Boolean.TRUE.equals(candidate.getFeasible())) {
-                validateInitialCandidateAgainstSnapshot(candidate, snapshot);
+            for (int attempt = 0; attempt < 2; attempt++) {
+                AiPlanDtoOut attemptCandidate = null;
+
+                try {
+                    attemptCandidate = aiPlanService.generateValidatedPlanCandidate(attemptInput, snapshot.durationMinutes(), snapshot.memberIds(), snapshot.tripType(), snapshot.eligibility(), snapshot.ages());
+                    mergeGenerationWarnings(attemptCandidate, readGenerationJson(snapshot.inputJson()));
+
+                    if (Boolean.TRUE.equals(attemptCandidate.getFeasible())) {
+                        validateInitialCandidateAgainstSnapshot(attemptCandidate, snapshot);
+                    }
+
+                    if (attempt == 0 && !Boolean.TRUE.equals(attemptCandidate.getFeasible())) {
+                        ObjectNode reviewInput = (ObjectNode) readGenerationJson(writeGenerationJson(generationInput));
+                        reviewInput.put("validationFeedback", "Review the infeasibility decision once against the supplied facts. Explicit UNKNOWN eligibility is permitted for provisional planning with warnings and is not itself a reason to reject a plan. Known planning wait estimates are valid even when marked estimated. Preserve every actual prohibition, missing-data constraint, supervision rule and duration limit. If a real conflict remains, return feasible=false and identify that conflict precisely; do not invent eligibility or force feasibility.");
+                        reviewInput.set("previousRejectedCandidate", participantJsonMapper.valueToTree(attemptCandidate));
+                        attemptInput = writeGenerationJson(reviewInput);
+                        continue;
+                    }
+
+                    validatedCandidate = attemptCandidate;
+                    break;
+                } catch (ApiException invalidCandidate) {
+                    String reason = invalidCandidate.getMessage();
+                    boolean repairable = reason != null && (reason.startsWith("Timing mismatch:") || "Activity interval must equal walking, waiting and activity minutes".equals(reason) || "The generated plan repeats a ride without explicit repeat permission".equals(reason) || "The plan contains an unknown or incorrect walking route".equals(reason) || reason.startsWith("Waiting time mismatch for ride "));
+
+                    if (attempt == 1 || !repairable) {
+                        throw invalidCandidate;
+                    }
+
+                    ObjectNode repairInput = (ObjectNode) readGenerationJson(writeGenerationJson(generationInput));
+                    repairInput.put("validationFeedback", reason);
+
+                    if (attemptCandidate != null) {
+                        repairInput.set("previousRejectedCandidate", participantJsonMapper.valueToTree(attemptCandidate));
+                    }
+
+                    attemptInput = writeGenerationJson(repairInput);
+                }
             }
+
+            if (validatedCandidate == null) {
+                throw new ApiException("No validated planning result was produced");
+            }
+
+            AiPlanDtoOut candidate = validatedCandidate;
 
             if (!Boolean.TRUE.equals(candidate.getFeasible())) {
                 return runGenerationTransaction(() -> failInitialGeneration(accountId, visitId, start.historyId(), "تعذر ترتيب المطلوب ضمن البيانات والمدة المتاحة؛ راجع تفاصيل النتيجة.", candidate));
@@ -2075,7 +2141,7 @@ public class VisitPlanService {
             return new InitialGenerationStart(existing.getId(), convertGenerationRequestToDtoOut(existing));
         }
 
-        if (!"PLANNING".equals(visit.getStatus()) || visit.getStartedAt() != null) {
+        if ((!"DRAFT".equals(visit.getStatus()) && !"PLANNING".equals(visit.getStatus())) || visit.getStartedAt() != null) {
             throw new ApiException("Initial generation requires a visit in PLANNING status before execution");
         }
 
@@ -2094,6 +2160,7 @@ public class VisitPlanService {
             }
         }
 
+        visitMemberService.freezeMemberSnapshots(visit);
         buildVisitPlanningContext(visit);
         validateInitialMemberAnswers(visit, buildGoingMemberPlanningContext(visit));
 
@@ -2113,6 +2180,7 @@ public class VisitPlanService {
             throw new ApiException("Paid generation requires a reserved server-verified payment");
         }
 
+        visit.setStatus("PLANNING");
         visit.setMembersLocked(true);
         visitRepository.save(visit);
 
@@ -2307,6 +2375,15 @@ public class VisitPlanService {
             priorities.put((Integer) row.get("id"), "OPTIONAL");
         }
 
+        for (JsonNode member : input.path("members")) {
+            for (JsonNode selection : member.path("selectedRides")) {
+                int rideId = requirePositiveInteger(selection, "rideId");
+                String priority = requireText(selection, "priority");
+                if (priorities.containsKey(rideId) && ("MUST_RIDE".equals(priority) || "PREFERRED".equals(priority) && !"MUST_RIDE".equals(priorities.get(rideId)))) {
+                    priorities.put(rideId, priority);
+                }
+            }
+        }
         Map<Integer, Set<Integer>> requiredRides = buildRequiredRideParticipants(input);
 
         for (Integer rideId : requiredRides.keySet()) {
@@ -2531,8 +2608,7 @@ public class VisitPlanService {
                 }
 
                 if (ride.path("planningWaitMinutes").isNull() || activity.getWaitingMinutes() != requireNonNegativeInteger(ride, "planningWaitMinutes")) {
-                    throw new ApiException("Generated waiting time does not match a known planning estimate");
-                }
+                    throw new ApiException("Waiting time mismatch for ride " + activity.getRideId() + ": expected=" + ride.path("planningWaitMinutes") + ", generated=" + activity.getWaitingMinutes());                }
 
                 Set<String> features = new HashSet<>(readTextArray(ride.path("features"), "Ride features"));
 
@@ -2721,7 +2797,7 @@ public class VisitPlanService {
                     boolean hasEarlierNonFoodActivity = activities.subList(0, index).stream().anyMatch(item -> !isFoodActivity(item));
                     boolean hasLaterNonFoodActivity = activities.subList(index + 1, activities.size()).stream().anyMatch(item -> !isFoodActivity(item));
 
-                    if (("ARRIVAL".equals(timing) && hasEarlierNonFoodActivity) || ("END".equals(timing) && hasLaterNonFoodActivity) || ("MIDDLE".equals(timing) && (!hasEarlierNonFoodActivity || !hasLaterNonFoodActivity))) {
+                    if (("START".equals(timing) && hasEarlierNonFoodActivity) || ("END".equals(timing) && hasLaterNonFoodActivity) || ("MIDDLE".equals(timing) && (!hasEarlierNonFoodActivity || !hasLaterNonFoodActivity))) {
                         timingMatches = false;
                         break;
                     }
@@ -2755,7 +2831,7 @@ public class VisitPlanService {
         }
 
         String choice = requireText(policy, "choice");
-        Map<String, List<String>> typesByChoice = Map.of("NONE", List.of(), "SKIPPED", List.of(), "ASK_LATER", List.of(), "ONE_MEAL", List.of("MEAL"), "TWO_MEALS", List.of("MEAL", "MEAL"), "SNACK", List.of("SNACK"), "MEAL_AND_SNACK", List.of("MEAL", "SNACK"));
+        Map<String, List<String>> typesByChoice = Map.of("NONE", List.of(), "SKIPPED", List.of(), "DEFERRED", List.of(), "ONE_MEAL", List.of("MEAL"), "TWO_MEALS", List.of("MEAL", "MEAL"), "SNACK", List.of("SNACK"), "MEAL_AND_SNACK", List.of("MEAL", "SNACK"));
 
         if (!typesByChoice.containsKey(choice)) {
             throw new ApiException("Meal policy choice is invalid");
@@ -2779,7 +2855,7 @@ public class VisitPlanService {
 
             Integer restaurantId = definition.path("restaurantId").isNull() ? null : requirePositiveInteger(definition, "restaurantId");
 
-            if (!keys.add(key) || !Set.of("MEAL", "SNACK").contains(type) || !Set.of("ARRIVAL", "MIDDLE", "END").contains(timing) || !memberIds.containsAll(participants) || earliest > latest || latest >= durationMinutes) {
+            if (!keys.add(key) || !Set.of("MEAL", "SNACK").contains(type) || !Set.of("START", "MIDDLE", "END").contains(timing) || !memberIds.containsAll(participants) || earliest > latest || latest >= durationMinutes) {
                 throw new ApiException("Meal break policy contains an invalid definition");
             }
 
@@ -2878,7 +2954,7 @@ public class VisitPlanService {
             }
         }
 
-        if ("ASK_LATER".equals(input.path("mealPolicy").path("choice").asString())) {
+        if ("DEFERRED".equals(input.path("mealPolicy").path("choice").asString())) {
             warnings.add("اختيار الأكل مؤجل؛ يظهر سؤاله يوم الزيارة وقد يؤثر اختياره على الجدول.");
         }
 
@@ -4289,7 +4365,7 @@ public class VisitPlanService {
         }
 
         java.time.LocalTime requestedArrival = dto.getExpectedArrivalTime();
-        record ArrivalPreparation(Integer planId, Integer historyId, LocalDateTime arrivalAt, Integer durationMinutes, GenerationSnapshot planning, List<PlanItemDtoOut> items, String itemSnapshot, String headerSnapshot) {
+        record ArrivalPreparation(Integer planId, Integer historyId, LocalDateTime arrivalAt, Integer durationMinutes, GenerationSnapshot planning, List<PlanItemDtoOut> items, String itemSnapshot, String headerSnapshot, boolean includePrayer, String resolvedMealPolicy) {
         }
 
         ArrivalPreparation prepared = runGenerationTransaction(() -> {
@@ -4313,6 +4389,64 @@ public class VisitPlanService {
 
             if (visit.getDurationMinutes() == null || visit.getDurationMinutes() <= 0 || visit.getIncludePrayer() == null) {
                 throw new ApiException("A positive visit duration and a prayer preference are required");
+            }
+
+            Map<String, Object> mealPolicy = visitMealBreakService.getMealBreakPolicy(accountId, visitId);
+            boolean mealDeferred = "DEFERRED".equals(mealPolicy.get("choice"));
+
+            if (mealDeferred && dto.getMealPreferences() == null) {
+                throw new ApiException("Choose your food preference before scheduling arrival");
+            }
+
+            if (!mealDeferred && dto.getMealPreferences() != null) {
+                throw new ApiException("Food preferences were already selected for this visit");
+            }
+
+            if (mealDeferred) {
+                String choice = dto.getMealPreferences().getChoice();
+                Map<String, List<String>> choices = Map.of("NONE", List.of(), "SKIPPED", List.of(), "ONE_MEAL", List.of("MEAL"), "TWO_MEALS", List.of("MEAL", "MEAL"), "SNACK", List.of("SNACK"), "MEAL_AND_SNACK", List.of("MEAL", "SNACK"));
+
+                if (choice == null || !choices.containsKey(choice)) {
+                    throw new ApiException("Choose a final food preference; it cannot remain deferred");
+                }
+
+                List<String> timings = dto.getMealPreferences().getTimings() == null ? List.of() : dto.getMealPreferences().getTimings();
+
+                if (timings.size() != choices.get(choice).size() || timings.stream().anyMatch(timing -> timing == null || !Set.of("START", "MIDDLE", "END").contains(timing))) {
+                    throw new ApiException("Provide one valid timing for each food break");
+                }
+
+                List<Integer> participantIds = visitMemberRepository.findAllByVisit_IdAndRsvpStatus(visitId, "GOING").stream().map(VisitMember::getId).sorted().toList();
+
+                if (participantIds.isEmpty()) {
+                    throw new ApiException("At least one GOING participant is required");
+                }
+
+                List<Map<String, Object>> foodBreaks = new ArrayList<>();
+                List<String> breakTypes = choices.get(choice);
+                int totalFoodMinutes = 0;
+
+                for (int index = 0; index < breakTypes.size(); index++) {
+                    String breakType = breakTypes.get(index);
+                    int duration = "MEAL".equals(breakType) ? 60 : 30;
+                    totalFoodMinutes += duration;
+                    Map<String, Object> foodBreak = new LinkedHashMap<>();
+                    foodBreak.put("breakKey", java.util.UUID.randomUUID().toString());
+                    foodBreak.put("breakType", breakType);
+                    foodBreak.put("timingPreference", timings.get(index));
+                    foodBreak.put("durationMinutes", duration);
+                    foodBreak.put("earliestStartMinutes", 0);
+                    foodBreak.put("latestStartMinutes", visit.getDurationMinutes() - duration);
+                    foodBreak.put("restaurantId", null);
+                    foodBreak.put("participantVisitMemberIds", participantIds);
+                    foodBreaks.add(foodBreak);
+                }
+
+                if (totalFoodMinutes > visit.getDurationMinutes()) {
+                    throw new ApiException("Food breaks exceed the visit duration");
+                }
+
+                mealPolicy = Map.of("ready", true, "choice", choice, "breaks", foodBreaks);
             }
 
             List<VisitPlan> plans = visitPlanRepository.findAllByVisit_Id(visitId);
@@ -4391,7 +4525,7 @@ public class VisitPlanService {
             LocalDateTime arrivalAt = visit.getVisitDate().atTime(requestedArrival);
             LocalDateTime endsAt = arrivalAt.plusMinutes(visit.getDurationMinutes());
 
-            if (!Boolean.TRUE.equals(visit.getIncludePrayer())) {
+            if (!Boolean.TRUE.equals(visit.getIncludePrayer()) && !mealDeferred) {
 
                 for (PlanItem item : items) {
 
@@ -4426,12 +4560,12 @@ public class VisitPlanService {
                 throw new ApiException("Prayer scheduling supports visits ending no later than the following calendar day");
             }
 
-            if (parkLatitude == null || !Double.isFinite(parkLatitude) || parkLatitude < -90 || parkLatitude > 90 || parkLongitude == null || !Double.isFinite(parkLongitude) || parkLongitude < -180 || parkLongitude > 180) {
+            if (Boolean.TRUE.equals(visit.getIncludePrayer()) && (parkLatitude == null || !Double.isFinite(parkLatitude) || parkLatitude < -90 || parkLatitude > 90 || parkLongitude == null || !Double.isFinite(parkLongitude) || parkLongitude < -180 || parkLongitude > 180)) {
                 throw new ApiException("Configure verified park latitude and longitude before scheduling prayer times");
             }
 
             GenerationSnapshot planning = collectInitialGenerationSnapshot(accountId, visit);
-            return new ArrivalPreparation(groupPlan.getId(), historyId, arrivalAt, visit.getDurationMinutes(), planning, itemDtos, writeGenerationJson(itemDtos), writeGenerationJson(headerRows));
+            return new ArrivalPreparation(groupPlan.getId(), historyId, arrivalAt, visit.getDurationMinutes(), planning, itemDtos, writeGenerationJson(itemDtos), writeGenerationJson(headerRows), Boolean.TRUE.equals(visit.getIncludePrayer()), mealDeferred ? writeGenerationJson(mealPolicy) : null);
         });
 
         if (prepared == null) {
@@ -4446,7 +4580,7 @@ public class VisitPlanService {
         List<Map<String, Object>> prayerEvents = new ArrayList<>();
         Set<Integer> prayerMinutes = new HashSet<>();
 
-        for (LocalDate date = prepared.arrivalAt().toLocalDate(); !date.isAfter(visitEndsAt.toLocalDate()); date = date.plusDays(1)) {
+        for (LocalDate date = prepared.arrivalAt().toLocalDate(); prepared.includePrayer() && !date.isAfter(visitEndsAt.toLocalDate()); date = date.plusDays(1)) {
 
             Map<String, LocalDateTime> times = prayerTimeService.getPrayerTimes(date, parkLatitude, parkLongitude);
 
@@ -4506,6 +4640,12 @@ public class VisitPlanService {
         }
 
         ObjectNode input = (ObjectNode) readGenerationJson(prepared.planning().inputJson());
+        if (prepared.resolvedMealPolicy() != null) {
+            input.set("mealPolicy", readGenerationJson(prepared.resolvedMealPolicy()));
+        }
+
+        GenerationSnapshot arrivalPlanning = new GenerationSnapshot(writeGenerationJson(input), prepared.planning().durationMinutes(), prepared.planning().tripType(), prepared.planning().memberIds(), prepared.planning().ages(), prepared.planning().eligibility(), prepared.planning().priorities(), prepared.planning().pinnedRideIds(), prepared.planning().rateablePlaceIds());
+
         input.put("operationType", "ARRIVAL");
         input.put("arrivalTimeKnown", true);
         input.put("arrivalAt", prepared.arrivalAt().toString());
@@ -4515,7 +4655,118 @@ public class VisitPlanService {
         input.set("fixedActivities", participantJsonMapper.valueToTree(fixedActivities));
         input.put("preserveAllNonPrayerActivities", true);
         input.put("preservePerMemberActivityOrder", true);
-        AiPlanDtoOut candidate = aiPlanService.generatePlanCandidate(writeGenerationJson(input));
+        AiPlanDtoOut candidate;
+        boolean scheduleApprovedRidesDirectly = !prepared.includePrayer() && prayerEvents.isEmpty() && fixedActivities.isEmpty() && input.path("allowSplit").isBoolean() && !input.path("allowSplit").asBoolean() && !approvedActivities.isEmpty();
+
+        for (AiPlanItemDtoOut activity : approvedActivities) {
+            if (!"RIDE".equals(activity.getActivityKind()) || activity.getBreakType() != null || activity.getPlaceId() != null || !new HashSet<>(activity.getParticipantVisitMemberIds()).equals(prepared.planning().memberIds())) {
+                scheduleApprovedRidesDirectly = false;
+            }
+        }
+
+        for (JsonNode definition : input.path("mealPolicy").path("breaks")) {
+            if (!definition.path("restaurantId").isNull() || !new HashSet<>(readPositiveIntegerArray(definition.path("participantVisitMemberIds"), "Meal participants", false)).equals(prepared.planning().memberIds())) {
+                scheduleApprovedRidesDirectly = false;
+            }
+        }
+
+        if (scheduleApprovedRidesDirectly) {
+            // Retain the approved ride order and calculate arrival timing from trusted snapshots.
+            List<AiPlanItemDtoOut> arrivalActivities = new ArrayList<>();
+            approvedActivities.sort(Comparator.comparing(AiPlanItemDtoOut::getRelativeStartMinutes).thenComparing(AiPlanItemDtoOut::getRelativeEndMinutes));
+
+            for (int position = 0; position <= approvedActivities.size(); position++) {
+                for (JsonNode definition : input.path("mealPolicy").path("breaks")) {
+                    String timing = requireText(definition, "timingPreference");
+                    int insertionPosition;
+                    if ("START".equals(timing)) {
+                        insertionPosition = 0;
+                    } else if ("END".equals(timing)) {
+                        insertionPosition = approvedActivities.size();
+                    } else if ("MIDDLE".equals(timing)) {
+                        if (approvedActivities.size() < 2) {
+                            throw new ApiException("A middle food break requires an approved activity before and after it");
+                        }
+                        insertionPosition = (approvedActivities.size() + 1) / 2;
+                    } else {
+                        throw new ApiException("Invalid food timing preference");
+                    }
+
+                    if (position != insertionPosition) {
+                        continue;
+                    }
+
+                    AiPlanItemDtoOut food = new AiPlanItemDtoOut();
+                    food.setActivityKind("BREAK");
+                    food.setBreakType(requireText(definition, "breakType"));
+                    food.setActivityMinutes(requirePositiveInteger(definition, "durationMinutes"));
+                    food.setWalkingMinutes(0);
+                    food.setWaitingMinutes(0);
+                    food.setParticipantVisitMemberIds(readPositiveIntegerArray(definition.path("participantVisitMemberIds"), "Meal participants", false));
+                    food.setSubgroupKey(approvedActivities.get(0).getSubgroupKey());
+                    food.setRelativeStartMinutes(requireNonNegativeInteger(definition, "earliestStartMinutes"));
+                    food.setRelativeEndMinutes(requireNonNegativeInteger(definition, "latestStartMinutes"));
+                    arrivalActivities.add(food);
+                }
+
+                if (position < approvedActivities.size()) {
+                    arrivalActivities.add(approvedActivities.get(position));
+                }
+            }
+
+            Map<Integer, JsonNode> arrivalRides = indexSnapshotResources(input.path("rides"));
+            Map<String, Integer> arrivalRoutes = new HashMap<>();
+            for (JsonNode route : input.path("walking").path("routes")) {
+                String routeKey = walkingRouteKey(requireText(route, "fromNodeKey"), requireText(route, "toNodeKey"));
+                int minutes = requireNonNegativeInteger(route, "minutes");
+                Integer previousMinutes = arrivalRoutes.putIfAbsent(routeKey, minutes);
+                if (previousMinutes != null && previousMinutes != minutes) {
+                    throw new ApiException("Conflicting walking routes in the arrival snapshot");
+                }
+            }
+
+            String previousNode = requireText(input.path("walking"), "entranceNodeKey");
+            long nextStart = 0;
+            for (AiPlanItemDtoOut activity : arrivalActivities) {
+                if ("RIDE".equals(activity.getActivityKind())) {
+                    JsonNode ride = arrivalRides.get(activity.getRideId());
+                    if (ride == null || !"OPEN".equals(ride.path("status").asString())) {
+                        throw new ApiException("An approved ride is no longer available; review the plan before arrival");
+                    }
+                    String nextNode = requireText(ride, "nodeKey");
+                    Integer walking = previousNode.equals(nextNode) ? Integer.valueOf(0) : arrivalRoutes.get(walkingRouteKey(previousNode, nextNode));
+                    if (walking == null) {
+                        throw new ApiException("No supplied walking route for an approved arrival activity");
+                    }
+                    if (!Objects.equals(activity.getActivityMinutes(), requirePositiveInteger(ride, "planningActivityMinutes"))) {
+                        throw new ApiException("An approved ride duration has changed; review the plan before arrival");
+                    }
+                    activity.setWalkingMinutes(walking);
+                    activity.setWaitingMinutes(requireNonNegativeInteger(ride, "planningWaitMinutes"));
+                    previousNode = nextNode;
+                } else {
+                    nextStart = Math.max(nextStart, activity.getRelativeStartMinutes());
+                    if (nextStart > activity.getRelativeEndMinutes()) {
+                        throw new ApiException("The requested food break cannot fit its allowed start window");
+                    }
+                }
+
+                long end = nextStart + activity.getWalkingMinutes() + activity.getWaitingMinutes() + activity.getActivityMinutes();
+                if (end > prepared.durationMinutes()) {
+                    throw new ApiException("The approved activities and food breaks exceed the visit duration; increase the duration or review the plan");
+                }
+                activity.setRelativeStartMinutes(Math.toIntExact(nextStart));
+                activity.setRelativeEndMinutes(Math.toIntExact(end));
+                nextStart = end;
+            }
+
+            candidate = new AiPlanDtoOut();
+            candidate.setFeasible(true);
+            candidate.setActivities(arrivalActivities);
+            candidate.setWarnings(new ArrayList<>());
+        } else {
+            candidate = aiPlanService.generatePlanCandidate(writeGenerationJson(input));
+        }
 
         if (!Boolean.TRUE.equals(candidate.getFeasible())) {
             throw new ApiException(candidate.getInfeasibilityReason() == null || candidate.getInfeasibilityReason().isBlank() ? "The approved activities and actual prayer times cannot fit; review arrival time or duration" : candidate.getInfeasibilityReason());
@@ -4525,7 +4776,8 @@ public class VisitPlanService {
         aiPlanService.validatePlanCandidateSupervision(candidate, prepared.planning().ages());
         aiPlanService.validatePlanCandidateActivityKinds(candidate);
         aiPlanService.validatePlanCandidateEligibility(candidate, prepared.planning().eligibility());
-        validateInitialCandidateAgainstSnapshot(candidate, prepared.planning());
+        mergeGenerationWarnings(candidate, input);
+        validateInitialCandidateAgainstSnapshot(candidate, arrivalPlanning);
 
         List<AiPlanItemDtoOut> activities = new ArrayList<>(candidate.getActivities());
         activities.sort(Comparator.comparing(AiPlanItemDtoOut::getRelativeStartMinutes).thenComparing(AiPlanItemDtoOut::getRelativeEndMinutes));
@@ -4568,6 +4820,13 @@ public class VisitPlanService {
             String key = writeGenerationJson(java.util.Arrays.asList(activity.getActivityKind(), activity.getRideId(), activity.getPlaceId(), activity.getBreakType(), activity.getActivityMinutes(), participants, activity.getSubgroupKey()));
             java.util.ArrayDeque<PlanItemDtoOut> matches = available.get(key);
 
+            if (prepared.resolvedMealPolicy() != null && ("MEAL".equals(activity.getBreakType()) || "SNACK".equals(activity.getBreakType()))) {
+                if (!"BREAK".equals(activity.getActivityKind()) || activity.getPlaceId() != null || activity.getRideId() != null) {
+                    throw new ApiException("Deferred food breaks must remain unassigned until a restaurant is selected");
+                }
+                continue;
+            }
+
             if (matches == null || matches.isEmpty()) {
                 throw new ApiException("Arrival scheduling cannot add, replace or change participants of an approved non-prayer activity");
             }
@@ -4606,7 +4865,7 @@ public class VisitPlanService {
 
             entityManager.refresh(visit, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
 
-            if (!visit.getOrganizer().getId().equals(accountId) || !"READY".equals(visit.getStatus()) || visit.getStartedAt() != null || !LocalDate.now(ZoneId.of("Asia/Riyadh")).equals(visit.getVisitDate()) || !visit.getVisitDate().equals(prepared.arrivalAt().toLocalDate()) || !Objects.equals(visit.getDurationMinutes(), prepared.durationMinutes()) || !Boolean.TRUE.equals(visit.getIncludePrayer())) {
+            if (!visit.getOrganizer().getId().equals(accountId) || !"READY".equals(visit.getStatus()) || visit.getStartedAt() != null || !LocalDate.now(ZoneId.of("Asia/Riyadh")).equals(visit.getVisitDate()) || !visit.getVisitDate().equals(prepared.arrivalAt().toLocalDate()) || !Objects.equals(visit.getDurationMinutes(), prepared.durationMinutes()) || Boolean.TRUE.equals(visit.getIncludePrayer()) != prepared.includePrayer()) {
                 throw new ApiException("The visit changed while preparing the prayer schedule");
             }
 
@@ -4696,7 +4955,23 @@ public class VisitPlanService {
             aiPlanService.validatePlanCandidateSupervision(candidate, current.ages());
             aiPlanService.validatePlanCandidateActivityKinds(candidate);
             aiPlanService.validatePlanCandidateEligibility(candidate, current.eligibility());
-            validateInitialCandidateAgainstSnapshot(candidate, current);
+            ObjectNode currentInput = (ObjectNode) readGenerationJson(current.inputJson());
+
+            if (prepared.resolvedMealPolicy() != null) {
+                currentInput.set("mealPolicy", readGenerationJson(prepared.resolvedMealPolicy()));
+            }
+
+            GenerationSnapshot finalPlanning = new GenerationSnapshot(writeGenerationJson(currentInput), current.durationMinutes(), current.tripType(), current.memberIds(), current.ages(), current.eligibility(), current.priorities(), current.pinnedRideIds(), current.rateablePlaceIds());
+            validateInitialCandidateAgainstSnapshot(candidate, finalPlanning);
+            Map<Integer, List<AiPlanItemDtoOut>> foodActivitiesByMember = new HashMap<>();
+
+            for (AiPlanItemDtoOut activity : activities) {
+                for (Integer memberId : activity.getParticipantVisitMemberIds()) {
+                    foodActivitiesByMember.computeIfAbsent(memberId, ignored -> new ArrayList<>()).add(activity);
+                }
+            }
+
+            Map<AiPlanItemDtoOut, String> foodKeys = validateSnapshotMeals(candidate, currentInput.path("mealPolicy"), foodActivitiesByMember);
             validateCandidateResources(candidate);
 
             Map<String, String> prayerTitles = Map.of("Fajr", "صلاة الفجر", "Dhuhr", "صلاة الظهر", "Asr", "صلاة العصر", "Maghrib", "صلاة المغرب", "Isha", "صلاة العشاء");
@@ -4710,6 +4985,8 @@ public class VisitPlanService {
                 if ("PRAYER".equals(activity.getBreakType())) {
                     item = convertAiActivityToPlanItem(activity, groupPlan, index, null, false, false);
                     item.setTitle(prayerTitles.get(prayerNames.get(activity)));
+                } else if (prepared.resolvedMealPolicy() != null && foodKeys.containsKey(activity)) {
+                    item = convertAiActivityToPlanItem(activity, groupPlan, index, null, false, false);
                 } else {
                     item = byId.get(sourceIds.get(activity));
                     item.setRelativeStartMinutes(activity.getRelativeStartMinutes());
@@ -4732,6 +5009,54 @@ public class VisitPlanService {
             }
 
             planItemRepository.saveAll(scheduled);
+            if (prepared.resolvedMealPolicy() != null) {
+                List<VisitMealBreak> previousMeals = visitMealBreakRepository.findVisitMealBreaksByVisitId(visitId);
+
+                if (previousMeals.stream().anyMatch(meal -> !"DEFERRED".equals(meal.getMealChoice()) || meal.getPlanItem() != null)) {
+                    throw new ApiException("Food preferences changed while preparing arrival");
+                }
+
+                visitMealBreakRepository.deleteAll(previousMeals);
+                Map<Integer, VisitMember> mealMembers = new HashMap<>();
+
+                for (VisitMember member : visitMemberRepository.findAllByVisit_IdAndRsvpStatus(visitId, "GOING")) {
+                    mealMembers.put(member.getId(), member);
+                }
+
+                JsonNode resolvedPolicy = readGenerationJson(prepared.resolvedMealPolicy());
+
+                for (JsonNode definition : resolvedPolicy.path("breaks")) {
+                    for (JsonNode participant : definition.path("participantVisitMemberIds")) {
+                        VisitMealBreak meal = new VisitMealBreak();
+                        meal.setVisit(visit);
+                        meal.setVisitMember(mealMembers.get(participant.asInt()));
+                        meal.setBreakKey(definition.path("breakKey").asString());
+                        meal.setMealChoice(definition.path("breakType").asString());
+                        meal.setPreferredTiming(definition.path("timingPreference").asString());
+                        visitMealBreakRepository.save(meal);
+                    }
+                }
+
+                if (resolvedPolicy.path("breaks").isEmpty()) {
+                    String breakKey = java.util.UUID.randomUUID().toString();
+                    for (VisitMember member : mealMembers.values()) {
+                        VisitMealBreak meal = new VisitMealBreak();
+                        meal.setVisit(visit);
+                        meal.setVisitMember(member);
+                        meal.setBreakKey(breakKey);
+                        meal.setMealChoice(resolvedPolicy.path("choice").asString());
+                        visitMealBreakRepository.save(meal);
+                    }
+                }
+
+                for (int index = 0; index < activities.size(); index++) {
+                    String foodKey = foodKeys.get(activities.get(index));
+                    if (foodKey != null) {
+                        visitMealBreakService.bindGeneratedBreak(accountId, visitId, foodKey, scheduled.get(index).getId());
+                    }
+                }
+            }
+
             groupPlan.setPlanItems(new HashSet<>(scheduled));
             groupPlan.setTimingMode("SCHEDULED");
 
@@ -4750,6 +5075,248 @@ public class VisitPlanService {
     }
 
 
+
+    @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
+    public void selectMealRestaurant(Integer accountId, Integer visitId, String breakKey, com.example.sikka.DtoIn.SelectMealRestaurantDtoIn dto) {
+        if (accountId == null || accountId <= 0 || visitId == null || visitId <= 0 || breakKey == null || breakKey.isBlank() || dto == null || dto.getPlaceId() == null || dto.getPlaceId() <= 0) {
+            throw new ApiException("Positive account, visit and restaurant IDs and a break key are required");
+        }
+
+        validateActiveAccount(accountId);
+        Visit visit = visitRepository.findVisitByIdForUpdate(visitId);
+
+        if (visit == null) {
+            throw new ApiException("Visit not found");
+        }
+
+        entityManager.refresh(visit, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+
+        if (!visit.getOrganizer().getId().equals(accountId)) {
+            throw new ApiException("Only the organizer can select the restaurant for a shared food break");
+        }
+
+        if ((!"READY".equals(visit.getStatus()) && !"IN_PROGRESS".equals(visit.getStatus())) || !LocalDate.now(ZoneId.of("Asia/Riyadh")).equals(visit.getVisitDate())) {
+            throw new ApiException("Select the restaurant on the visit date before the food break starts");
+        }
+
+        List<VisitPlan> plans = visitPlanRepository.findAllByVisit_Id(visitId);
+        plans.sort(Comparator.comparing(VisitPlan::getId));
+        VisitPlan groupPlan = null;
+
+        for (VisitPlan reference : plans) {
+            VisitPlan plan = visitPlanRepository.findVisitPlanByIdForUpdate(reference.getId());
+            if (plan == null) {
+                throw new ApiException("A visit plan is no longer available");
+            }
+            entityManager.refresh(plan, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+            if (plan.getProposedItems() != null || plan.getPendingScope() != null || plan.getProposalBaseSnapshot() != null) {
+                throw new ApiException("Resolve pending proposals before selecting a restaurant");
+            }
+            if ("GROUP".equals(plan.getPlanKind()) && Boolean.TRUE.equals(plan.getIsActive())) {
+                if (groupPlan != null) {
+                    throw new ApiException("Multiple active group plans were found");
+                }
+                groupPlan = plan;
+            }
+        }
+
+        if (groupPlan == null || !"SCHEDULED".equals(groupPlan.getTimingMode()) || groupPlan.getPlanApproval() == null || !"APPROVED".equals(groupPlan.getPlanApproval().getStatus())) {
+            throw new ApiException("Schedule arrival for an approved active plan before selecting a restaurant");
+        }
+
+        List<VisitMealBreak> meals = visitMealBreakRepository.findVisitMealBreaksByVisitIdAndBreakKey(visitId, breakKey);
+        if (meals.isEmpty() || meals.get(0).getPlanItem() == null) {
+            throw new ApiException("A scheduled food break is required");
+        }
+
+        Integer targetId = meals.get(0).getPlanItem().getId();
+        Set<Integer> foodParticipants = new HashSet<>();
+        for (VisitMealBreak meal : meals) {
+            if (meal.getPlanItem() == null || !targetId.equals(meal.getPlanItem().getId()) || (!"MEAL".equals(meal.getMealChoice()) && !"SNACK".equals(meal.getMealChoice())) || !foodParticipants.add(meal.getVisitMember().getId())) {
+                throw new ApiException("The shared food break has inconsistent participant records");
+            }
+        }
+
+        Place restaurant = placeRepository.findPlaceById(dto.getPlaceId());
+        if (restaurant == null || !"RESTAURANT".equals(restaurant.getKind()) || !"OPEN".equals(restaurant.getStatus())) {
+            throw new ApiException("Choose an open restaurant");
+        }
+
+        GenerationSnapshot planning = collectInitialGenerationSnapshot(accountId, visit);
+        ObjectNode input = (ObjectNode) readGenerationJson(planning.inputJson());
+        boolean matchedFoodPolicy = false;
+        for (JsonNode definition : input.path("mealPolicy").path("breaks")) {
+            if (breakKey.equals(definition.path("breakKey").asString())) {
+                ((ObjectNode) definition).put("restaurantId", restaurant.getId());
+                matchedFoodPolicy = true;
+            }
+        }
+        if (!matchedFoodPolicy) {
+            throw new ApiException("The food break is not part of the current planning policy");
+        }
+
+        Map<Integer, JsonNode> rides = indexSnapshotResources(input.path("rides"));
+        Map<Integer, JsonNode> places = indexSnapshotResources(input.path("places"));
+        if (!places.containsKey(restaurant.getId())) {
+            throw new ApiException("The restaurant needs a verified walking network link");
+        }
+
+        Map<String, Integer> routes = new HashMap<>();
+        for (JsonNode route : input.path("walking").path("routes")) {
+            routes.put(walkingRouteKey(requireText(route, "fromNodeKey"), requireText(route, "toNodeKey")), requireNonNegativeInteger(route, "minutes"));
+        }
+
+        List<PlanItem> items = getSortedPlanItems(groupPlan);
+        if (items.isEmpty()) {
+            throw new ApiException("The active plan has no activities");
+        }
+        Map<Integer, PlanItem> byId = new HashMap<>();
+        for (PlanItem item : items) {
+            entityManager.refresh(item, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+            byId.put(item.getId(), item);
+        }
+        PlanItem target = byId.get(targetId);
+        if (target == null || !foodParticipants.equals(parseActivityParticipantIds(target.getParticipantVisitMemberIds())) || (!"MEAL".equals(target.getBreakType()) && !"SNACK".equals(target.getBreakType()))) {
+            throw new ApiException("The food break does not match the active shared plan");
+        }
+        if (target.getStartsAt() == null || target.getEndsAt() == null || target.getRelativeStartMinutes() == null || target.getRelativeEndMinutes() == null) {
+            throw new ApiException("The food break has no valid scheduled times");
+        }
+
+        LocalDateTime now = LocalDateTime.now(ZoneId.of("Asia/Riyadh"));
+        if (!now.isBefore(target.getEndsAt())) {
+            throw new ApiException("This food break has already ended; select a restaurant before it starts");
+        }
+        LocalDateTime arrivalAt = target.getStartsAt().minusMinutes(target.getRelativeStartMinutes());
+        int currentMinute = Math.max(0, Math.toIntExact(java.time.Duration.between(arrivalAt, now).toMinutes()));
+        if (arrivalAt.plusMinutes(currentMinute).isBefore(now)) {
+            currentMinute++;
+        }
+
+        Map<Integer, String> previousNodes = new HashMap<>();
+        Map<Integer, Integer> previousEnds = new HashMap<>();
+        Set<Integer> affectedMembers = new HashSet<>();
+        List<AiPlanItemDtoOut> activities = new ArrayList<>();
+        List<PlanItem> changedItems = new ArrayList<>();
+        Set<Integer> changedIds = new HashSet<>();
+        for (PlanItem item : items) {
+            List<Integer> participants = new ArrayList<>(parseActivityParticipantIds(item.getParticipantVisitMemberIds()));
+            participants.sort(Integer::compareTo);
+            AiPlanItemDtoOut activity = convertPlanItemToAiActivity(convertPlanItemToDtoOut(item), participants);
+            if (item.getExecutionReleasedAt() != null && item.getStartsAt() != null && !item.getExecutionReleasedAt().isBefore(item.getStartsAt()) && item.getExecutionReleasedAt().isBefore(item.getEndsAt())) {
+                java.time.Duration releaseOffset = java.time.Duration.between(arrivalAt, item.getExecutionReleasedAt());
+                long releasedSeconds = releaseOffset.getSeconds() + (releaseOffset.getNano() > 0 ? 1 : 0);
+                activity.setExecutionEndMinutes(Math.toIntExact(Math.floorDiv(releasedSeconds + 59, 60)));
+            }
+            boolean isTarget = targetId.equals(item.getId());
+            boolean affected = isTarget || participants.stream().anyMatch(affectedMembers::contains);
+            if (isTarget) {
+                activity.setPlaceId(restaurant.getId());
+            }
+            Integer requiredWalking = null;
+            int earliestStart = activity.getRelativeStartMinutes();
+            if (isTarget) {
+                earliestStart = Math.max(earliestStart, currentMinute);
+            }
+            for (Integer memberId : participants) {
+                String previousNode = previousNodes.getOrDefault(memberId, requireText(input.path("walking"), "entranceNodeKey"));
+                String nextNode = previousNode;
+                if (activity.getRideId() != null) {
+                    nextNode = requireText(rides.get(activity.getRideId()), "nodeKey");
+                } else if (activity.getPlaceId() != null) {
+                    nextNode = requireText(places.get(activity.getPlaceId()), "nodeKey");
+                }
+                if (affected) {
+                    Integer walking = previousNode.equals(nextNode) ? Integer.valueOf(0) : routes.get(walkingRouteKey(previousNode, nextNode));
+                    if (walking == null || (requiredWalking != null && !requiredWalking.equals(walking))) {
+                        throw new ApiException("The restaurant route cannot be applied to this shared activity; choose another restaurant or replan");
+                    }
+                    requiredWalking = walking;
+                    earliestStart = Math.max(earliestStart, previousEnds.getOrDefault(memberId, 0));
+                }
+                previousNodes.put(memberId, nextNode);
+            }
+            if (affected) {
+                int end = Math.addExact(earliestStart, Math.addExact(requiredWalking, Math.addExact(activity.getWaitingMinutes(), activity.getActivityMinutes())));
+                boolean changed = isTarget || !Objects.equals(item.getWalkingMinutes(), requiredWalking) || !Objects.equals(item.getRelativeStartMinutes(), earliestStart) || !Objects.equals(item.getRelativeEndMinutes(), end);
+                if (changed && (Boolean.TRUE.equals(item.getPinned()) || "PRAYER".equals(item.getBreakType()) || "MEETING_POINT".equals(item.getActivityKind()) || (!isTarget && ("MEAL".equals(item.getBreakType()) || "SNACK".equals(item.getBreakType()))))) {
+                    throw new ApiException("The restaurant conflicts with a fixed prayer, meal or meeting; choose another restaurant or replan");
+                }
+                activity.setWalkingMinutes(requiredWalking);
+                activity.setRelativeStartMinutes(earliestStart);
+                activity.setRelativeEndMinutes(end);
+                if (changed) {
+                    changedItems.add(item);
+                    changedIds.add(item.getId());
+                }
+                affectedMembers.addAll(participants);
+            }
+            for (Integer memberId : participants) {
+                previousEnds.put(memberId, activity.getExecutionEndMinutes() == null ? activity.getRelativeEndMinutes() : activity.getExecutionEndMinutes());
+            }
+            activities.add(activity);
+        }
+
+        List<ActivitySession> waitingSessions = new ArrayList<>();
+        for (Integer memberId : planning.memberIds()) {
+            for (ActivitySession reference : activitySessionRepository.findAllByVisitMember_IdOrderByIdDesc(memberId)) {
+                if (!changedIds.contains(reference.getPlanItem().getId())) {
+                    continue;
+                }
+                ActivitySession session = activitySessionRepository.findActivitySessionByIdForUpdate(reference.getId());
+                if (session == null) {
+                    throw new ApiException("An activity session changed; retry selecting the restaurant");
+                }
+                entityManager.refresh(session, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+                if (!"WAITING".equals(session.getStatus()) || session.getEnteredAreaAt() != null || session.getQueueStartedAt() != null) {
+                    throw new ApiException("Restaurant selection cannot change a started or completed activity");
+                }
+                if (targetId.equals(session.getPlanItem().getId())) {
+                    waitingSessions.add(session);
+                }
+            }
+            for (VisitRecord record : visitRecordRepository.findAllByVisitMember_IdOrderByCreatedAtDescIdDesc(memberId)) {
+                if (record.getPlanItem() != null && changedIds.contains(record.getPlanItem().getId())) {
+                    throw new ApiException("Restaurant selection cannot change an activity with execution records");
+                }
+            }
+        }
+
+        AiPlanDtoOut candidate = new AiPlanDtoOut();
+        candidate.setFeasible(true);
+        candidate.setActivities(activities);
+        candidate.setWarnings(new ArrayList<>());
+        aiPlanService.validatePlanCandidateTiming(candidate, planning.durationMinutes(), planning.memberIds(), planning.tripType());
+        aiPlanService.validatePlanCandidateSupervision(candidate, planning.ages());
+        aiPlanService.validatePlanCandidateActivityKinds(candidate);
+        GenerationSnapshot updatedPlanning = new GenerationSnapshot(writeGenerationJson(input), planning.durationMinutes(), planning.tripType(), planning.memberIds(), planning.ages(), planning.eligibility(), planning.priorities(), planning.pinnedRideIds(), planning.rateablePlaceIds());
+        validateInitialCandidateAgainstSnapshot(candidate, updatedPlanning);
+
+        for (int index = 0; index < items.size(); index++) {
+            PlanItem item = items.get(index);
+            if (!changedIds.contains(item.getId())) {
+                continue;
+            }
+            AiPlanItemDtoOut activity = activities.get(index);
+            item.setRelativeStartMinutes(activity.getRelativeStartMinutes());
+            item.setRelativeEndMinutes(activity.getRelativeEndMinutes());
+            item.setWalkingMinutes(activity.getWalkingMinutes());
+            item.setStartsAt(arrivalAt.plusMinutes(activity.getRelativeStartMinutes()));
+            item.setEndsAt(arrivalAt.plusMinutes(activity.getRelativeEndMinutes()));
+        }
+        target.setPlace(restaurant);
+        target.setTitle(restaurant.getName());
+        target.setIsRateable(true);
+        for (VisitMealBreak meal : meals) {
+            meal.setPlace(restaurant);
+        }
+        for (ActivitySession session : waitingSessions) {
+            session.setPlace(restaurant);
+        }
+        planItemRepository.saveAll(changedItems);
+        visitMealBreakRepository.saveAll(meals);
+        activitySessionRepository.saveAll(waitingSessions);
+    }
 
     private DelayProposalSource lockAndValidateDelayProposalSource(Integer sourceDelayNotificationId, Integer accountId, Integer visitId, Visit visit, VisitPlan plan) {
 

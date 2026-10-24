@@ -11,7 +11,7 @@ import lombok.RequiredArgsConstructor;
 import com.example.sikka.Model.VisitMember;
 import com.example.sikka.Repository.VisitMemberRepository;
 import org.springframework.stereotype.Service;
-
+import com.example.sikka.DtoIn.UpdateProfileDtoIn;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -55,14 +55,19 @@ public class VisitorProfileService {
         visitorProfileRepository.save(profile);
     }
 
+    @org.springframework.transaction.annotation.Transactional
     public void delete(Integer id) {
         VisitorProfile profile = visitorProfileRepository.findVisitorProfileById(id);
         if (profile == null)
             throw new ApiException("profile not found");
 
+        if ((profile.getVisitMembers() != null && !profile.getVisitMembers().isEmpty()) || (profile.getRidePreferences() != null && !profile.getRidePreferences().isEmpty()) || (profile.getPrivacyConsents() != null && !profile.getPrivacyConsents().isEmpty())) {
+            throw new ApiException("Cannot delete a profile linked to visit memberships, ride preferences or consents");
+        }
         profile.getAccount().setVisitorProfile(null);
         visitorProfileRepository.delete(profile);
     }
+
 
     public VisitorProfileDtoOut getByAccount(Integer accountId) {
         VisitorProfile profile = visitorProfileRepository.findVisitorProfileByAccount_Id(accountId);
@@ -71,7 +76,23 @@ public class VisitorProfileService {
         return toDtoOut(profile);
     }
 
-    // contract method for the other flows (full profile including healthData, never exposed in a Controller)
+    // the user updates his own profile, the account comes from the path (not from the body)
+    public void updateByAccount(Integer accountId, UpdateProfileDtoIn dto) {
+        if (dto == null) {
+            throw new ApiException("Profile details are required");
+        }
+        VisitorProfile profile = visitorProfileRepository.findVisitorProfileByAccount_Id(accountId);
+        if (profile == null)
+            throw new ApiException("profile not found");
+
+        fill(profile, new VisitorProfileDtoIn(accountId, dto.getName(), dto.getBirthDate(), dto.getHeightCm(), dto.getWeightKg(), dto.getGender(), dto.getThrillPreference(), dto.getPreferredRideTypes(), dto.getDislikedRideFeatures(), dto.getFoodPreferences(), dto.getHealthData()));
+        visitorProfileRepository.save(profile);
+    }
+
+    // contract method for the other flows: the full profile of an account member (healthData, preferences).
+    // returns null for a family member (no account, no profile).
+    // for name, birthDate, heightCm, weightKg and gender read the snapshot stored on the member:
+    // VisitMemberService.getVisitMember(memberId)
     public VisitorProfile getProfileByMember(Integer memberId) {
         VisitMember member = visitMemberRepository.findVisitMemberById(memberId);
         if (member == null)
@@ -90,6 +111,7 @@ public class VisitorProfileService {
         p.setBirthDate(dto.getBirthDate());
         p.setHeightCm(dto.getHeightCm());
         p.setWeightKg(dto.getWeightKg());
+        p.setGender(dto.getGender());
         p.setThrillPreference(dto.getThrillPreference());
         p.setPreferredRideTypes(dto.getPreferredRideTypes());
         p.setDislikedRideFeatures(dto.getDislikedRideFeatures());
@@ -98,9 +120,6 @@ public class VisitorProfileService {
     }
 
     private VisitorProfileDtoOut toDtoOut(VisitorProfile p) {
-        return new VisitorProfileDtoOut(p.getId(), p.getAccount().getId(), p.getName(),
-                p.getBirthDate(), p.getHeightCm(), p.getWeightKg(), p.getThrillPreference(),
-                p.getPreferredRideTypes(), p.getDislikedRideFeatures(), p.getFoodPreferences(),
-                p.getCreatedAt(), p.getUpdatedAt());
+        return new VisitorProfileDtoOut(p.getId(), p.getAccount().getId(), p.getName(), p.getBirthDate(), p.getHeightCm(), p.getWeightKg(), p.getGender(), p.getThrillPreference(), p.getPreferredRideTypes(), p.getDislikedRideFeatures(), p.getFoodPreferences(), p.getCreatedAt(), p.getUpdatedAt());
     }
 }

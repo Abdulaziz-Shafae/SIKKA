@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import com.example.sikka.DtoIn.CreateVisitDtoIn;
+import com.example.sikka.DtoIn.ReuseVisitDtoIn;
 
 @RestController
 @RequestMapping("/api/v1/visit")
@@ -54,6 +55,18 @@ public class VisitController {
     @GetMapping("/my-visits/{accountId}")
     public ResponseEntity<?> myVisits(@PathVariable Integer accountId) {
         return ResponseEntity.status(200).body(visitService.myVisits(accountId));
+    }
+
+    @GetMapping("/details/{accountId}/{visitId}")
+    public ResponseEntity<?> details(@PathVariable Integer accountId, @PathVariable Integer visitId) {
+        return ResponseEntity.status(200).body(visitService.getVisitDetails(accountId, visitId));
+    }
+
+    @PutMapping("/update-visit/{accountId}/{visitId}")
+    public ResponseEntity<?> updateVisit(@PathVariable Integer accountId, @PathVariable Integer visitId,
+                                         @RequestBody @Valid CreateVisitDtoIn dto) {
+        visitService.updateByOrganizer(accountId, visitId, dto);
+        return ResponseEntity.status(200).body(new ApiResponse("visit updated successfully"));
     }
 
     @PutMapping("/cancel/{accountId}/{visitId}")

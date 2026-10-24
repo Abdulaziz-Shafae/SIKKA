@@ -1,7 +1,12 @@
 package com.example.sikka.Service;
 
 import com.example.sikka.Api.ApiException;
+import com.example.sikka.DtoIn.UpdateRideStatusDtoIn;
+import com.example.sikka.DtoIn.UpdateRideWaitDtoIn;
+import com.example.sikka.DtoOut.RideWaitTimeDtoOut;
+import com.example.sikka.Model.Account;
 import com.example.sikka.Model.Ride;
+import com.example.sikka.Repository.AccountRepository;
 import com.example.sikka.Repository.RideRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -10,6 +15,7 @@ import com.example.sikka.Model.VisitorProfile;
 import com.example.sikka.Repository.VisitorProfileRepository;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.Period;
 
 import java.util.ArrayList;
@@ -20,7 +26,9 @@ import java.util.List;
 public class RideService {
 
     private final RideRepository rideRepository;
+    private final com.example.sikka.Repository.VisitMemberRepository visitMemberRepository;
     private final VisitorProfileRepository visitorProfileRepository;
+    private final AccountRepository accountRepository;
 
     @org.springframework.beans.factory.annotation.Value("${sikka.park.wait-freshness-minutes:15}")
     private long waitFreshnessMinutes = 15;
@@ -77,50 +85,121 @@ public class RideService {
         rideRepository.delete(ride);
     }
 
-    private void validateRide(Ride ride) {
-        if (ride == null) {
+    private void validateRide(Ride ride){
+        if (ride == null){
             throw new ApiException("Ride details are required");
         }
-        if (ride.getThrillLevel() != null && !ride.getThrillLevel().matches("^(LOW|MILD|EXTREME)$")) {
+
+        if (ride.getThrillLevel() != null && !ride.getThrillLevel().matches("^(LOW|MILD|EXTREME)$")){
             throw new ApiException("Thrill level must be LOW, MILD or EXTREME");
         }
-        if (ride.getCompanionRequiredBelowHeightCm() != null && !Boolean.TRUE.equals(ride.getAdultCompanionRequired())) {
+
+        String heightRuleStatus = ride.getHeightRuleStatus();
+
+        if (heightRuleStatus == null){
+            heightRuleStatus = "UNKNOWN";
+            ride.setHeightRuleStatus(heightRuleStatus);
+        }
+
+        if (!heightRuleStatus.matches("^(UNKNOWN|NONE|SPECIFIED)$")){
+            throw new ApiException("Invalid height rule status");
+        }
+
+        if ("NONE".equals(heightRuleStatus) && (ride.getMinHeightCm() != null || ride.getMaxHeightCm() != null)){
+            throw new ApiException("Height limits must be empty when height rule status is NONE");
+        }
+
+        if ("SPECIFIED".equals(heightRuleStatus) && ride.getMinHeightCm() == null && ride.getMaxHeightCm() == null){
+            throw new ApiException("At least one height limit is required when height rule status is SPECIFIED");
+        }
+
+        String weightRuleStatus = ride.getWeightRuleStatus();
+
+        if (weightRuleStatus == null){
+            weightRuleStatus = "UNKNOWN";
+            ride.setWeightRuleStatus(weightRuleStatus);
+        }
+
+        if (!weightRuleStatus.matches("^(UNKNOWN|NONE|SPECIFIED)$")){
+            throw new ApiException("Invalid weight rule status");
+        }
+
+        if ("NONE".equals(weightRuleStatus) && (ride.getMinWeightKg() != null || ride.getMaxWeightKg() != null)){
+            throw new ApiException("Weight limits must be empty when weight rule status is NONE");
+        }
+
+        if ("SPECIFIED".equals(weightRuleStatus) && ride.getMinWeightKg() == null && ride.getMaxWeightKg() == null){
+            throw new ApiException("At least one weight limit is required when weight rule status is SPECIFIED");
+        }
+
+        String ageRuleStatus = ride.getAgeRuleStatus();
+
+        if (ageRuleStatus == null){
+            ageRuleStatus = "UNKNOWN";
+            ride.setAgeRuleStatus(ageRuleStatus);
+        }
+
+        if (!ageRuleStatus.matches("^(UNKNOWN|NONE|SPECIFIED)$")){
+            throw new ApiException("Invalid age rule status");
+        }
+
+        if ("NONE".equals(ageRuleStatus) && (ride.getMinAgeYears() != null || ride.getMaxAgeYears() != null)){
+            throw new ApiException("Age limits must be empty when age rule status is NONE");
+        }
+
+        if ("SPECIFIED".equals(ageRuleStatus) && ride.getMinAgeYears() == null && ride.getMaxAgeYears() == null){
+            throw new ApiException("At least one age limit is required when age rule status is SPECIFIED");
+        }
+
+        if (!"UNKNOWN".equals(heightRuleStatus) || !"UNKNOWN".equals(weightRuleStatus) || !"UNKNOWN".equals(ageRuleStatus)){
+
+            if (ride.getSourceUrl() == null || ride.getSourceUrl().isBlank() || ride.getRequirementsVerifiedAt() == null){
+                throw new ApiException("Source URL and verification time are required for documented rules");
+            }
+        }
+
+        if (ride.getCompanionRequiredBelowHeightCm() != null && !Boolean.TRUE.equals(ride.getAdultCompanionRequired())){
             throw new ApiException("Adult companion must be required when a companion height threshold is provided");
         }
-        if (ride.getCompanionRequiredBelowHeightCm() != null && ride.getMinHeightCm() != null && ride.getCompanionRequiredBelowHeightCm().compareTo(ride.getMinHeightCm()) < 0) {
+
+        if (ride.getCompanionRequiredBelowHeightCm() != null && ride.getMinHeightCm() != null && ride.getCompanionRequiredBelowHeightCm().compareTo(ride.getMinHeightCm()) < 0){
             throw new ApiException("Companion height threshold cannot be below minimum ride height");
         }
 
-        if (ride.getMinHeightCm() != null && ride.getMaxHeightCm() != null && ride.getMinHeightCm().compareTo(ride.getMaxHeightCm()) > 0) {
+        if (ride.getMinHeightCm() != null && ride.getMaxHeightCm() != null && ride.getMinHeightCm().compareTo(ride.getMaxHeightCm()) > 0){
             throw new ApiException("Minimum height cannot exceed maximum height");
         }
 
-        if (ride.getMinAgeYears() != null && ride.getMaxAgeYears() != null && ride.getMinAgeYears() > ride.getMaxAgeYears()) {
+        if (ride.getMinAgeYears() != null && ride.getMaxAgeYears() != null && ride.getMinAgeYears() > ride.getMaxAgeYears()){
             throw new ApiException("Minimum age cannot exceed maximum age");
         }
 
-        if (ride.getMinWeightKg() != null && ride.getMaxWeightKg() != null && ride.getMinWeightKg().compareTo(ride.getMaxWeightKg()) > 0) {
+        if (ride.getMinWeightKg() != null && ride.getMaxWeightKg() != null && ride.getMinWeightKg().compareTo(ride.getMaxWeightKg()) > 0){
             throw new ApiException("Minimum weight cannot exceed maximum weight");
         }
 
-        if (ride.getWaitMinutes() != null && (ride.getWaitSource() == null || ride.getWaitSource().isBlank())) {
+        if (ride.getWaitMinutes() != null && (ride.getWaitSource() == null || ride.getWaitSource().isBlank())){
             throw new ApiException("Wait source is required when waiting time is provided");
         }
 
-        if (ride.getWaitMinutes() != null && ride.getWaitObservedAt() == null) {
-            throw new ApiException( "Wait observation time is required when waiting time is provided" );
+        if (ride.getWaitMinutes() != null && ride.getWaitObservedAt() == null){
+            throw new ApiException("Wait observation time is required when waiting time is provided");
         }
 
-        if (ride.getWaitMinutes() == null && ride.getWaitObservedAt() != null) {
-            throw new ApiException( "Waiting time is required when wait observation time is provided" );
+        if (ride.getWaitMinutes() == null && ride.getWaitObservedAt() != null){
+            throw new ApiException("Waiting time is required when wait observation time is provided");
         }
 
-        if ((ride.getMapX() == null) != (ride.getMapY() == null)) {
+        if ((ride.getMapX() == null) != (ride.getMapY() == null)){
             throw new ApiException("Both map coordinates must be provided together");
         }
     }
 
     private void copyRideFields(Ride target, Ride source) {
+        target.setSourceRideId(source.getSourceRideId());
+        target.setRideDurationMinutes(source.getRideDurationMinutes());
+        target.setEntryExitBufferMinutes(source.getEntryExitBufferMinutes());
+        target.setTrackingArea(source.getTrackingArea());
         target.setName(source.getName());
         target.setLand(source.getLand());
         target.setRideFeatures(source.getRideFeatures());
@@ -145,6 +224,9 @@ public class RideService {
         target.setWaitSource(source.getWaitSource());
         target.setMapX(source.getMapX());
         target.setMapY(source.getMapY());
+        target.setHeightRuleStatus(source.getHeightRuleStatus());
+        target.setWeightRuleStatus(source.getWeightRuleStatus());
+        target.setAgeRuleStatus(source.getAgeRuleStatus());
     }
 
     public List<Ride> getOpenRides(){
@@ -201,25 +283,21 @@ public class RideService {
         }
 
         if (profile.getHeightCm() != null && profile.getHeightCm().signum() > 0){
-            if (ride.getMinHeightCm() != null
-                    && profile.getHeightCm().compareTo(ride.getMinHeightCm()) < 0){
+            if (ride.getMinHeightCm() != null && profile.getHeightCm().compareTo(ride.getMinHeightCm()) < 0){
                 return "NOT_ELIGIBLE";
             }
 
-            if (ride.getMaxHeightCm() != null
-                    && profile.getHeightCm().compareTo(ride.getMaxHeightCm()) > 0){
+            if (ride.getMaxHeightCm() != null && profile.getHeightCm().compareTo(ride.getMaxHeightCm()) > 0){
                 return "NOT_ELIGIBLE";
             }
         }
 
         if (profile.getWeightKg() != null && profile.getWeightKg().signum() > 0){
-            if (ride.getMinWeightKg() != null
-                    && profile.getWeightKg().compareTo(ride.getMinWeightKg()) < 0){
+            if (ride.getMinWeightKg() != null && profile.getWeightKg().compareTo(ride.getMinWeightKg()) < 0){
                 return "NOT_ELIGIBLE";
             }
 
-            if (ride.getMaxWeightKg() != null
-                    && profile.getWeightKg().compareTo(ride.getMaxWeightKg()) > 0){
+            if (ride.getMaxWeightKg() != null && profile.getWeightKg().compareTo(ride.getMaxWeightKg()) > 0){
                 return "NOT_ELIGIBLE";
             }
         }
@@ -240,4 +318,173 @@ public class RideService {
 
         return "UNKNOWN";
     }
+
+    public List<RideWaitTimeDtoOut> getRideWaitTimes(){
+        List<Ride> rides = rideRepository.findAll();
+        List<RideWaitTimeDtoOut> result = new ArrayList<>();
+        LocalDateTime now = LocalDateTime.now();
+
+        for (Ride ride : rides){
+            String freshness = "UNKNOWN";
+
+            if (ride.getWaitMinutes() != null && ride.getWaitMinutes() >= 0 && ride.getWaitObservedAt() != null && !ride.getWaitObservedAt().isAfter(now) && ride.getWaitSource() != null && !ride.getWaitSource().isBlank()){
+
+                if (ride.getWaitObservedAt().isBefore(now.minusMinutes(waitFreshnessMinutes))){
+                    freshness = "STALE";
+                } else {
+                    freshness = "RECENT";
+                }
+            }
+
+            result.add(new RideWaitTimeDtoOut( ride.getId(), ride.getName(), ride.getStatus(), ride.getWaitMinutes(), ride.getWaitObservedAt(), ride.getWaitSource(), freshness ));
+        }
+
+        return result;
+    }
+
+    public List<Ride> filterRides(String category, String thrill, String status){
+        if (category != null && !category.matches("^(THRILL|FAMILY|KIDS|WATER|ARCADE)$")){
+            throw new ApiException("Category must be THRILL, FAMILY, KIDS, WATER or ARCADE");
+        }
+
+        if (thrill != null && !thrill.matches("^(LOW|MILD|EXTREME)$")){
+            throw new ApiException("Thrill level must be LOW, MILD or EXTREME");
+        }
+
+        if (status != null && !status.matches("^(OPEN|CLOSED|UNAVAILABLE)$")){
+            throw new ApiException("Status must be OPEN, CLOSED or UNAVAILABLE");
+        }
+
+        List<Ride> rides = rideRepository.filterRides(category, thrill, status);
+
+        if (rides.isEmpty()){
+            throw new ApiException("No rides found matching these filters");
+        }
+
+        return rides;
+    }
+
+    @Transactional
+    public void updateRideWait(Integer accountId, Integer rideId, UpdateRideWaitDtoIn dto){
+        Account account = accountRepository.findAccountById(accountId);
+
+        if (account == null){
+            throw new ApiException("Account not found");
+        }
+
+        if (!"ACTIVE".equals(account.getStatus())){
+            throw new ApiException("Account is not active");
+        }
+
+        if (!"ADMIN".equals(account.getRole())){
+            throw new ApiException("Only admins can update ride waiting times");
+        }
+
+        Ride ride = rideRepository.findRideById(rideId);
+
+        if (ride == null){
+            throw new ApiException("Ride not found");
+        }
+
+        if (ride.getWaitObservedAt() != null && dto.getWaitObservedAt().isBefore(ride.getWaitObservedAt())){
+            throw new ApiException("Cannot replace a newer waiting time observation with an older one");
+        }
+
+        ride.setWaitMinutes(dto.getWaitMinutes());
+        ride.setWaitSource(dto.getWaitSource());
+        ride.setWaitObservedAt(dto.getWaitObservedAt());
+
+        rideRepository.save(ride);
+
+        // TODO: بعد تنفيذ onRideChanged وتحديد مقدار تغير الانتظار المؤثر،
+        // نربط التحديث بفحص إعادة التخطيط عند عبدالعزيز.
+    }
+
+    @Transactional
+    public void updateRideStatus(Integer accountId, Integer rideId, UpdateRideStatusDtoIn dto){
+        Account account = accountRepository.findAccountById(accountId);
+
+        if (account == null){
+            throw new ApiException("Account not found");
+        }
+
+        if (!"ACTIVE".equals(account.getStatus())){
+            throw new ApiException("Account is not active");
+        }
+
+        if (!"ADMIN".equals(account.getRole())){
+            throw new ApiException("Only admins can update ride status");
+        }
+
+        Ride ride = rideRepository.findRideById(rideId);
+
+        if (ride == null){
+            throw new ApiException("Ride not found");
+        }
+
+        if (dto.getStatus().equals(ride.getStatus())){
+            throw new ApiException("Ride already has this status");
+        }
+
+        ride.setStatus(dto.getStatus());
+
+        rideRepository.save(ride);
+
+        // TODO: ربط التغيير المؤثر بـ VisitPlanService.onRideChanged(rideId)
+        // بعد تنفيذها، لفحص الخطط المتأثرة واقتراح بديل دون تغيير الخطة المعتمدة مباشرة.
+    }
+
+    public java.util.Map<String, Object> checkEligibilityForMember(Integer accountId, Integer memberId, Integer rideId) {
+        com.example.sikka.Model.VisitMember member = visitMemberRepository.findVisitMemberById(memberId);
+        if (member == null || !member.getVisit().getOrganizer().getId().equals(accountId) && (member.getVisitorProfile() == null || !member.getVisitorProfile().getAccount().getId().equals(accountId))) {
+            throw new ApiException("You cannot access this visit member");
+        }
+        Ride ride = getRideById(rideId);
+        List<String> reasons = new ArrayList<>();
+        List<String> missing = new ArrayList<>();
+        java.math.BigDecimal height = member.getHeightCm();
+        java.math.BigDecimal weight = member.getWeightKg();
+        if (height == null) {
+            missing.add("heightCm");
+        } else if (ride.getMinHeightCm() != null && height.compareTo(ride.getMinHeightCm()) < 0 || ride.getMaxHeightCm() != null && height.compareTo(ride.getMaxHeightCm()) > 0) {
+            reasons.add("Height is outside the known ride limits");
+        }
+        if (weight == null) {
+            missing.add("weightKg");
+        } else if (ride.getMinWeightKg() != null && weight.compareTo(ride.getMinWeightKg()) < 0 || ride.getMaxWeightKg() != null && weight.compareTo(ride.getMaxWeightKg()) > 0) {
+            reasons.add("Weight is outside the known ride limits");
+        }
+        if (member.getBirthDate() == null) {
+            missing.add("birthDate");
+        } else {
+            int age = Period.between(member.getBirthDate(), member.getVisit().getVisitDate()).getYears();
+            if (age < 0 || ride.getMinAgeYears() != null && age < ride.getMinAgeYears() || ride.getMaxAgeYears() != null && age > ride.getMaxAgeYears()) {
+                reasons.add("Age is outside the known ride limits on the visit date");
+            }
+        }
+        if (reasons.isEmpty()) {
+            reasons.add("Eligibility is unconfirmed; health and companion requirements still need verification");
+        } else {
+            return java.util.Map.of("status", "NOT_ELIGIBLE", "reasons", reasons, "missingFields", missing);
+        }
+        return java.util.Map.of("status", "UNKNOWN", "reasons", reasons, "missingFields", missing);
+    }
+
+    public java.util.Map<String, Object> getRideSnapshot(Integer rideId) {
+        Ride ride = getRideById(rideId);
+        java.util.Map<String, Object> snapshot = new java.util.LinkedHashMap<>();
+        snapshot.put("id", ride.getId());
+        snapshot.put("status", ride.getStatus());
+        snapshot.put("nodeKey", "RIDE:" + ride.getId());
+        snapshot.put("rideDurationMinutes", ride.getRideDurationMinutes());
+        snapshot.put("entryExitBufferMinutes", ride.getEntryExitBufferMinutes());
+        snapshot.put("features", ride.getRideFeatures());
+        boolean recent = ride.getWaitMinutes() != null && ride.getWaitObservedAt() != null && !ride.getWaitObservedAt().isAfter(LocalDateTime.now()) && !ride.getWaitObservedAt().isBefore(LocalDateTime.now().minusMinutes(waitFreshnessMinutes));
+        snapshot.put("planningWaitMinutes", recent ? ride.getWaitMinutes() : null);
+        snapshot.put("waitIsEstimate", true);
+        snapshot.put("waitSource", ride.getWaitSource() == null ? "UNKNOWN" : ride.getWaitSource());
+        snapshot.put("waitObservedAt", recent ? ride.getWaitObservedAt().atZone(java.time.ZoneId.of("Asia/Riyadh")).toOffsetDateTime().toString() : null);
+        return snapshot;
+    }
+
 }

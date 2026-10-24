@@ -20,7 +20,7 @@ class ServiceValidationReviewTest {
         for (String value : new String[]{"MEDIUM", "HIGH"}) {
             Ride ride = new Ride();
             ride.setThrillLevel(value);
-            assertThrows(ApiException.class, () -> new RideService(rides, profiles).addRide(ride));
+            assertThrows(ApiException.class, () -> new RideService(rides, mock(com.example.sikka.Repository.VisitMemberRepository.class), profiles, accounts).addRide(ride));
             RegisterDtoIn registration = new RegisterDtoIn();
             registration.setThrillPreference(value);
             assertThrows(ApiException.class, () -> new AccountService(accounts, profiles).register(registration));
@@ -31,7 +31,7 @@ class ServiceValidationReviewTest {
     @Test
     void rejectNullRsvpBeforeQueryingMembership() {
         VisitMemberRepository members = mock(VisitMemberRepository.class);
-        VisitMemberService service = new VisitMemberService(members, mock(VisitRepository.class), mock(VisitorProfileRepository.class), mock(VisitGroupService.class));
+        VisitMemberService service = new VisitMemberService(members, mock(VisitRepository.class), mock(VisitorProfileRepository.class), mock(VisitGroupService.class), mock(RideService.class), mock(com.example.sikka.Repository.FamilyMemberRepository.class));
         assertThrows(ApiException.class, () -> service.updateRsvp(1, 2, null));
         verifyNoInteractions(members);
     }
@@ -41,7 +41,7 @@ class ServiceValidationReviewTest {
         PlaceRepository places = mock(PlaceRepository.class);
         Place place = new Place();
         place.setKind("HOTEL");
-        assertThrows(ApiException.class, () -> new PlaceService(places).addPlace(place));
+        assertThrows(ApiException.class, () -> new PlaceService(places, mock(com.example.sikka.Service.MapService.class), mock(com.example.sikka.Repository.VisitRepository.class)).addPlace(place));
         verifyNoInteractions(places);
     }
 
@@ -72,7 +72,7 @@ class ServiceValidationReviewTest {
         dto.setOrganizerId(1);
         dto.setVisitDate(LocalDate.now().plusDays(1));
         dto.setMaxParticipants(3);
-        VisitService service = new VisitService(visits, accounts, mock(VisitGroupRepository.class), mock(VisitMemberRepository.class), profiles, members, mock(VisitGroupService.class));
+        VisitService service = new VisitService(visits, accounts, mock(VisitGroupRepository.class), mock(com.example.sikka.Repository.PlanItemRepository.class), mock(VisitMemberRepository.class), profiles, members, mock(VisitGroupService.class), mock(com.example.sikka.Service.PaymentOrderService.class), mock(com.example.sikka.Repository.VisitPlanRepository.class), mock(com.example.sikka.Service.VisitPlanService.class));
         service.add(dto);
         verify(members).addOrganizer(argThat(visit -> visit.getOrganizer() == organizer && "DRAFT".equals(visit.getStatus())), eq(profile));
     }
@@ -84,7 +84,7 @@ class ServiceValidationReviewTest {
         visit.setStatus("PLANNING");
         visit.setMembersLocked(true);
         when(visits.findVisitByIdForUpdate(2)).thenReturn(visit);
-        VisitService service = new VisitService(visits, mock(AccountRepository.class), mock(VisitGroupRepository.class), mock(VisitMemberRepository.class), mock(VisitorProfileRepository.class), mock(VisitMemberService.class), mock(VisitGroupService.class));
+        VisitService service = new VisitService(visits, mock(AccountRepository.class), mock(VisitGroupRepository.class), mock(com.example.sikka.Repository.PlanItemRepository.class), mock(VisitMemberRepository.class), mock(VisitorProfileRepository.class), mock(VisitMemberService.class), mock(VisitGroupService.class), mock(com.example.sikka.Service.PaymentOrderService.class), mock(com.example.sikka.Repository.VisitPlanRepository.class), mock(com.example.sikka.Service.VisitPlanService.class));
         assertThrows(ApiException.class, () -> service.update(2, new VisitDtoIn()));
         verify(visits, never()).save(any());
     }
@@ -97,7 +97,7 @@ class ServiceValidationReviewTest {
         Account account = new Account();
         account.setStatus("SUSPENDED");
         when(accounts.findAccountById(1)).thenReturn(account);
-        assertThrows(ApiException.class, () -> new PaymentOrderService(payments, accounts, visits).addPaymentOrder(1, 2));
+        assertThrows(ApiException.class, () -> new PaymentOrderService(payments, accounts, visits, mock(com.example.sikka.Repository.PlanHistoryRepository.class)).addPaymentOrder(1, 2));
         verifyNoInteractions(payments, visits);
     }
 }

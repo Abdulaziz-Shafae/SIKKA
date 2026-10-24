@@ -33,6 +33,17 @@ public class ActivitySession {
 
     private LocalDateTime enteredAreaAt;
 
+    @JsonIgnore
+    private LocalDateTime areaCandidateSince;
+
+    @JsonIgnore
+    @PositiveOrZero
+    private Integer areaCandidateReadings;
+
+    @JsonIgnore
+    @Column(columnDefinition = "TEXT")
+    private String areaCandidateDefinition;
+
     private LocalDateTime queueStartedAt;
 
     private LocalDateTime completedAt;

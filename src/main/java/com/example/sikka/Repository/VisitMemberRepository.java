@@ -22,4 +22,7 @@ public interface VisitMemberRepository extends JpaRepository<VisitMember, Intege
     List<VisitMember> findAllByVisit_Id(Integer visitId);
 
     List<VisitMember> findAllByVisitorProfile_Account_Id(Integer accountId);
+
+    List<VisitMember> findAllByFamilyMember_Id(Integer familyMemberId);
+
 }

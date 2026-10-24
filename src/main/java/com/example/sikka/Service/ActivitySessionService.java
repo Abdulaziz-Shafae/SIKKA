@@ -100,7 +100,7 @@ public class ActivitySessionService {
                 continue;
             }
 
-            if (isOrganizer && member.getFamilyMember() != null && member.getFamilyMember().getOwnerAccount().getId().equals(accountId)) {
+            if (isOrganizer && (member.getFamilyMember() != null && member.getFamilyMember().getOwnerAccount().getId().equals(accountId) || member.getFamilyMember() == null && member.getSnapshotAt() != null && "FAMILY".equals(member.getVisit().getTripType()))) {
                 allowedMembers.add(member);
             }
         }
@@ -169,7 +169,7 @@ public class ActivitySessionService {
         Visit visit = member.getVisit();
 
         boolean isOwnActivity = member.getVisitorProfile() != null && member.getVisitorProfile().getAccount().getId().equals(accountId);
-        boolean isManagedFamilyActivity = visit.getOrganizer().getId().equals(accountId) && member.getVisitorProfile() == null && member.getFamilyMember() != null && member.getFamilyMember().getOwnerAccount().getId().equals(accountId);
+        boolean isManagedFamilyActivity = visit.getOrganizer().getId().equals(accountId) && member.getVisitorProfile() == null && (member.getFamilyMember() != null && member.getFamilyMember().getOwnerAccount().getId().equals(accountId) || member.getFamilyMember() == null && member.getSnapshotAt() != null && "FAMILY".equals(member.getVisit().getTripType()));
 
         if (!isOwnActivity && !isManagedFamilyActivity) {
             throw new ApiException("You cannot complete this member's activity");
@@ -248,7 +248,7 @@ public class ActivitySessionService {
         Visit visit = member.getVisit();
 
         boolean isOwnActivity = member.getVisitorProfile() != null && member.getVisitorProfile().getAccount().getId().equals(accountId);
-        boolean isManagedFamilyActivity = visit.getOrganizer().getId().equals(accountId) && member.getVisitorProfile() == null && member.getFamilyMember() != null && member.getFamilyMember().getOwnerAccount().getId().equals(accountId);
+        boolean isManagedFamilyActivity = visit.getOrganizer().getId().equals(accountId) && member.getVisitorProfile() == null && (member.getFamilyMember() != null && member.getFamilyMember().getOwnerAccount().getId().equals(accountId) || member.getFamilyMember() == null && member.getSnapshotAt() != null && "FAMILY".equals(member.getVisit().getTripType()));
 
         if (!isOwnActivity && !isManagedFamilyActivity) {
             throw new ApiException("You cannot rate this member's activity");
@@ -393,7 +393,7 @@ public class ActivitySessionService {
         Visit visit = member.getVisit();
 
         boolean isOwnActivity = member.getVisitorProfile() != null && member.getVisitorProfile().getAccount().getId().equals(accountId);
-        boolean isManagedFamilyActivity = visit.getOrganizer().getId().equals(accountId) && member.getVisitorProfile() == null && member.getFamilyMember() != null && member.getFamilyMember().getOwnerAccount().getId().equals(accountId);
+        boolean isManagedFamilyActivity = visit.getOrganizer().getId().equals(accountId) && member.getVisitorProfile() == null && (member.getFamilyMember() != null && member.getFamilyMember().getOwnerAccount().getId().equals(accountId) || member.getFamilyMember() == null && member.getSnapshotAt() != null && "FAMILY".equals(member.getVisit().getTripType()));
 
         if (!isOwnActivity && !isManagedFamilyActivity) {
             throw new ApiException("You cannot start this member's activity");
@@ -476,8 +476,193 @@ public class ActivitySessionService {
             session.setBufferMinutes("RIDE".equals(planItem.getActivityKind()) ? planItem.getRide().getEntryExitBufferMinutes() : 0);
         }
 
+        session.setAreaCandidateSince(null);
+        session.setAreaCandidateReadings(0);
+        session.setAreaCandidateDefinition(null);
         session.setTrackingMode("MANUAL");
         session.setStatus("ACTIVE");
+
+        activitySessionRepository.save(session);
+
+        return convertActivitySessionToDtoOut(session);
+    }
+
+    @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
+    public ActivitySessionDtoOut startGpsActivity(Integer accountId, Integer visitMemberId, Integer planItemId) {
+
+        Account account = accountRepository.findAccountById(accountId);
+
+        if (account == null) {
+            throw new ApiException("Account not found");
+        }
+
+        if (!"ACTIVE".equals(account.getStatus())) {
+            throw new ApiException("Account is not active");
+        }
+
+        PlanItem startReference = planItemRepository.findPlanItemById(planItemId);
+
+        if (startReference == null) {
+            throw new ApiException("Plan item not found");
+        }
+
+        Visit lockedVisit = visitRepository.findVisitByIdForUpdate(startReference.getVisitPlan().getVisit().getId());
+        VisitPlan lockedPlan = visitPlanRepository.findVisitPlanByIdForUpdate(startReference.getVisitPlan().getId());
+
+        if (lockedVisit == null || lockedPlan == null) {
+            throw new ApiException("The execution visit or plan is unavailable");
+        }
+
+        entityManager.refresh(startReference, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+        entityManager.refresh(lockedVisit, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+        entityManager.refresh(lockedPlan, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+
+        VisitMember member = activitySessionRepository.findVisitMemberByIdForActivityUpdate(visitMemberId);
+
+        if (member == null) {
+            throw new ApiException("Visit member not found");
+        }
+
+        Visit visit = member.getVisit();
+
+        boolean isOwnActivity = member.getVisitorProfile() != null && member.getVisitorProfile().getAccount().getId().equals(accountId);
+        boolean isManagedFamilyActivity = visit.getOrganizer().getId().equals(accountId) && member.getVisitorProfile() == null && (member.getFamilyMember() != null && member.getFamilyMember().getOwnerAccount().getId().equals(accountId) || member.getFamilyMember() == null && member.getSnapshotAt() != null && "FAMILY".equals(member.getVisit().getTripType()));
+
+        if (!isOwnActivity && !isManagedFamilyActivity) {
+            throw new ApiException("You cannot start this member's activity");
+        }
+
+        if (!"IN_PROGRESS".equals(visit.getStatus())) {
+            throw new ApiException("Activities can only be started during the visit");
+        }
+
+        if (!"GOING".equals(member.getRsvpStatus())) {
+            throw new ApiException("Only GOING members can start activities");
+        }
+
+        PlanItem planItem = visitPlanService.getCanonicalExecutionPlanItem(accountId, planItemId);
+
+        if (!planItem.getVisitPlan().getVisit().getId().equals(visit.getId())) {
+            throw new ApiException("The activity does not belong to this visit");
+        }
+
+        if (!Boolean.TRUE.equals(planItem.getVisitPlan().getIsActive())) {
+            throw new ApiException("The activity must belong to an active plan");
+        }
+
+        if ("INDIVIDUAL".equals(planItem.getVisitPlan().getPlanKind())) {
+
+            if (planItem.getVisitPlan().getOwnerVisitMember() == null || !planItem.getVisitPlan().getOwnerVisitMember().getId().equals(member.getId())) {
+                throw new ApiException("The individual plan does not belong to this member");
+            }
+        }
+
+        HashSet<Integer> participantIds = parseActivityParticipantIds(planItem.getParticipantVisitMemberIds());
+
+        if (!participantIds.contains(member.getId())) {
+            throw new ApiException("The member is not a participant in this activity");
+        }
+
+        if (planItem.getStartsAt() == null || planItem.getEndsAt() == null || !planItem.getEndsAt().isAfter(planItem.getStartsAt())) {
+            throw new ApiException("The activity must have valid scheduled times");
+        }
+
+        LocalDateTime now = LocalDateTime.now(ZoneId.of("Asia/Riyadh"));
+
+        if (planItem.getStartsAt().isAfter(now)) {
+            throw new ApiException("The activity has not reached its scheduled start time");
+        }
+
+        List<ActivitySession> matchingSessions = activitySessionRepository.findAllByVisitMember_IdAndPlanItem_IdOrderByIdAsc(member.getId(), planItem.getId());
+
+        if (matchingSessions.size() > 1) {
+            throw new ApiException("Duplicate activity sessions were found for this member and activity");
+        }
+
+        ActivitySession session = matchingSessions.isEmpty() ? null : matchingSessions.get(0);
+
+        if (session != null && ("COMPLETED".equals(session.getStatus()) || "SKIPPED".equals(session.getStatus()))) {
+            throw new ApiException("This activity has already been completed or skipped");
+        }
+
+        List<ActivitySession> memberSessions = activitySessionRepository.findAllByVisitMember_IdOrderByIdDesc(member.getId());
+
+        for (ActivitySession otherSession : memberSessions) {
+
+            if (session != null && otherSession.getId().equals(session.getId())) {
+                continue;
+            }
+
+            if ("WAITING".equals(otherSession.getStatus()) || "ACTIVE".equals(otherSession.getStatus())) {
+                throw new ApiException("Finish the current activity before starting another activity");
+            }
+        }
+
+        if (member.getVisitorProfile() == null || !member.getVisitorProfile().getAccount().getId().equals(accountId)) {
+            throw new ApiException("GPS tracking requires the member's own location sharing consent");
+        }
+
+        PrivacyConsent consent = privacyConsentRepository.findTopByVisitorProfileIdAndConsentKindOrderByCreatedAtDescIdDesc(member.getVisitorProfile().getId(), "LOCATION_SHARING");
+        if (consent == null || !Boolean.TRUE.equals(consent.getGranted()) || consent.getRevokedAt() != null) {
+            throw new ApiException("Active location sharing consent is required");
+        }
+
+        if (!"RIDE".equals(planItem.getActivityKind()) || planItem.getRide() == null || planItem.getRide().getTrackingArea() == null || planItem.getRide().getTrackingArea().isBlank()) {
+            throw new ApiException("A verified GPS tracking area is required for this ride; use manual tracking instead");
+        }
+
+        String areaJson = planItem.getRide().getTrackingArea();
+        if (areaJson == null || areaJson.isBlank()) {
+            throw new ApiException("The ride has no verified tracking area; switch to manual tracking");
+        }
+
+        JsonNode area;
+        try {
+            area = participantJsonMapper.readTree(areaJson);
+        } catch (JacksonException exception) {
+            throw new ApiException("The ride tracking area must contain valid JSON");
+        }
+        if (area == null || !area.isObject() || !"CIRCLE".equals(area.path("type").asString()) || !area.path("latitude").isNumber() || !area.path("longitude").isNumber() || !area.path("radiusMeters").isNumber() || !area.path("verifiedAt").isString()) {
+            throw new ApiException("The ride needs a verified circular GPS area with latitude, longitude, radiusMeters and verifiedAt");
+        }
+        double latitude = area.path("latitude").asDouble();
+        double longitude = area.path("longitude").asDouble();
+        double radius = area.path("radiusMeters").asDouble();
+        if (!Double.isFinite(latitude) || latitude < -90 || latitude > 90 || !Double.isFinite(longitude) || longitude < -180 || longitude > 180 || !Double.isFinite(radius) || radius <= 0) {
+            throw new ApiException("The ride tracking area has invalid coordinates or radius");
+        }
+        Instant verifiedAt;
+        try {
+            verifiedAt = java.time.OffsetDateTime.parse(area.path("verifiedAt").asString()).toInstant();
+        } catch (java.time.format.DateTimeParseException exception) {
+            throw new ApiException("Tracking area verification requires an ISO timestamp with an offset");
+        }
+        if (verifiedAt.isAfter(Instant.now())) {
+            throw new ApiException("Tracking area verification cannot be in the future");
+        }
+
+
+        if (session != null && ("ACTIVE".equals(session.getStatus()) || session.getEnteredAreaAt() != null || session.getQueueStartedAt() != null)) {
+            throw new ApiException("The activity has already started; its tracking mode cannot be reset");
+        }
+
+        if (session != null && "GPS".equals(session.getTrackingMode())) {
+            return convertActivitySessionToDtoOut(session);
+        }
+
+        if (session == null) {
+            session = new ActivitySession();
+            session.setVisitMember(member);
+            session.setPlanItem(planItem);
+            session.setRide(planItem.getRide());
+            session.setPlace(planItem.getPlace());
+            session.setExpectedWaitMinutes(planItem.getWaitingMinutes());
+            session.setExpectedRideMinutes("RIDE".equals(planItem.getActivityKind()) ? planItem.getRide().getRideDurationMinutes() : null);
+            session.setBufferMinutes("RIDE".equals(planItem.getActivityKind()) ? planItem.getRide().getEntryExitBufferMinutes() : 0);
+        }
+
+        session.setTrackingMode("GPS");
+        session.setStatus("WAITING");
 
         activitySessionRepository.save(session);
 
@@ -565,11 +750,13 @@ public class ActivitySessionService {
             throw new ApiException("Location capture time is in the future");
         }
 
-        Visit visit = visitRepository.findVisitById(visitId);
+        Visit visit = visitRepository.findVisitByIdForUpdate(visitId);
 
         if (visit == null) {
             throw new ApiException("Visit not found");
         }
+
+        entityManager.refresh(visit, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
 
         if (!"IN_PROGRESS".equals(visit.getStatus())) {
             throw new ApiException("Location updates require a visit in progress");
@@ -597,11 +784,27 @@ public class ActivitySessionService {
             throw new ApiException("No current activity session found");
         }
 
+        ActivitySession reference = activitySessionRepository.findActivitySessionById(currentActivity.getId());
+        if (reference == null) {
+            throw new ApiException("Activity session not found");
+        }
+        VisitPlan lockedPlan = visitPlanRepository.findVisitPlanByIdForUpdate(reference.getPlanItem().getVisitPlan().getId());
+        if (lockedPlan == null) {
+            throw new ApiException("The execution plan is unavailable");
+        }
+        entityManager.refresh(lockedPlan, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+        VisitMember lockedMember = activitySessionRepository.findVisitMemberByIdForActivityUpdate(member.getId());
+        if (lockedMember == null) {
+            throw new ApiException("Visit member not found");
+        }
+
         ActivitySession session = activitySessionRepository.findActivitySessionByIdForUpdate(currentActivity.getId());
 
         if (session == null) {
             throw new ApiException("Activity session not found");
         }
+
+        entityManager.refresh(session, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
 
         if (!session.getVisitMember().getId().equals(member.getId())) {
             throw new ApiException("You can only update your own activity location");
@@ -625,6 +828,67 @@ public class ActivitySessionService {
 
         if (session.getLastLocationAt() != null && !locationTime.isAfter(session.getLastLocationAt())) {
             throw new ApiException("Location reading must be newer than the last accepted reading");
+        }
+
+        if ("GPS".equals(session.getTrackingMode()) && session.getEnteredAreaAt() == null) {
+            String areaJson = planItem.getRide() == null ? null : planItem.getRide().getTrackingArea();
+            if (areaJson == null || areaJson.isBlank()) {
+                throw new ApiException("The ride has no verified tracking area; switch to manual tracking");
+            }
+
+            JsonNode area;
+            try {
+                area = participantJsonMapper.readTree(areaJson);
+            } catch (JacksonException exception) {
+                throw new ApiException("The ride tracking area must contain valid JSON");
+            }
+            if (area == null || !area.isObject() || !"CIRCLE".equals(area.path("type").asString()) || !area.path("latitude").isNumber() || !area.path("longitude").isNumber() || !area.path("radiusMeters").isNumber() || !area.path("verifiedAt").isString()) {
+                throw new ApiException("The ride needs a verified circular GPS area with latitude, longitude, radiusMeters and verifiedAt");
+            }
+            double latitude = area.path("latitude").asDouble();
+            double longitude = area.path("longitude").asDouble();
+            double radius = area.path("radiusMeters").asDouble();
+            if (!Double.isFinite(latitude) || latitude < -90 || latitude > 90 || !Double.isFinite(longitude) || longitude < -180 || longitude > 180 || !Double.isFinite(radius) || radius <= 0) {
+                throw new ApiException("The ride tracking area has invalid coordinates or radius");
+            }
+            Instant verifiedAt;
+            try {
+                verifiedAt = java.time.OffsetDateTime.parse(area.path("verifiedAt").asString()).toInstant();
+            } catch (java.time.format.DateTimeParseException exception) {
+                throw new ApiException("Tracking area verification requires an ISO timestamp with an offset");
+            }
+            if (verifiedAt.isAfter(now)) {
+                throw new ApiException("Tracking area verification cannot be in the future");
+            }
+
+            double latitudeDelta = Math.toRadians(dto.getLatitude() - latitude);
+            double longitudeDelta = Math.toRadians(dto.getLongitude() - longitude);
+            double haversine = Math.sin(latitudeDelta / 2) * Math.sin(latitudeDelta / 2) + Math.cos(Math.toRadians(latitude)) * Math.cos(Math.toRadians(dto.getLatitude())) * Math.sin(longitudeDelta / 2) * Math.sin(longitudeDelta / 2);
+            double distanceMeters = 6371000.0 * 2 * Math.asin(Math.sqrt(Math.max(0.0, Math.min(1.0, haversine))));
+            boolean inside = distanceMeters + dto.getAccuracyMeters() <= radius;
+            boolean interrupted = session.getLastLocationAt() == null || java.time.Duration.between(session.getLastLocationAt(), locationTime).getSeconds() > 60 || !areaJson.equals(session.getAreaCandidateDefinition());
+
+            if (!inside || interrupted) {
+                session.setAreaCandidateSince(null);
+                session.setAreaCandidateReadings(0);
+                session.setAreaCandidateDefinition(null);
+            }
+            if (inside) {
+                if (session.getAreaCandidateSince() == null) {
+                    session.setAreaCandidateSince(locationTime);
+                    session.setAreaCandidateDefinition(areaJson);
+                }
+                int readings = session.getAreaCandidateReadings() == null ? 0 : session.getAreaCandidateReadings();
+                session.setAreaCandidateReadings(Math.min(3, readings + 1));
+                if (session.getAreaCandidateReadings() >= 3 && !locationTime.isBefore(session.getAreaCandidateSince().plusSeconds(30))) {
+                    session.setEnteredAreaAt(locationTime);
+                    session.setQueueStartedAt(locationTime);
+                    session.setStatus("ACTIVE");
+                    session.setAreaCandidateSince(null);
+                    session.setAreaCandidateReadings(0);
+                    session.setAreaCandidateDefinition(null);
+                }
+            }
         }
 
         session.setLastLatitude(dto.getLatitude());

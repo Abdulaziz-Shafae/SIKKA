@@ -1,6 +1,7 @@
 package com.example.sikka.Model;
 
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
 import lombok.AllArgsConstructor;
@@ -28,6 +29,11 @@ public class Ride {
     @Size(max = 150, message = "Ride name must not exceed 150 characters")
     @Column(nullable = false, length = 150)
     private String name;
+
+    @Size(max = 150, message = "Source ride ID must not exceed 150 characters")
+    @Pattern(regexp = "^[a-z0-9]+(-[a-z0-9]+)*$", message = "Invalid source ride ID")
+    @Column(unique = true, length = 150)
+    private String sourceRideId;
 
     @Pattern(regexp = "^(THRILL|FAMILY|KIDS|WATER|ARCADE)$", message = "Category must be THRILL, FAMILY, KIDS, WATER or ARCADE")
     @Size(max = 60, message = "Category must not exceed 60 characters")
@@ -122,13 +128,28 @@ public class Ride {
     @Column(nullable = false)
     private LocalDateTime updatedAt;
 
+    @Pattern(regexp = "^(UNKNOWN|NONE|SPECIFIED)$", message = "Invalid height rule status")
+    @Column(length = 15)
+    private String heightRuleStatus = "UNKNOWN";
+
+    @Pattern(regexp = "^(UNKNOWN|NONE|SPECIFIED)$", message = "Invalid weight rule status")
+    @Column(length = 15)
+    private String weightRuleStatus = "UNKNOWN";
+
+    @Pattern(regexp = "^(UNKNOWN|NONE|SPECIFIED)$", message = "Invalid age rule status")
+    @Column(length = 15)
+    private String ageRuleStatus = "UNKNOWN";
+
     @OneToMany(mappedBy = "ride")
+    @JsonIgnore
     private Set<PlanItem> planItems = new HashSet<>();
 
     @OneToMany(mappedBy = "ride")
+    @JsonIgnore
     private Set<VisitRecord> visitRecords = new HashSet<>();
 
     @OneToMany(mappedBy = "ride")
+    @JsonIgnore
     private Set<RidePreference> ridePreferences = new HashSet<>();
 
     @PrePersist
@@ -136,4 +157,14 @@ public class Ride {
     public void updateTimestamp() {
         updatedAt = LocalDateTime.now();
     }
+
+    @jakarta.validation.constraints.Positive
+    private Integer rideDurationMinutes;
+
+    @jakarta.validation.constraints.PositiveOrZero
+    private Integer entryExitBufferMinutes;
+
+    @Column(columnDefinition = "json")
+    private String trackingArea;
+
 }

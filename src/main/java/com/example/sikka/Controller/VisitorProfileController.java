@@ -7,6 +7,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import com.example.sikka.DtoIn.UpdateProfileDtoIn;
 
 @RestController
 @RequestMapping("/api/v1/visitor-profile")
@@ -41,5 +42,11 @@ public class VisitorProfileController {
     @GetMapping("/get-by-account/{accountId}")
     public ResponseEntity<?> getByAccount(@PathVariable Integer accountId) {
         return ResponseEntity.status(200).body(visitorProfileService.getByAccount(accountId));
+    }
+
+    @PutMapping("/update-by-account/{accountId}")
+    public ResponseEntity<?> updateByAccount(@PathVariable Integer accountId, @RequestBody @Valid UpdateProfileDtoIn dto) {
+        visitorProfileService.updateByAccount(accountId, dto);
+        return ResponseEntity.status(200).body(new ApiResponse("profile updated successfully"));
     }
 }
