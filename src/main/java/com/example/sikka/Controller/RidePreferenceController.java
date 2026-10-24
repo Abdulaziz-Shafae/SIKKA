@@ -1,11 +1,13 @@
 package com.example.sikka.Controller;
 
 import com.example.sikka.Api.ApiResponse;
+import com.example.sikka.Model.Account;
 import com.example.sikka.Model.RidePreference;
 import com.example.sikka.Service.RidePreferenceService;
 import jakarta.validation.Valid;
 import lombok.AllArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -15,31 +17,31 @@ public class RidePreferenceController {
 
     private final RidePreferenceService ridePreferenceService;
 
-    @GetMapping("/get/my/preferences/{accountId}")
-    public ResponseEntity<?> getMyRidePreferences(@PathVariable Integer accountId){
-        return ResponseEntity.status(200).body(ridePreferenceService.getMyRidePreferences(accountId));
+    @GetMapping("/get/my/preferences")
+    public ResponseEntity<?> getMyRidePreferences(@AuthenticationPrincipal Account account){
+        return ResponseEntity.status(200).body(ridePreferenceService.getMyRidePreferences(account.getId()));
     }
 
-    @GetMapping("/get/details/{accountId}/{preferenceId}")
-    public ResponseEntity<?> getRidePreferenceById(@PathVariable Integer accountId, @PathVariable Integer preferenceId){
-        return ResponseEntity.status(200).body(ridePreferenceService.getRidePreferenceById(accountId, preferenceId));
+    @GetMapping("/get/details/{preferenceId}")
+    public ResponseEntity<?> getRidePreferenceById(@AuthenticationPrincipal Account account, @PathVariable Integer preferenceId){
+        return ResponseEntity.status(200).body(ridePreferenceService.getRidePreferenceById(account.getId(), preferenceId));
     }
 
-    @PostMapping("/add/{accountId}/{rideId}")
-    public ResponseEntity<?> addRidePreference(@PathVariable Integer accountId, @PathVariable Integer rideId, @RequestBody @Valid RidePreference ridePreference){
-        ridePreferenceService.addRidePreference(accountId, rideId, ridePreference);
+    @PostMapping("/add/{rideId}")
+    public ResponseEntity<?> addRidePreference(@AuthenticationPrincipal Account account, @PathVariable Integer rideId, @RequestBody @Valid RidePreference ridePreference){
+        ridePreferenceService.addRidePreference(account.getId(), rideId, ridePreference);
         return ResponseEntity.status(200).body(new ApiResponse("Ride preference added successfully"));
     }
 
-    @PutMapping("/update/{accountId}/{preferenceId}")
-    public ResponseEntity<?> updateRidePreference(@PathVariable Integer accountId, @PathVariable Integer preferenceId, @RequestBody @Valid RidePreference ridePreference){
-        ridePreferenceService.updateRidePreference(accountId, preferenceId, ridePreference);
+    @PutMapping("/update/{preferenceId}")
+    public ResponseEntity<?> updateRidePreference(@AuthenticationPrincipal Account account, @PathVariable Integer preferenceId, @RequestBody @Valid RidePreference ridePreference){
+        ridePreferenceService.updateRidePreference(account.getId(), preferenceId, ridePreference);
         return ResponseEntity.status(200).body(new ApiResponse("Ride preference updated successfully"));
     }
 
-    @DeleteMapping("/delete/{accountId}/{preferenceId}")
-    public ResponseEntity<?> deleteRidePreference(@PathVariable Integer accountId, @PathVariable Integer preferenceId){
-        ridePreferenceService.deleteRidePreference(accountId, preferenceId);
+    @DeleteMapping("/delete/{preferenceId}")
+    public ResponseEntity<?> deleteRidePreference(@AuthenticationPrincipal Account account, @PathVariable Integer preferenceId){
+        ridePreferenceService.deleteRidePreference(account.getId(), preferenceId);
         return ResponseEntity.status(200).body(new ApiResponse("Ride preference deleted successfully"));
     }
 }

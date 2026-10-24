@@ -3,11 +3,13 @@ package com.example.sikka.Controller;
 import com.example.sikka.Api.ApiResponse;
 import com.example.sikka.DtoIn.UpdateRideStatusDtoIn;
 import com.example.sikka.DtoIn.UpdateRideWaitDtoIn;
+import com.example.sikka.Model.Account;
 import com.example.sikka.Model.Ride;
 import com.example.sikka.Service.RideService;
 import jakarta.validation.Valid;
 import lombok.AllArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -60,26 +62,22 @@ public class RideController {
         return ResponseEntity.status(200).body(rideService.filterRides(category, thrill, status));
     }
 
-    @PutMapping("/admin/update-wait/{accountId}/{rideId}")
-    public ResponseEntity<?> updateRideWait(@PathVariable Integer accountId, @PathVariable Integer rideId, @RequestBody @Valid UpdateRideWaitDtoIn dto){
-        rideService.updateRideWait(accountId, rideId, dto);
+    @PutMapping("/admin/update-wait/{rideId}")
+    public ResponseEntity<?> updateRideWait(@AuthenticationPrincipal Account account, @PathVariable Integer rideId, @RequestBody @Valid UpdateRideWaitDtoIn dto){
+        rideService.updateRideWait(account.getId(), rideId, dto);
         return ResponseEntity.status(200).body(new ApiResponse("Ride waiting time updated successfully"));
     }
 
-    @PutMapping("/admin/update-status/{accountId}/{rideId}")
-    public ResponseEntity<?> updateRideStatus(@PathVariable Integer accountId, @PathVariable Integer rideId, @RequestBody @Valid UpdateRideStatusDtoIn dto){
-        rideService.updateRideStatus(accountId, rideId, dto);
+    @PutMapping("/admin/update-status/{rideId}")
+    public ResponseEntity<?> updateRideStatus(@AuthenticationPrincipal Account account, @PathVariable Integer rideId, @RequestBody @Valid UpdateRideStatusDtoIn dto){
+        rideService.updateRideStatus(account.getId(), rideId, dto);
         return ResponseEntity.status(200).body(new ApiResponse("Ride status updated successfully"));
     }
 
-    @GetMapping("/eligibility/{accountId}/{memberId}/{rideId}")
-    public ResponseEntity<?> checkEligibilityForMember(
-            @PathVariable Integer accountId,
-            @PathVariable Integer memberId,
-            @PathVariable Integer rideId){
-
+    @GetMapping("/eligibility/{memberId}/{rideId}")
+    public ResponseEntity<?> checkEligibilityForMember(@AuthenticationPrincipal Account account, @PathVariable Integer memberId, @PathVariable Integer rideId){
         return ResponseEntity.status(200).body(
-                rideService.checkEligibilityForMember(accountId, memberId, rideId)
+                rideService.checkEligibilityForMember(account.getId(), memberId, rideId)
         );
     }
 }

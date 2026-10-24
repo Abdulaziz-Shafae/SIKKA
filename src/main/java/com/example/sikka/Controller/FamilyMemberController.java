@@ -2,10 +2,12 @@ package com.example.sikka.Controller;
 
 import com.example.sikka.Api.ApiResponse;
 import com.example.sikka.DtoIn.FamilyMemberDtoIn;
+import com.example.sikka.Model.Account;
 import com.example.sikka.Service.FamilyMemberService;
 import jakarta.validation.Valid;
 import lombok.AllArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -15,47 +17,35 @@ public class FamilyMemberController {
 
     private final FamilyMemberService familyMemberService;
 
-    @GetMapping("/get/my/{accountId}")
-    public ResponseEntity<?> getMyFamilyMembers(@PathVariable Integer accountId){
+    @GetMapping("/get/my")
+    public ResponseEntity<?> getMyFamilyMembers(@AuthenticationPrincipal Account account){
         return ResponseEntity.status(200).body(
-                familyMemberService.getMyFamilyMembers(accountId)
+                familyMemberService.getMyFamilyMembers(account.getId())
         );
     }
 
-    @GetMapping("/get/details/{accountId}/{familyMemberId}")
-    public ResponseEntity<?> getFamilyMemberById(
-            @PathVariable Integer accountId,
-            @PathVariable Integer familyMemberId){
+    @GetMapping("/get/details/{familyMemberId}")
+    public ResponseEntity<?> getFamilyMemberById(@AuthenticationPrincipal Account account, @PathVariable Integer familyMemberId){
         return ResponseEntity.status(200).body(
-                familyMemberService.getFamilyMemberById(accountId, familyMemberId)
+                familyMemberService.getFamilyMemberById(account.getId(), familyMemberId)
         );
     }
 
-    @PostMapping("/add/{accountId}")
-    public ResponseEntity<?> addFamilyMember(
-            @PathVariable Integer accountId,
-            @RequestBody @Valid FamilyMemberDtoIn dto){
-        familyMemberService.addFamilyMember(accountId, dto);
-        return ResponseEntity.status(200).body(
-                new ApiResponse("Family member added successfully")
-        );
+    @PostMapping("/add")
+    public ResponseEntity<?> addFamilyMember(@AuthenticationPrincipal Account account, @RequestBody @Valid FamilyMemberDtoIn dto){
+        familyMemberService.addFamilyMember(account.getId(), dto);
+        return ResponseEntity.status(200).body(new ApiResponse("Family member added successfully"));
     }
 
-    @PutMapping("/update/{accountId}/{familyMemberId}")
-    public ResponseEntity<?> updateFamilyMember(
-            @PathVariable Integer accountId,
-            @PathVariable Integer familyMemberId,
-            @RequestBody @Valid FamilyMemberDtoIn dto){
-        familyMemberService.updateFamilyMember(accountId, familyMemberId, dto);
-        return ResponseEntity.status(200).body(
-                new ApiResponse("Family member updated successfully")
-        );
+    @PutMapping("/update/{familyMemberId}")
+    public ResponseEntity<?> updateFamilyMember(@AuthenticationPrincipal Account account, @PathVariable Integer familyMemberId, @RequestBody @Valid FamilyMemberDtoIn dto){
+        familyMemberService.updateFamilyMember(account.getId(), familyMemberId, dto);
+        return ResponseEntity.status(200).body(new ApiResponse("Family member updated successfully"));
     }
 
-    @DeleteMapping("/delete/{accountId}/{familyMemberId}")
-    public ResponseEntity<?> deleteFamilyMember(@PathVariable Integer accountId, @PathVariable Integer familyMemberId) {
-        familyMemberService.deleteFamilyMember(accountId, familyMemberId);
+    @DeleteMapping("/delete/{familyMemberId}")
+    public ResponseEntity<?> deleteFamilyMember(@AuthenticationPrincipal Account account, @PathVariable Integer familyMemberId){
+        familyMemberService.deleteFamilyMember(account.getId(), familyMemberId);
         return ResponseEntity.status(200).body(new ApiResponse("Family member deleted successfully"));
     }
-
 }
