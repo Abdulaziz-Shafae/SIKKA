@@ -10,9 +10,6 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class MemberPreferencesDtoIn {
-    @NotBlank
-    @Pattern(regexp = "^(ANSWERED|SKIPPED)$")
-    private String answerStatus;
 
     @Valid
     private List<@NotNull SelectedRideDtoIn> selectedRides;

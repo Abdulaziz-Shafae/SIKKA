@@ -3901,11 +3901,17 @@ public class VisitPlanService {
 
 
     @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED, timeout = 60)
-    public void respondToReplanProposal(Integer accountId, PlanApprovalDtoIn dto) {
+    public void respondToReplanProposal(Integer accountId, PlanApprovalDtoIn dto, int statusInt) {
+
+        if (statusInt != 1 && statusInt != 2) {
+            throw new ApiException("Replan approval action must be 1 or 2");
+        }
+        String status = statusInt == 1 ? "APPROVED" : "REJECTED";
+
 
         Account account = validateActiveAccount(accountId);
 
-        if (dto == null || dto.getVisitPlanId() == null || dto.getVisitPlanId() <= 0 || (!"APPROVED".equals(dto.getStatus()) && !"REJECTED".equals(dto.getStatus()))) {
+        if (dto == null || dto.getVisitPlanId() == null || dto.getVisitPlanId() <= 0 || (!"APPROVED".equals(status) && !"REJECTED".equals(status))) {
             throw new ApiException("A positive visit plan ID and an APPROVED or REJECTED response are required");
         }
 
@@ -4018,7 +4024,7 @@ public class VisitPlanService {
             }
         }
 
-        if ("APPROVED".equals(dto.getStatus())) {
+        if ("APPROVED".equals(status)) {
 
             if (visit.getStartedAt() == null || visit.getVisitDate() == null || visit.getPlannedStartTime() == null) {
                 throw new ApiException("The visit's execution timing is missing");

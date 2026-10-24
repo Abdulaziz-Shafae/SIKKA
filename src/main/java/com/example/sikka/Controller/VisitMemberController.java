@@ -45,9 +45,21 @@ public class VisitMemberController {
         return ResponseEntity.status(200).body(new ApiResponse("joined successfully"));
     }
 
-    @PutMapping("/update-rsvp/{accountId}/{visitId}/{rsvp}")
-    public ResponseEntity<?> updateRsvp(@PathVariable Integer accountId, @PathVariable Integer visitId, @PathVariable String rsvp) {
-        visitMemberService.updateRsvp(accountId, visitId, rsvp);
+    @PutMapping("/rsvp/going/{accountId}/{visitId}")
+    public ResponseEntity<?> confirmAttendance(@PathVariable Integer accountId, @PathVariable Integer visitId) {
+        visitMemberService.updateRsvp(accountId, visitId, 1);
+        return ResponseEntity.status(200).body(new ApiResponse("rsvp updated successfully"));
+    }
+
+    @PutMapping("/rsvp/maybe/{accountId}/{visitId}")
+    public ResponseEntity<?> markAttendanceAsMaybe(@PathVariable Integer accountId, @PathVariable Integer visitId) {
+        visitMemberService.updateRsvp(accountId, visitId, 2);
+        return ResponseEntity.status(200).body(new ApiResponse("rsvp updated successfully"));
+    }
+
+    @PutMapping("/rsvp/not-going/{accountId}/{visitId}")
+    public ResponseEntity<?> declineAttendance(@PathVariable Integer accountId, @PathVariable Integer visitId) {
+        visitMemberService.updateRsvp(accountId, visitId, 3);
         return ResponseEntity.status(200).body(new ApiResponse("rsvp updated successfully"));
     }
 
@@ -94,8 +106,13 @@ public class VisitMemberController {
 
     @PutMapping("/preferences/{accountId}/{visitMemberId}")
     public ResponseEntity<?> saveMemberPreferences(@PathVariable Integer accountId, @PathVariable Integer visitMemberId, @RequestBody @Valid com.example.sikka.DtoIn.MemberPreferencesDtoIn dto) {
-        visitMemberService.saveMemberPreferences(accountId, visitMemberId, dto);
+        visitMemberService.saveMemberPreferences(accountId, visitMemberId, dto, 1);
         return ResponseEntity.status(200).body(new ApiResponse("Planning answers saved successfully"));
+    }
+    @PutMapping("/preferences/skip/{accountId}/{visitMemberId}")
+    public ResponseEntity<?> skipMemberPreferences(@PathVariable Integer accountId, @PathVariable Integer visitMemberId) {
+        visitMemberService.saveMemberPreferences(accountId, visitMemberId, new com.example.sikka.DtoIn.MemberPreferencesDtoIn(), 2);
+        return ResponseEntity.status(200).body(new ApiResponse("Planning answers skipped successfully"));
     }
 
 }

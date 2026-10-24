@@ -95,18 +95,18 @@ public class PlanApprovalService {
     }
 
     @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED, timeout = 60)
-    public void respondToPlanApproval(Integer accountId, PlanApprovalDtoIn planApprovalDtoIn) {
+    public void respondToPlanApproval(Integer accountId, PlanApprovalDtoIn planApprovalDtoIn, int statusInt) {
+
+        if (statusInt != 1 && statusInt != 2) {
+            throw new ApiException("Plan approval action must be 1 or 2");
+        }
+        String status = statusInt == 1 ? "APPROVED" : "REJECTED";
+
 
         Account account = validateActiveAccount(accountId);
 
         if (planApprovalDtoIn == null || planApprovalDtoIn.getVisitPlanId() == null || planApprovalDtoIn.getVisitPlanId() <= 0) {
             throw new ApiException("A positive visit plan ID is required");
-        }
-
-        String status = planApprovalDtoIn.getStatus();
-
-        if (!"APPROVED".equals(status) && !"REJECTED".equals(status)) {
-            throw new ApiException("Response must be APPROVED or REJECTED");
         }
 
         VisitPlan reference = visitPlanRepository.findVisitPlanById(planApprovalDtoIn.getVisitPlanId());
@@ -131,7 +131,7 @@ public class PlanApprovalService {
         entityManager.refresh(visitPlan, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
 
         if (planApprovalDtoIn.getProposalKey() != null || visitPlan.getProposedItems() != null || visitPlan.getPendingScope() != null || visitPlan.getProposalBaseSnapshot() != null) {
-            visitPlanService.respondToReplanProposal(accountId, planApprovalDtoIn);
+            visitPlanService.respondToReplanProposal(accountId, planApprovalDtoIn, statusInt);
             return;
         }
 

@@ -22,15 +22,27 @@ public class VisitRecordController {
         return ResponseEntity.status(200).body(visitRecordService.getMyVisitRecords(accountId, visitId));
     }
 
-    @PostMapping("/create/{accountId}/{visitId}")
-    public ResponseEntity<?> createVisitRecords(@PathVariable Integer accountId, @PathVariable Integer visitId, @RequestBody @Valid CreateVisitRecordDtoIn createVisitRecordDtoIn) {
-        visitRecordService.createVisitRecords(accountId, visitId, createVisitRecordDtoIn);
+    @PostMapping("/complete/{accountId}/{visitId}")
+    public ResponseEntity<?> completeVisitRecords(@PathVariable Integer accountId, @PathVariable Integer visitId, @RequestBody @Valid CreateVisitRecordDtoIn dto) {
+        visitRecordService.createVisitRecords(accountId, visitId, dto, 1);
         return ResponseEntity.status(201).body(new ApiResponse("Visit records created successfully"));
     }
 
-    @PutMapping("/update/status/{accountId}")
-    public ResponseEntity<?> updateVisitRecordStatus(@PathVariable Integer accountId, @RequestBody @Valid UpdateVisitRecordDtoIn updateVisitRecordDtoIn) {
-        visitRecordService.updateVisitRecordStatus(accountId, updateVisitRecordDtoIn);
+    @PostMapping("/skip/{accountId}/{visitId}")
+    public ResponseEntity<?> skipVisitRecords(@PathVariable Integer accountId, @PathVariable Integer visitId, @RequestBody @Valid CreateVisitRecordDtoIn dto) {
+        visitRecordService.createVisitRecords(accountId, visitId, dto, 2);
+        return ResponseEntity.status(201).body(new ApiResponse("Visit records created successfully"));
+    }
+
+    @PutMapping("/update/complete/{accountId}")
+    public ResponseEntity<?> correctVisitRecordToCompleted(@PathVariable Integer accountId, @RequestBody @Valid UpdateVisitRecordDtoIn dto) {
+        visitRecordService.updateVisitRecordStatus(accountId, dto, 1);
+        return ResponseEntity.status(200).body(new ApiResponse("Visit record status updated successfully"));
+    }
+
+    @PutMapping("/update/skip/{accountId}")
+    public ResponseEntity<?> correctVisitRecordToSkipped(@PathVariable Integer accountId, @RequestBody @Valid UpdateVisitRecordDtoIn dto) {
+        visitRecordService.updateVisitRecordStatus(accountId, dto, 2);
         return ResponseEntity.status(200).body(new ApiResponse("Visit record status updated successfully"));
     }
 

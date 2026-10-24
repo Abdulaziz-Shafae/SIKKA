@@ -19,9 +19,6 @@ public class PlanApprovalDtoIn {
     @Positive(message = "Visit plan ID must be positive")
     private Integer visitPlanId;
 
-    @NotBlank(message = "Approval response is required")
-    @Pattern(regexp = "^(APPROVED|REJECTED)$", message = "Response must be APPROVED or REJECTED")
-    private String status;
     @jakarta.validation.constraints.Size(max = 36, message = "Proposal key must not exceed 36 characters")
     private String proposalKey;
 }
