@@ -52,7 +52,7 @@ public class Ride {
     @Column(length = 60)
     private Set<@Pattern(regexp = "^(ROLLER_COASTER|FLAT_RIDE|DROP_TOWER|DARK_RIDE|WATER_RIDE|INTERACTIVE|PLAYGROUND|RECORD_BREAKING|ARCADE_CARNIVAL)$", message = "Invalid rideFeatures value") String> rideFeatures = new HashSet<>();
 
-    // Null means not verified; false means no companion requirement is published.
+    // Null means unknown; false means verified that no adult companion is required.
     private Boolean adultCompanionRequired;
 
     @Positive(message = "Companion height threshold must be positive")
@@ -139,6 +139,21 @@ public class Ride {
     @Pattern(regexp = "^(UNKNOWN|NONE|SPECIFIED)$", message = "Invalid age rule status")
     @Column(length = 15)
     private String ageRuleStatus = "UNKNOWN";
+
+    @Pattern(
+            regexp = "^(UNKNOWN|NONE|SPECIFIED)$",
+            message = "Health rule status must be UNKNOWN, NONE or SPECIFIED"
+    )
+    @Column(nullable = false, columnDefinition = "varchar(20) default 'UNKNOWN'")
+    private String healthRuleStatus = "UNKNOWN";
+
+    @ElementCollection
+    @CollectionTable(name = "ride_health_restrictions", joinColumns = @JoinColumn(name = "ride_id"))
+    @Column(name = "condition_code", nullable = false, length = 60)
+    private Set<@NotBlank @Size(max = 60) String> healthRestrictions = new HashSet<>();
+
+    @Column(nullable = false, columnDefinition = "boolean default true")
+    private Boolean additionalSafetyReviewRequired = true;
 
     @OneToMany(mappedBy = "ride")
     @JsonIgnore
