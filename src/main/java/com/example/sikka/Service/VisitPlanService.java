@@ -148,6 +148,8 @@ public class VisitPlanService {
             throw new ApiException("Account is not active");
         }
 
+        visitEntitlementService.requirePlanningAccess(accountId, visitId);
+
         Visit visit = visitRepository.findVisitByIdForUpdate(visitId);
 
         if (visit == null) {
@@ -199,6 +201,8 @@ public class VisitPlanService {
             throw new ApiException("Account is not active");
         }
 
+        visitEntitlementService.requirePlanningAccess(accountId, visitId);
+
         Visit visit = visitRepository.findVisitByIdForUpdate(visitId);
 
         if (visit == null) {
@@ -213,7 +217,6 @@ public class VisitPlanService {
             throw new ApiException("Plans cannot be created in the current visit status");
         }
 
-        visitEntitlementService.requirePlanningAccess(accountId, visitId);
 
         if (visitPlanRepository.existsByVisit_IdAndPlanKind(visitId, "GROUP")) {
             throw new ApiException("This visit already has a group plan");
@@ -371,6 +374,7 @@ public class VisitPlanService {
             throw new ApiException("Account is not active");
         }
 
+
         Visit visit = visitRepository.findVisitByIdForUpdate(visitId);
 
         if (visit == null) {
@@ -385,7 +389,6 @@ public class VisitPlanService {
             throw new ApiException("Planning can only start while the visit is in PLANNING status");
         }
 
-        visitEntitlementService.requirePlanningAccess(accountId, visitId);
 
         List<VisitMember> goingMembers = visitMemberRepository.findAllByVisit_IdAndRsvpStatus(visitId, "GOING");
 
