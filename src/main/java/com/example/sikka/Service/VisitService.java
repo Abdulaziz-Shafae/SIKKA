@@ -18,6 +18,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalTime;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -32,6 +34,7 @@ public class VisitService {
     private final VisitorProfileRepository visitorProfileRepository;
     private final VisitMemberService visitMemberService;
     private final VisitGroupService visitGroupService;
+    private final VisitEntitlementService visitEntitlementService;
 
     // ---------- CRUD ----------
 
@@ -71,6 +74,7 @@ public class VisitService {
             visit.setGroup(group);
         }
 
+        visit.setVisitType(visitEntitlementService.resolveType(dto.getVisitType(), dto.getGroupId() != null));
         visit.setOrganizer(organizer);
         visit.setName(dto.getName());
         visit.setVisitDate(dto.getVisitDate());
@@ -102,6 +106,10 @@ public class VisitService {
         if (dto.getMaxParticipants() < visitMemberRepository.countByVisit(visit))
             throw new ApiException("max participants is less than current members");
 
+        if (!visit.getVisitDate().equals(dto.getVisitDate())) {
+            if (Boolean.TRUE.equals(visit.getDateChangeUsed())) throw new ApiException("Visit date can only be changed once");
+            visit.setDateChangeUsed(true);
+        }
         visit.setName(dto.getName());
         visit.setVisitDate(dto.getVisitDate());
         visit.setPlannedStartTime(dto.getPlannedStartTime());
@@ -165,6 +173,7 @@ public class VisitService {
         checkTimes(dto.getPlannedStartTime(), dto.getPlannedEndTime());
 
         Visit visit = new Visit();
+        visit.setVisitType(visitEntitlementService.resolveType(dto.getVisitType(), dto.getGroupName() != null && !dto.getGroupName().isBlank()));
         visit.setOrganizer(organizer);
         visit.setName(dto.getName());
         visit.setVisitDate(dto.getVisitDate());
@@ -238,6 +247,11 @@ public class VisitService {
         if (!isAllowed(visit.getStatus(), status))
             throw new ApiException("cannot change status from " + visit.getStatus() + " to " + status);
 
+        if ("IN_PROGRESS".equals(status)) {
+            visitEntitlementService.verifyStartLocked(visit);
+            visit.setStartedAt(LocalDateTime.now(ZoneId.of("Asia/Riyadh")));
+        }
+        if ("CANCELLED".equals(status) && visit.getStartedAt() == null) visit.setFreeSlotReserved(false);
         visit.setStatus(status);
         visitRepository.save(visit);
     }
@@ -276,7 +290,7 @@ public class VisitService {
     }
 
     private void validateVisitDetails(java.time.LocalDate visitDate, Integer maxParticipants) {
-        if (visitDate == null || visitDate.isBefore(java.time.LocalDate.now())) {
+        if (visitDate == null || visitDate.isBefore(java.time.LocalDate.now(ZoneId.of("Asia/Riyadh")))) {
             throw new ApiException("Visit date must be today or later");
         }
         if (maxParticipants == null || maxParticipants <= 0) {
