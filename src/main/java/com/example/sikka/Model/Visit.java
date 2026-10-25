@@ -49,6 +49,21 @@ public class Visit {
     @Column(columnDefinition = "boolean not null default false")
     private Boolean membersLocked = false;
 
+    @Pattern(regexp = "^(SOLO|FRIENDS|FAMILY)$")
+    @Column(nullable = false, length = 10)
+    private String visitType = "SOLO";
+
+    @Column(nullable = false)
+    private Boolean freeSlotReserved = false;
+
+    @Column(nullable = false)
+    private Boolean freeGenerationUsed = false;
+
+    @Column(nullable = false)
+    private Boolean dateChangeUsed = false;
+
+    private LocalDateTime startedAt;
+
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
