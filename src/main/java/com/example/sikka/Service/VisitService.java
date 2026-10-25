@@ -129,6 +129,14 @@ public class VisitService {
         }
         validateVisitDetails(dto.getVisitDate(), dto.getMaxParticipants());
 
+        if (visit.getReusedFromVisitId() != null && !paymentOrderService.hasPaidVisit(visit.getOrganizer().getId(), visit.getId())) {
+            if (!Objects.equals(dto.getName(), visit.getName()) || !Objects.equals(dto.getMaxParticipants(), visit.getMaxParticipants())) throw new ApiException("Pay before changing repeated visit details");
+        }
+        if (!Objects.equals(dto.getVisitDate(), visit.getVisitDate())) {
+            if (Boolean.TRUE.equals(visit.getDateChangeUsed())) throw new ApiException("Visit date may only be changed once");
+            visit.setDateChangeUsed(true);
+        }
+
         if (dto.getMaxParticipants() < visitMemberRepository.countByVisit(visit))
             throw new ApiException("max participants is less than current members");
 
@@ -279,6 +287,10 @@ public class VisitService {
 
         int max = resolveMaxParticipants(dto);
         validateVisitDetails(dto.getVisitDate(), max);
+        if (!Objects.equals(dto.getVisitDate(), visit.getVisitDate())) {
+            if (Boolean.TRUE.equals(visit.getDateChangeUsed())) throw new ApiException("Visit date may only be changed once");
+            visit.setDateChangeUsed(true);
+        }
 
         if (max < visitMemberRepository.countByVisit(visit))
             throw new ApiException("max participants is less than current members");
