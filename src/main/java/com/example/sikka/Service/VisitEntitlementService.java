@@ -48,7 +48,7 @@ public class VisitEntitlementService {
         if (Boolean.TRUE.equals(visit.getFreeGenerationUsed())) throw new ApiException("Regeneration requires verified payment");
         if (Boolean.TRUE.equals(visit.getFreeSlotReserved())) return;
         List<Visit> visits = visitRepository.findAllByOrganizer_Id(accountId);
-        long used = visits.stream().filter(v -> Boolean.TRUE.equals(v.getFreeSlotReserved()) && !"CANCELLED".equals(v.getStatus()) && !isPaid(v)).count();
+        long used = visits.stream().filter(v -> Boolean.TRUE.equals(v.getFreeSlotReserved()) && !"CANCELLED".equals(v.getStatus()) && (v.getStartedAt() != null || !isPaid(v))).count();
         if (used >= 2) throw new ApiException("Free visits exhausted; verified payment required");
         visit.setFreeSlotReserved(true);
         visitRepository.save(visit);
