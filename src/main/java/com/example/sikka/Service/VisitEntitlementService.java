@@ -38,7 +38,13 @@ public class VisitEntitlementService {
         if (account == null || !"ACTIVE".equals(account.getStatus())) throw new ApiException("Account is not active");
         Visit visit = visitRepository.findVisitByIdForUpdate(visitId);
         if (visit == null || !visit.getOrganizer().getId().equals(accountId)) throw new ApiException("Visit organizer mismatch");
-        if (isPaid(visit)) return;
+        if (isPaid(visit)) {
+            if (visit.getStartedAt() == null && Boolean.TRUE.equals(visit.getFreeSlotReserved())) {
+                visit.setFreeSlotReserved(false);
+                visitRepository.save(visit);
+            }
+            return;
+        }
         if (Boolean.TRUE.equals(visit.getFreeGenerationUsed())) throw new ApiException("Regeneration requires verified payment");
         if (Boolean.TRUE.equals(visit.getFreeSlotReserved())) return;
         List<Visit> visits = visitRepository.findAllByOrganizer_Id(accountId);
