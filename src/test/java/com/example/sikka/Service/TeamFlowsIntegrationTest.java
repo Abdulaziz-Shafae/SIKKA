@@ -75,6 +75,7 @@ class TeamFlowsIntegrationTest {
         VisitMember saved = entityManager.find(VisitMember.class, member.getId());
         assertEquals(savedName, saved.getName());
         assertNull(saved.getFamilyMember());
+        createActiveGroupPlan(visit);
         var result = visitService.reuseVisit(visit.getOrganizer().getId(), visit.getId(), new ReuseVisitDtoIn(LocalDate.now().plusDays(3)));
         assertEquals(1, visitMemberRepository.findAllByVisit_Id(result.getVisitId()).size());
     }
@@ -84,6 +85,7 @@ class TeamFlowsIntegrationTest {
         Visit visit = createVisit("FAMILY");
         FamilyMember family = createFamily(visit.getOrganizer());
         visitMemberService.addFamilyMembers(visit.getOrganizer().getId(), visit.getId(), new AddFamilyMembersDtoIn(List.of(family.getId())));
+        createActiveGroupPlan(visit);
         var result = visitService.reuseVisit(visit.getOrganizer().getId(), visit.getId(), new ReuseVisitDtoIn(LocalDate.now().plusDays(3)));
         assertEquals(2, visitMemberRepository.findAllByVisit_Id(result.getVisitId()).size());
         assertNull(result.getInviteCode());
@@ -199,6 +201,9 @@ class TeamFlowsIntegrationTest {
         visit.setOrganizer(account);
         visit.setTripType("SOLO");
         visit.setVisitDate(LocalDate.now().plusDays(2));
+        visit.setMaxParticipants(1);
+        visit.setName("Quota test visit");
+        visit.setDurationMinutes(360);
         visit.setStatus("DRAFT");
         visit.setMembersLocked(false);
         entityManager.persist(visit);
