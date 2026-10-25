@@ -296,7 +296,7 @@ public class VisitMemberService {
 
     // join, rsvp, rides, leave and remove are allowed in DRAFT only (generate moves the visit to PLANNING)
     private void requirePaidRepeatedEdit(Visit visit) {
-        if (visit.getReusedFromVisit() != null && !paymentOrderService.hasPaidVisit(visit.getOrganizer().getId(), visit.getId())) {
+        if (visit.getReusedFromVisitId() != null && !paymentOrderService.hasPaidVisit(visit.getOrganizer().getId(), visit.getId())) {
             throw new ApiException("Pay before changing members or preferences of a repeated visit");
         }
     }
