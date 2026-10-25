@@ -97,7 +97,7 @@ public class PaymentOrderService {
         PaymentOrder latestPaymentOrder = null;
 
         for (PaymentOrder paymentOrder : paymentOrders){
-            if ("PAID".equals(paymentOrder.getStatus())){
+            if ("PAID".equals(paymentOrder.getStatus()) && paymentOrder.getVerifiedAt() != null){
                 throw new ApiException("This visit plan has already been paid for");
             }
 
@@ -126,6 +126,7 @@ public class PaymentOrderService {
             newPaymentOrder.setKind("RETRY");
         }
 
+        if (visit.getVisitType() == null || !visit.getVisitType().matches("SOLO|FRIENDS|FAMILY")) throw new ApiException("Invalid visit type");
         newPaymentOrder.setAmountSar(new BigDecimal("SOLO".equals(visit.getVisitType()) ? "19.00" : "29.00"));
         newPaymentOrder.setStatus("PENDING");
         newPaymentOrder.setVisit(visit);
