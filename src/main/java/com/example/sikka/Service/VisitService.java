@@ -306,7 +306,6 @@ public class VisitService {
     }
 
     @Transactional
-    @Transactional
     public void startVisit(Integer accountId, Integer visitId) {
 
         if (accountId == null || accountId <= 0 || visitId == null || visitId <= 0) {
