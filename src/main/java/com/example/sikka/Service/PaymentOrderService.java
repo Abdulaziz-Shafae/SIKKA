@@ -165,9 +165,9 @@ public class PaymentOrderService {
         boolean reserved = Boolean.TRUE.equals(visit.getFreeSlotReserved());
         int remaining = (int) Math.max(0, 2 - occupiedFreeSlots(accountId));
         boolean freeAllowed = !reusable && (reserved || remaining > 0);
-        boolean paymentRequired = !paid && !freeAllowed && !reusable;
+        boolean paymentRequired = !paid && !freeAllowed;
         boolean allowed = visit.getStartedAt() == null && Set.of("DRAFT", "PLANNING", "READY").contains(visit.getStatus());
-        String status = paid ? "PAID" : reusable ? "FREE" : freeAllowed ? "FREE" : "PAYMENT_REQUIRED";
+        String status = paid ? "PAID" : reusable ? "REUSE_FREE_PAYMENT_REQUIRED_FOR_EDITS" : freeAllowed ? "FREE" : "PAYMENT_REQUIRED";
         return new com.example.sikka.DtoOut.PlanningAccessDtoOut(remaining, paymentRequired, getPrice(visit), status, allowed && (paid || freeAllowed));
     }
 
