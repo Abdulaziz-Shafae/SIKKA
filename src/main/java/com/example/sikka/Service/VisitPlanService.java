@@ -138,7 +138,7 @@ public class VisitPlanService {
 
     @Transactional
     public void createIndividualVisitPlan(Integer accountId, Integer visitId) {
-        Account account = accountRepository.findAccountById(accountId);
+        Account account = accountRepository.findAccountByIdForUpdate(accountId);
 
         if (account == null) {
             throw new ApiException("Account not found");
@@ -191,7 +191,7 @@ public class VisitPlanService {
 
     @Transactional
     public void createGroupVisitPlan(Integer accountId, Integer visitId) {
-        Account account = accountRepository.findAccountById(accountId);
+        Account account = accountRepository.findAccountByIdForUpdate(accountId);
 
         if (account == null) {
             throw new ApiException("Account not found");
@@ -364,7 +364,7 @@ public class VisitPlanService {
             throw new ApiException("A valid visit ID is required");
         }
 
-        Account account = accountRepository.findAccountById(accountId);
+        Account account = accountRepository.findAccountByIdForUpdate(accountId);
 
         if (account == null) {
             throw new ApiException("Account not found");
