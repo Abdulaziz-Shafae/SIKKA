@@ -46,6 +46,7 @@ class TeamFlowsIntegrationTest {
         entityManager.persist(friend);
         visit.setPlannedStartTime(java.time.LocalTime.of(12, 0));
         visit.setPlannedEndTime(java.time.LocalTime.of(18, 0));
+        createActiveGroupPlan(visit);
         var result = visitService.reuseVisit(visit.getOrganizer().getId(), visit.getId(), new ReuseVisitDtoIn(LocalDate.now().plusDays(3)));
         Visit reused = entityManager.find(Visit.class, result.getVisitId());
         assertEquals(360, reused.getDurationMinutes());
@@ -53,8 +54,8 @@ class TeamFlowsIntegrationTest {
         assertNull(reused.getPlannedEndTime());
         assertEquals("DRAFT", reused.getStatus());
         assertNotNull(result.getInviteCode());
-        assertEquals(1, visitMemberRepository.findAllByVisit_Id(reused.getId()).size());
-        assertEquals("[]", visitMemberRepository.findAllByVisit_Id(reused.getId()).get(0).getSelectedRides());
+        assertEquals(2, visitMemberRepository.findAllByVisit_Id(reused.getId()).size());
+        assertEquals("[]", visitMemberRepository.findAllByVisit_Id(reused.getId()).stream().filter(m -> m.getVisitorProfile() != null && m.getVisitorProfile().getAccount().getId().equals(visit.getOrganizer().getId())).findFirst().orElseThrow().getSelectedRides());
     }
 
     @Test
@@ -127,14 +128,16 @@ class TeamFlowsIntegrationTest {
 
     @Test
     void freeReservationsCannotExceedTwoAndFailureReleasesQuota() {
-        Visit visit = createVisit("SOLO");
-        Integer accountId = visit.getOrganizer().getId();
-        Integer first = paymentOrderService.reserveEntitlement(accountId, visit.getId(), "first", "INITIAL");
-        assertEquals(first, paymentOrderService.reserveEntitlement(accountId, visit.getId(), "first", "INITIAL"));
-        paymentOrderService.reserveEntitlement(accountId, visit.getId(), "second", "INITIAL");
-        assertThrows(ApiException.class, () -> paymentOrderService.reserveEntitlement(accountId, visit.getId(), "third", "INITIAL"));
+        Visit firstVisit = createVisit("SOLO");
+        Integer accountId = firstVisit.getOrganizer().getId();
+        Visit secondVisit = createQuotaVisit(firstVisit.getOrganizer());
+        Visit thirdVisit = createQuotaVisit(firstVisit.getOrganizer());
+        Integer first = paymentOrderService.reserveEntitlement(accountId, firstVisit.getId(), "first", "INITIAL");
+        assertEquals(first, paymentOrderService.reserveEntitlement(accountId, firstVisit.getId(), "first", "INITIAL"));
+        paymentOrderService.reserveEntitlement(accountId, secondVisit.getId(), "second", "INITIAL");
+        assertThrows(ApiException.class, () -> paymentOrderService.reserveEntitlement(accountId, thirdVisit.getId(), "third", "INITIAL"));
         paymentOrderService.releaseEntitlement(accountId, first);
-        assertNotNull(paymentOrderService.reserveEntitlement(accountId, visit.getId(), "retry", "INITIAL"));
+        assertNotNull(paymentOrderService.reserveEntitlement(accountId, thirdVisit.getId(), "retry", "INITIAL"));
         assertFalse(historyRepository.findById(first).orElseThrow().getCountsTowardQuota());
     }
 
@@ -189,6 +192,28 @@ class TeamFlowsIntegrationTest {
         } finally {
             org.springframework.test.util.ReflectionTestUtils.setField(mapService, "entranceNodeId", previousEntrance);
         }
+    }
+
+    private Visit createQuotaVisit(Account account) {
+        Visit visit = new Visit();
+        visit.setOrganizer(account);
+        visit.setTripType("SOLO");
+        visit.setVisitDate(LocalDate.now().plusDays(2));
+        visit.setStatus("DRAFT");
+        visit.setMembersLocked(false);
+        entityManager.persist(visit);
+        entityManager.flush();
+        return visit;
+    }
+
+    private void createActiveGroupPlan(Visit visit) {
+        VisitPlan group = new VisitPlan();
+        group.setVisit(visit);
+        group.setPlanKind("GROUP");
+        group.setTimingMode("RELATIVE");
+        group.setIsActive(true);
+        entityManager.persist(group);
+        entityManager.flush();
     }
 
     private Visit createVisit(String type) {
