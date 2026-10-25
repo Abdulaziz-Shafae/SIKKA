@@ -59,6 +59,7 @@ public class VisitService {
     private final JsonMapper planningJsonMapper = JsonMapper.builder().enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS).build();
     private final VisitPlanRepository visitPlanRepository;
     private final com.example.sikka.Repository.PlanApprovalRepository planApprovalRepository;
+    private final com.example.sikka.Repository.VisitMealBreakRepository visitMealBreakRepository;
     private final VisitPlanService visitPlanService;
 
     // ---------- CRUD ----------
@@ -882,13 +883,15 @@ public class VisitService {
             warnings.add("Account members must confirm participation in the new visit");
         }
 
-        copyReusablePlans(sourceVisit, newVisit, newMembers);
+        java.util.Map<Integer, PlanItem> copiedItems = copyReusablePlans(sourceVisit, newVisit, newMembers);
+        copyReusableMeals(sourceVisit, newVisit, newMembers, copiedItems);
         warnings.add("Review members and arrival schedule on the visit day");
 
         return new ReuseVisitDtoOut(newVisit.getId(), sourceVisit.getId(), newVisit.getStatus(), inviteCode, warnings);
     }
 
-    private void copyReusablePlans(Visit sourceVisit, Visit newVisit, List<VisitMember> newMembers) {
+    private java.util.Map<Integer, PlanItem> copyReusablePlans(Visit sourceVisit, Visit newVisit, List<VisitMember> newMembers) {
+        java.util.Map<Integer, PlanItem> copiedItems = new java.util.HashMap<>();
         List<VisitPlan> activePlans = visitPlanRepository.findAllByVisit_Id(sourceVisit.getId()).stream()
                 .filter(p -> Boolean.TRUE.equals(p.getIsActive())).toList();
         if (activePlans.stream().noneMatch(p -> "GROUP".equals(p.getPlanKind()))) {
@@ -929,6 +932,7 @@ public class VisitService {
                 item.setPlace(oldItem.getPlace());
                 item.setParticipantVisitMemberIds(remapParticipantIds(oldItem.getParticipantVisitMemberIds(), sourceVisit, newMembers));
                 planItemRepository.save(item);
+                copiedItems.put(oldItem.getId(), item);
             }
             com.example.sikka.Model.PlanApproval approval = new com.example.sikka.Model.PlanApproval();
             approval.setVisitPlan(plan);
@@ -936,6 +940,27 @@ public class VisitService {
             approval.setStatus("PENDING");
             approval.setRequiredApproverAccount(newVisit.getOrganizer());
             planApprovalRepository.save(approval);
+        }
+        return copiedItems;
+    }
+
+    private void copyReusableMeals(Visit sourceVisit, Visit newVisit, List<VisitMember> newMembers, java.util.Map<Integer, PlanItem> copiedItems) {
+        for (com.example.sikka.Model.VisitMealBreak oldBreak : visitMealBreakRepository.findVisitMealBreaksByVisitId(sourceVisit.getId())) {
+            VisitMember oldMember = oldBreak.getVisitMember();
+            VisitMember copied = newMembers.stream().filter(m -> oldMember.getVisitorProfile() != null && m.getVisitorProfile() != null && oldMember.getVisitorProfile().getId().equals(m.getVisitorProfile().getId()) || oldMember.getFamilyMember() != null && m.getFamilyMember() != null && oldMember.getFamilyMember().getId().equals(m.getFamilyMember().getId())).findFirst().orElseThrow(() -> new ApiException("Repeat requires the same meal participants"));
+            com.example.sikka.Model.VisitMealBreak b = new com.example.sikka.Model.VisitMealBreak();
+            b.setVisit(newVisit);
+            b.setVisitMember(copied);
+            b.setBreakKey(oldBreak.getBreakKey());
+            b.setMealChoice(oldBreak.getMealChoice());
+            b.setPreferredTiming(oldBreak.getPreferredTiming());
+            b.setPlace(oldBreak.getPlace());
+            if (oldBreak.getPlanItem() != null) {
+                PlanItem mapped = copiedItems.get(oldBreak.getPlanItem().getId());
+                if (mapped == null) throw new ApiException("Cannot reuse meal schedule without its copied plan item");
+                b.setPlanItem(mapped);
+            }
+            visitMealBreakRepository.save(b);
         }
     }
 
