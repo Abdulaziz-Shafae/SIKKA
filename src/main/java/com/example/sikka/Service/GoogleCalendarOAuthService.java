@@ -19,6 +19,7 @@ import java.security.SecureRandom;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.*;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -34,6 +35,7 @@ public class GoogleCalendarOAuthService {
     private final VisitPlanRepository visitPlanRepository;
     private final RestClient client = RestClient.create();
     private final SecureRandom random = new SecureRandom();
+    private static final DateTimeFormatter GOOGLE_EVENT_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX");
 
     @Value("${sikka.google.client-id:}")
     private String clientId;
@@ -138,8 +140,8 @@ public class GoogleCalendarOAuthService {
         Map<String, Object> event = Map.of(
                 "summary", visit.getName() == null ? "زيارة سكة" : visit.getName(),
                 "description", description,
-                "start", Map.of("dateTime", start.atZone(ZoneId.of("Asia/Riyadh")).toOffsetDateTime().toString(), "timeZone", "Asia/Riyadh"),
-                "end", Map.of("dateTime", end.atZone(ZoneId.of("Asia/Riyadh")).toOffsetDateTime().toString(), "timeZone", "Asia/Riyadh")
+                "start", Map.of("dateTime", start.atZone(ZoneId.of("Asia/Riyadh")).format(GOOGLE_EVENT_TIME), "timeZone", "Asia/Riyadh"),
+                "end", Map.of("dateTime", end.atZone(ZoneId.of("Asia/Riyadh")).format(GOOGLE_EVENT_TIME), "timeZone", "Asia/Riyadh")
         );
         String token = accessToken(decrypt(connection.getEncryptedRefreshToken()));
         Optional<GoogleCalendarEvent> existing = eventRepository.findByAccount_IdAndVisit_Id(accountId, visitId);
