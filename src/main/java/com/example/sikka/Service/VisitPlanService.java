@@ -38,6 +38,7 @@ public class VisitPlanService {
     private final VisitRepository visitRepository;
     private final VisitMemberRepository visitMemberRepository;
     private final PaymentOrderRepository paymentOrderRepository;
+    private final VisitEntitlementService visitEntitlementService;
     private final JsonMapper participantJsonMapper = JsonMapper.builder().enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS).build();
 
     @Transactional(readOnly = true)
@@ -171,9 +172,7 @@ public class VisitPlanService {
             throw new ApiException("Individual plans require a GOING member");
         }
 
-        if (!paymentOrderRepository.existsByVisit_IdAndStatusAndVerifiedAtIsNotNull(visitId, "PAID")) {
-            throw new ApiException("A verified payment is required before planning");
-        }
+        visitEntitlementService.requirePlanningAccess(accountId, visitId);
 
         if (visitPlanRepository.existsByVisit_IdAndOwnerVisitMember_IdAndPlanKind(visitId, visitMember.getId(), "INDIVIDUAL")) {
             throw new ApiException("You already have an individual plan for this visit");
@@ -214,9 +213,7 @@ public class VisitPlanService {
             throw new ApiException("Plans cannot be created in the current visit status");
         }
 
-        if (!paymentOrderRepository.existsByVisit_IdAndStatusAndVerifiedAtIsNotNull(visitId, "PAID")) {
-            throw new ApiException("A verified payment is required before planning");
-        }
+        visitEntitlementService.requirePlanningAccess(accountId, visitId);
 
         if (visitPlanRepository.existsByVisit_IdAndPlanKind(visitId, "GROUP")) {
             throw new ApiException("This visit already has a group plan");
@@ -388,9 +385,7 @@ public class VisitPlanService {
             throw new ApiException("Planning can only start while the visit is in PLANNING status");
         }
 
-        if (!paymentOrderRepository.existsByVisit_IdAndStatusAndVerifiedAtIsNotNull(visitId, "PAID")) {
-            throw new ApiException("A verified payment is required before planning");
-        }
+        visitEntitlementService.requirePlanningAccess(accountId, visitId);
 
         List<VisitMember> goingMembers = visitMemberRepository.findAllByVisit_IdAndRsvpStatus(visitId, "GOING");
 
