@@ -60,6 +60,7 @@ public class VisitService {
     private final VisitPlanRepository visitPlanRepository;
     private final com.example.sikka.Repository.PlanApprovalRepository planApprovalRepository;
     private final com.example.sikka.Repository.VisitMealBreakRepository visitMealBreakRepository;
+    private final com.example.sikka.Repository.PlanHistoryRepository planHistoryRepository;
     private final VisitPlanService visitPlanService;
 
     // ---------- CRUD ----------
@@ -897,8 +898,20 @@ public class VisitService {
         if (activePlans.stream().noneMatch(p -> "GROUP".equals(p.getPlanKind()))) {
             throw new ApiException("Source visit must have an active group plan to repeat without AI");
         }
+        com.example.sikka.Model.PlanHistory reuse = new com.example.sikka.Model.PlanHistory();
+        reuse.setAccount(newVisit.getOrganizer());
+        reuse.setVisit(newVisit);
+        reuse.setSourceVisit(sourceVisit);
+        reuse.setRequestKey(java.util.UUID.randomUUID().toString());
+        reuse.setOperationType("REUSE");
+        reuse.setStatus("SUCCEEDED");
+        reuse.setBillingMode("FREE");
+        reuse.setCountsTowardQuota(false);
+        reuse.setCompletedAt(LocalDateTime.now(ZoneId.of("Asia/Riyadh")));
+        planHistoryRepository.save(reuse);
         for (VisitPlan oldPlan : activePlans) {
             VisitPlan plan = new VisitPlan();
+            plan.setGeneratedByHistory(reuse);
             plan.setVisit(newVisit);
             plan.setPlanKind(oldPlan.getPlanKind());
             plan.setTimingMode("RELATIVE");
