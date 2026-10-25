@@ -913,7 +913,6 @@ public class VisitService {
         com.example.sikka.Model.PlanHistory reuse = new com.example.sikka.Model.PlanHistory();
         reuse.setAccount(newVisit.getOrganizer());
         reuse.setVisit(newVisit);
-        reuse.setSourceVisit(sourceVisit);
         reuse.setRequestKey(java.util.UUID.randomUUID().toString());
         reuse.setOperationType("REUSE");
         reuse.setStatus("SUCCEEDED");
