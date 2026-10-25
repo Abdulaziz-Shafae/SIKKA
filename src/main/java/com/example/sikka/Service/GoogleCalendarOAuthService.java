@@ -100,11 +100,13 @@ public class GoogleCalendarOAuthService {
         connectionRepository.deleteById(accountId);
     }
 
+    @Transactional
     public String syncVisit(Integer accountId, Integer visitId) {
         configured();
         GoogleCalendarConnection connection = connectionRepository.findById(accountId).orElseThrow(() -> new ApiException("Connect Google Calendar first"));
         Visit visit = visitRepository.findVisitById(visitId);
         if (visit == null) throw new ApiException("Visit not found");
+        if (visit.getVisitDate() == null) throw new ApiException("Visit date is required");
         boolean organizer = visit.getOrganizer() != null && accountId.equals(visit.getOrganizer().getId());
         boolean member = visitMemberRepository.findVisitMemberByVisit_IdAndVisitorProfile_Account_Id(visitId, accountId) != null;
         if (!organizer && !member) throw new ApiException("You are not a member of this visit");
