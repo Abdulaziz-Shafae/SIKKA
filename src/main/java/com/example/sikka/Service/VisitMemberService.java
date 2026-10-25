@@ -55,6 +55,7 @@ public class VisitMemberService {
         if (profile == null)
             throw new ApiException("visitor profile not found");
 
+        requirePaidRepeatedEdit(visit);
         createMember(visit, profile);
     }
 
@@ -66,6 +67,7 @@ public class VisitMemberService {
 
         visitRepository.findVisitByIdForUpdate(member.getVisit().getId());
         checkOpenForChanges(member.getVisit());
+        requirePaidRepeatedEdit(member.getVisit());
         if (isOrganizerMember(member, member.getVisit().getOrganizer().getId()))
             throw new ApiException("organizer cannot be removed");
         validateMemberDeletion(member);
