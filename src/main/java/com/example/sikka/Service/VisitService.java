@@ -58,6 +58,7 @@ public class VisitService {
     private final PaymentOrderService paymentOrderService;
     private final JsonMapper planningJsonMapper = JsonMapper.builder().enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS).build();
     private final VisitPlanRepository visitPlanRepository;
+    private final com.example.sikka.Repository.PlanApprovalRepository planApprovalRepository;
     private final VisitPlanService visitPlanService;
 
     // ---------- CRUD ----------
@@ -287,6 +288,7 @@ public class VisitService {
     }
 
     @Transactional
+    @Transactional
     public void startVisit(Integer accountId, Integer visitId) {
 
         if (accountId == null || accountId <= 0 || visitId == null || visitId <= 0) {
@@ -363,6 +365,12 @@ public class VisitService {
             }
         }
 
+        if (visit.getReusedFromVisit() == null && !Boolean.TRUE.equals(visit.getFreeSlotReserved()) && !paymentOrderService.hasPaidVisit(accountId, visitId)) {
+            throw new ApiException("Visit payment or free entitlement is required");
+        }
+        if (visit.getReusedFromVisit() != null && !paymentOrderService.hasPaidVisit(accountId, visitId) && !Boolean.TRUE.equals(visit.getFreeSlotReserved())) {
+            // A copied, unchanged itinerary remains free.
+        }
         changeStatus(visitId, "IN_PROGRESS");
 
         visit.setStartedAt(LocalDateTime.now(ZoneId.of("Asia/Riyadh")));
@@ -775,6 +783,7 @@ public class VisitService {
 
         Visit newVisit = new Visit();
         newVisit.setOrganizer(account);
+        newVisit.setReusedFromVisit(sourceVisit);
         newVisit.setName(sourceVisit.getName());
         newVisit.setVisitDate(dto.getVisitDate());
         newVisit.setMaxParticipants(sourceVisit.getMaxParticipants());
@@ -872,10 +881,82 @@ public class VisitService {
             warnings.add("Account members must confirm participation in the new visit");
         }
 
-        warnings.add("Review and confirm planning answers for the new visit");
-        warnings.add("Review meal break preferences before generating the new plan");
+        copyReusablePlans(sourceVisit, newVisit, newMembers);
+        warnings.add("Review members and arrival schedule on the visit day");
 
         return new ReuseVisitDtoOut(newVisit.getId(), sourceVisit.getId(), newVisit.getStatus(), inviteCode, warnings);
+    }
+
+    private void copyReusablePlans(Visit sourceVisit, Visit newVisit, List<VisitMember> newMembers) {
+        List<VisitPlan> activePlans = visitPlanRepository.findAllByVisit_Id(sourceVisit.getId()).stream()
+                .filter(p -> Boolean.TRUE.equals(p.getIsActive())).toList();
+        if (activePlans.stream().noneMatch(p -> "GROUP".equals(p.getPlanKind()))) {
+            throw new ApiException("Source visit must have an active group plan to repeat without AI");
+        }
+        for (VisitPlan oldPlan : activePlans) {
+            VisitPlan plan = new VisitPlan();
+            plan.setVisit(newVisit);
+            plan.setPlanKind(oldPlan.getPlanKind());
+            plan.setTimingMode("RELATIVE");
+            plan.setIsActive(true);
+            if (oldPlan.getOwnerVisitMember() != null) {
+                VisitMember oldOwner = oldPlan.getOwnerVisitMember();
+                VisitMember owner = newMembers.stream()
+                        .filter(m -> oldOwner.getVisitorProfile() != null && m.getVisitorProfile() != null && oldOwner.getVisitorProfile().getId().equals(m.getVisitorProfile().getId())
+                                || oldOwner.getFamilyMember() != null && m.getFamilyMember() != null && oldOwner.getFamilyMember().getId().equals(m.getFamilyMember().getId()))
+                        .findFirst().orElseThrow(() -> new ApiException("Repeat requires the same visit members"));
+                plan.setOwnerVisitMember(owner);
+            }
+            visitPlanRepository.save(plan);
+            for (PlanItem oldItem : planItemRepository.findAllByVisitPlan_Id(oldPlan.getId())) {
+                PlanItem item = new PlanItem();
+                item.setVisitPlan(plan);
+                item.setActivityKind(oldItem.getActivityKind());
+                item.setTitle(oldItem.getTitle());
+                item.setRelativeStartMinutes(oldItem.getRelativeStartMinutes());
+                item.setRelativeEndMinutes(oldItem.getRelativeEndMinutes());
+                item.setWalkingMinutes(oldItem.getWalkingMinutes());
+                item.setWaitingMinutes(oldItem.getWaitingMinutes());
+                item.setActivityMinutes(oldItem.getActivityMinutes());
+                item.setBreakType(oldItem.getBreakType());
+                item.setIsRateable(oldItem.getIsRateable());
+                item.setSortOrder(oldItem.getSortOrder());
+                item.setPriority(oldItem.getPriority());
+                item.setPinned(oldItem.getPinned());
+                item.setSubgroupKey(oldItem.getSubgroupKey());
+                item.setRide(oldItem.getRide());
+                item.setPlace(oldItem.getPlace());
+                item.setParticipantVisitMemberIds(remapParticipantIds(oldItem.getParticipantVisitMemberIds(), sourceVisit, newMembers));
+                planItemRepository.save(item);
+            }
+            com.example.sikka.Model.PlanApproval approval = new com.example.sikka.Model.PlanApproval();
+            approval.setVisitPlan(plan);
+            approval.setApprovalScope(oldPlan.getPlanKind());
+            approval.setStatus("PENDING");
+            approval.setRequiredApproverAccount(newVisit.getOrganizer());
+            planApprovalRepository.save(approval);
+        }
+    }
+
+    private String remapParticipantIds(String json, Visit sourceVisit, List<VisitMember> newMembers) {
+        if (json == null || json.isBlank()) return json;
+        try {
+            JsonNode ids = planningJsonMapper.readTree(json);
+            if (!ids.isArray()) throw new ApiException("Invalid source plan participant IDs");
+            List<Integer> copiedIds = new ArrayList<>();
+            for (JsonNode id : ids) {
+                VisitMember old = visitMemberRepository.findVisitMemberById(id.asInt());
+                if (old == null || !old.getVisit().getId().equals(sourceVisit.getId())) throw new ApiException("Source plan references an unknown member");
+                VisitMember copied = newMembers.stream()
+                        .filter(m -> old.getVisitorProfile() != null && m.getVisitorProfile() != null && old.getVisitorProfile().getId().equals(m.getVisitorProfile().getId())
+                                || old.getFamilyMember() != null && m.getFamilyMember() != null && old.getFamilyMember().getId().equals(m.getFamilyMember().getId()))
+                        .findFirst().orElseThrow(() -> new ApiException("Every planned participant must be copied"));
+                copiedIds.add(copied.getId());
+            }
+            return planningJsonMapper.writeValueAsString(copiedIds);
+        } catch (JacksonException e) {
+            throw new ApiException("Unable to copy plan participants");
+        }
     }
 
     private VisitMember copyReusableVisitMember(Integer accountId, VisitMember sourceMember, Visit newVisit, HashSet<Integer> copiedProfileIds, HashSet<Integer> copiedFamilyIds, List<String> warnings, LocalDateTime createdAt) {
