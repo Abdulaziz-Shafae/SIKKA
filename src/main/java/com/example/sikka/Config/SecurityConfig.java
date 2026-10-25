@@ -30,6 +30,7 @@ public class SecurityConfig {
 
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/v1/account/register").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/google-calendar/oauth/callback").permitAll()
                         .requestMatchers("/api/v1/auth/verify-email", "/api/v1/auth/resend-verification",
                                 "/api/v1/auth/forgot-password", "/api/v1/auth/reset-password").permitAll()
                         .requestMatchers(HttpMethod.GET,
