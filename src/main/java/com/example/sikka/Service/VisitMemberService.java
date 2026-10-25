@@ -38,6 +38,7 @@ public class VisitMemberService {
     private final com.example.sikka.Repository.FamilyMemberRepository familyMemberRepository;
     private final com.example.sikka.Repository.VisitPlanRepository visitPlanRepository;
     private final com.example.sikka.Repository.VisitRecordRepository visitRecordRepository;
+    private final com.example.sikka.Repository.AccountRepository accountRepository;
     // ---------- CRUD ----------
 
     public List<VisitMember> get() {
@@ -88,6 +89,10 @@ public class VisitMemberService {
     // visitor joins by invite code, no organizer approval
     @Transactional
     public void join(Integer accountId, JoinDtoIn dto) {
+        com.example.sikka.Model.Account account = accountRepository.findAccountById(accountId);
+        if (account == null || !Boolean.TRUE.equals(account.getEmailVerified()))
+            throw new ApiException("verify your account first");
+
         VisitorProfile profile = visitorProfileRepository.findVisitorProfileByAccount_Id(accountId);
         if (profile == null)
             throw new ApiException("create your visitor profile first");
