@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 
@@ -83,11 +84,11 @@ public class PaymentOrderService {
             throw new ApiException("Only the visit organizer can pay for the plan");
         }
 
-        if (visit.getVisitDate() == null || visit.getVisitDate().isBefore(LocalDate.now())){
+        if (visit.getVisitDate() == null || visit.getVisitDate().isBefore(LocalDate.now(ZoneId.of("Asia/Riyadh")))){
             throw new ApiException("Cannot pay for a past visit");
         }
 
-        if (!"DRAFT".equals(visit.getStatus())){
+        if (!"DRAFT".equals(visit.getStatus()) && !"PLANNING".equals(visit.getStatus()) && !"READY".equals(visit.getStatus())){
             throw new ApiException("Payment is only allowed for draft visits");
         }
 
@@ -125,7 +126,7 @@ public class PaymentOrderService {
             newPaymentOrder.setKind("RETRY");
         }
 
-        newPaymentOrder.setAmountSar(new BigDecimal("19.00"));
+        newPaymentOrder.setAmountSar(new BigDecimal("SOLO".equals(visit.getVisitType()) ? "19.00" : "29.00"));
         newPaymentOrder.setStatus("PENDING");
         newPaymentOrder.setVisit(visit);
         newPaymentOrder.setBuyerAccount(account);
