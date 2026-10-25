@@ -21,6 +21,7 @@ public class AccountService {
     private final AccountRepository accountRepository;
     private final VisitorProfileRepository visitorProfileRepository;
     private final org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
+    private final VerificationService verificationService;
     public List<AccountDtoOut> get() {
         List<AccountDtoOut> list = new ArrayList<>();
         for (Account a : accountRepository.findAll())
@@ -88,6 +89,7 @@ public class AccountService {
         Account account = new Account();
         account.setName(dto.getName());
         account.setEmail(dto.getEmail());
+        account.setPhone(dto.getPhone());
         account.setPasswordHash(passwordEncoder.encode(dto.getPassword()));
         account.setRole("USER");
         account.setStatus("ACTIVE");
@@ -106,6 +108,7 @@ public class AccountService {
         profile.setFoodPreferences(dto.getFoodPreferences());
         profile.setAccount(account);
         visitorProfileRepository.save(profile);
+        verificationService.sendVerificationCode(account);
     }
 
     // contract method for the other flows

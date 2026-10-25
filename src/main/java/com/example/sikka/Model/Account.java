@@ -87,6 +87,9 @@ public class Account implements UserDetails {
     @OneToMany(mappedBy = "recordedByAccount")
     private Set<VisitRecord> visitRecords;
 
+    @Column(columnDefinition = "varchar(20)")
+    private String phone;
+
     @OneToMany(mappedBy = "buyerAccount")
     private Set<PaymentOrder> paymentOrders;
 

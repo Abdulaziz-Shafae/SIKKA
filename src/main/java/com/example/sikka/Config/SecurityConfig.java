@@ -30,7 +30,8 @@ public class SecurityConfig {
 
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/v1/account/register").permitAll()
-
+                        .requestMatchers("/api/v1/auth/verify-email", "/api/v1/auth/resend-verification",
+                                "/api/v1/auth/forgot-password", "/api/v1/auth/reset-password").permitAll()
                         .requestMatchers(HttpMethod.GET,
                                 "/api/v1/ride/get",
                                 "/api/v1/ride/get/{rideId}",
@@ -94,8 +95,6 @@ public class SecurityConfig {
                                 "/api/v1/visit-member/add",
                                 "/api/v1/visit-member/delete/**"
                         ).hasAuthority("ADMIN")
-
-                        // Nawaf: place management
                         .requestMatchers(
                                 "/api/v1/place/get",
                                 "/api/v1/place/add",
