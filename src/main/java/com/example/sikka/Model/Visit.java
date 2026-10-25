@@ -108,6 +108,14 @@ public class Visit {
     @Positive
     private Integer durationMinutes;
 
+    @Column(nullable = false)
+    private Boolean freeSlotReserved = false;
+
+    @ManyToOne
+    @JoinColumn(name = "reused_from_visit_id")
+    @JsonIgnore
+    private Visit reusedFromVisit;
+
     private LocalDateTime startedAt;
 
     @Column(columnDefinition = "json")
