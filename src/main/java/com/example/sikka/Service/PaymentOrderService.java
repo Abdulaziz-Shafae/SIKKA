@@ -165,9 +165,10 @@ public class PaymentOrderService {
         boolean reserved = Boolean.TRUE.equals(visit.getFreeSlotReserved());
         int remaining = (int) Math.max(0, 2 - occupiedFreeSlots(accountId));
         boolean freeAllowed = !reusable && (reserved || remaining > 0);
-        boolean paymentRequired = !paid && !freeAllowed;
+        boolean paymentRequired = !paid && !freeAllowed && !reusable;
         boolean allowed = visit.getStartedAt() == null && Set.of("DRAFT", "PLANNING", "READY").contains(visit.getStatus());
-        return new com.example.sikka.DtoOut.PlanningAccessDtoOut(remaining, paymentRequired, getPrice(visit), paid ? "PAID" : freeAllowed ? "FREE" : "PAYMENT_REQUIRED", allowed && !paymentRequired);
+        String status = paid ? "PAID" : reusable ? "FREE" : freeAllowed ? "FREE" : "PAYMENT_REQUIRED";
+        return new com.example.sikka.DtoOut.PlanningAccessDtoOut(remaining, paymentRequired, getPrice(visit), status, allowed && (paid || freeAllowed));
     }
 
     @Transactional
@@ -217,6 +218,15 @@ public class PaymentOrderService {
         history.setStatus("FAILED");
         history.setCountsTowardQuota(false);
         planHistoryRepository.save(history);
+        Visit visit = visitRepository.findVisitByIdForUpdate(history.getVisit().getId());
+        if (visit != null && visit.getStartedAt() == null && Boolean.TRUE.equals(visit.getFreeSlotReserved())) {
+            boolean activeHistory = planHistoryRepository.findAllByAccount_IdOrderByStartedAtDescIdDesc(accountId).stream()
+                    .anyMatch(h -> h.getVisit().getId().equals(visit.getId()) && Set.of("PROCESSING", "SUCCEEDED").contains(h.getStatus()));
+            if (!activeHistory) {
+                visit.setFreeSlotReserved(false);
+                visitRepository.save(visit);
+            }
+        }
     }
 
     private Visit getPlanningVisit(Integer accountId, Integer visitId) {
