@@ -159,7 +159,7 @@ public class PaymentOrderService {
     public com.example.sikka.DtoOut.PlanningAccessDtoOut getPlanningAccess(Integer accountId, Integer visitId) {
         Visit visit = getPlanningVisit(accountId, visitId);
         boolean paid = isPaid(accountId, visit);
-        boolean reusable = visit.getReusedFromVisit() != null;
+        boolean reusable = visit.getReusedFromVisitId() != null;
         boolean reserved = Boolean.TRUE.equals(visit.getFreeSlotReserved());
         int remaining = (int) Math.max(0, 2 - occupiedFreeSlots(accountId));
         boolean freeAllowed = !reusable && (reserved || remaining > 0);
@@ -183,7 +183,7 @@ public class PaymentOrderService {
             return previous.getId();
         }
         boolean paid = isPaid(accountId, visit);
-        boolean reused = visit.getReusedFromVisit() != null;
+        boolean reused = visit.getReusedFromVisitId() != null;
         boolean reserved = Boolean.TRUE.equals(visit.getFreeSlotReserved());
         if (!paid && (reused || !reserved && occupiedFreeSlots(accountId) >= 2)) throw new ApiException("A server-verified payment is required");
         if (!paid && !reserved) {
