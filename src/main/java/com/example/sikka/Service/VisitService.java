@@ -372,9 +372,6 @@ public class VisitService {
         if (visit.getReusedFromVisitId() == null && !Boolean.TRUE.equals(visit.getFreeSlotReserved()) && !paymentOrderService.hasPaidVisit(accountId, visitId)) {
             throw new ApiException("Visit payment or free entitlement is required");
         }
-        if (visit.getReusedFromVisitId() != null && !paymentOrderService.hasPaidVisit(accountId, visitId) && !Boolean.TRUE.equals(visit.getFreeSlotReserved())) {
-            // A copied, unchanged itinerary remains free.
-        }
         changeStatus(visitId, "IN_PROGRESS");
 
         visit.setStartedAt(LocalDateTime.now(ZoneId.of("Asia/Riyadh")));
