@@ -26,6 +26,9 @@ public class CreateVisitDtoIn {
     @FutureOrPresent(message = "visit date cannot be in the past")
     private LocalDate visitDate;
 
+    @jakarta.validation.constraints.Pattern(regexp = "^(SOLO|FRIENDS|FAMILY)$")
+    private String visitType;
+
     private LocalTime plannedStartTime;
 
     private LocalTime plannedEndTime;
