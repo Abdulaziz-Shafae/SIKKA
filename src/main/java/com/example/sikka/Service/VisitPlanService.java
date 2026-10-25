@@ -3402,7 +3402,76 @@ public class VisitPlanService {
                     throw new ApiException("Invalid regeneration billing mode");
                 }
 
+                VisitPlan groupPlan = saveGeneratedGroupActivities(visit, history, candidate, current.priorities(), current.pinnedRideIds(), current.rateablePlaceIds(), current.inputJson());
+
+                List<VisitMember> members = visitMemberRepository.findAllByVisit_IdAndRsvpStatus(visitId, "GOING");
+
+                if (!isFamilyVisit(visit)) {
+
+                    for (VisitMember member : members) {
+
+                        VisitPlan individualPlan = new VisitPlan();
+
+                        individualPlan.setVisit(visit);
+                        individualPlan.setPlanKind("INDIVIDUAL");
+                        individualPlan.setOwnerVisitMember(member);
+                        individualPlan.setGeneratedByHistory(history);
+                        individualPlan.setTimingMode("RELATIVE");
+                        individualPlan.setIsActive(false);
+
+                        visitPlanRepository.save(individualPlan);
+                    }
+                }
+
+                LocalDateTime completedAt = LocalDateTime.now(ZoneId.of("Asia/Riyadh"));
+
+                for (VisitPlan previous : previousPlans) {
+
+                    previous.setIsActive(false);
+
+                    PlanApproval approval = previous.getPlanApproval();
+
+                    if (approval != null && "PENDING".equals(approval.getStatus())) {
+                        approval.setStatus("REJECTED");
+                        approval.setApprovedByAccount(visit.getOrganizer());
+                        approval.setRespondedAt(completedAt);
+                    }
+                }
+
+                visitPlanRepository.saveAll(previousPlans);
+
+                visit.setStatus("PLANNING");
+                visit.setPlannedStartTime(null);
+                visit.setPlannedEndTime(null);
+
+                visitRepository.save(visit);
+
+                paymentOrderService.consumeEntitlement(accountId, history.getId());
+
+                history.setStatus("SUCCEEDED");
+                history.setCountsTowardQuota(true);
+                history.setCompletedAt(completedAt);
+                history.setFailureReason(null);
+                history.setGenerationResultSnapshot(writeGenerationJson(candidate));
+
+                planHistoryRepository.save(history);
+                planHistoryRepository.flush();
+
+                return convertGenerationRequestToDtoOut(history);
+            });
+
+        } catch (RuntimeException failure) {
+
+            String reason = failure instanceof ApiException && failure.getMessage() != null && !failure.getMessage().isBlank() ? failure.getMessage() : "تعذر إكمال إعادة التوليد. تحقق من حالة الطلب قبل إرسال محاولة جديدة.";
+
+            try {
+                return runGenerationTransaction(() -> failRegeneration(accountId, visitId, start.historyId(), reason, null));
+            } catch (RuntimeException cleanupFailure) {
+                cleanupFailure.addSuppressed(failure);
+                throw new ApiException("Regeneration outcome could not be confirmed. Check this request key before sending a new request");
             }
+        }
+    }
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public ReplanProposalDtoOut suggestReplan(Integer accountId, Integer visitId, SuggestReplanDtoIn dto) {
