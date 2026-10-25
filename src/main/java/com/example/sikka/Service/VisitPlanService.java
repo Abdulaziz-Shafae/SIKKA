@@ -174,7 +174,7 @@ public class VisitPlanService {
             throw new ApiException("Individual plans require a GOING member");
         }
 
-        visitEntitlementService.requirePlanningAccess(accountId, visitId);
+
 
         if (visitPlanRepository.existsByVisit_IdAndOwnerVisitMember_IdAndPlanKind(visitId, visitMember.getId(), "INDIVIDUAL")) {
             throw new ApiException("You already have an individual plan for this visit");
@@ -374,6 +374,8 @@ public class VisitPlanService {
             throw new ApiException("Account is not active");
         }
 
+
+        visitEntitlementService.requirePlanningAccess(accountId, visitId);
 
         Visit visit = visitRepository.findVisitByIdForUpdate(visitId);
 
