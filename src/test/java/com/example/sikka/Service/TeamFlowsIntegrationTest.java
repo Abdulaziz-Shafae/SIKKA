@@ -144,6 +144,44 @@ class TeamFlowsIntegrationTest {
     }
 
     @Test
+    void cancelledUnstartedFreeVisitReleasesSlotButStartedVisitDoesNot() {
+        Visit first = createVisit("SOLO");
+        Integer accountId = first.getOrganizer().getId();
+        Visit second = createQuotaVisit(first.getOrganizer());
+        Visit third = createQuotaVisit(first.getOrganizer());
+        paymentOrderService.reserveEntitlement(accountId, first.getId(), "cancel-one", "INITIAL");
+        paymentOrderService.reserveEntitlement(accountId, second.getId(), "cancel-two", "INITIAL");
+        assertThrows(ApiException.class, () -> paymentOrderService.reserveEntitlement(accountId, third.getId(), "cancel-three", "INITIAL"));
+        visitService.cancel(accountId, first.getId());
+        assertNotNull(paymentOrderService.reserveEntitlement(accountId, third.getId(), "cancel-after", "INITIAL"));
+        assertTrue(Boolean.TRUE.equals(second.getFreeSlotReserved()));
+    }
+
+    @Test
+    void copiedVisitIsFreeToReuseButGenerationRequiresPayment() {
+        Visit original = createVisit("SOLO");
+        createActiveGroupPlan(original);
+        Integer accountId = original.getOrganizer().getId();
+        var result = visitService.reuseVisit(accountId, original.getId(), new ReuseVisitDtoIn(LocalDate.now().plusDays(3)));
+        Visit copied = entityManager.find(Visit.class, result.getVisitId());
+        assertEquals(original.getId(), copied.getReusedFromVisitId());
+        assertFalse(Boolean.TRUE.equals(copied.getFreeSlotReserved()));
+        var access = paymentOrderService.getPlanningAccess(accountId, copied.getId());
+        assertTrue(access.getPaymentRequired());
+        assertThrows(ApiException.class, () -> paymentOrderService.reserveEntitlement(accountId, copied.getId(), "repeat-ai", "REGENERATE"));
+        assertNotNull(entityManager.find(Visit.class, copied.getId()));
+    }
+
+    @Test
+    void repeatedVisitMemberEditsRequireVerifiedPayment() {
+        Visit original = createVisit("SOLO");
+        createActiveGroupPlan(original);
+        Integer accountId = original.getOrganizer().getId();
+        var result = visitService.reuseVisit(accountId, original.getId(), new ReuseVisitDtoIn(LocalDate.now().plusDays(3)));
+        assertThrows(ApiException.class, () -> visitMemberService.updateSelectedRides(accountId, result.getVisitId(), new SelectedRidesDtoIn()));
+    }
+
+    @Test
     void eligibilityUsesMemberSnapshotAndAgeOnVisitDate() {
         Visit visit = createVisit("SOLO");
         VisitMember member = visitMemberRepository.findAllByVisit_Id(visit.getId()).get(0);
