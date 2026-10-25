@@ -112,6 +112,19 @@ public class SecurityConfig {
                         .deleteCookies("JSESSIONID")
                 )
 
+                .exceptionHandling(ex -> ex
+                        .authenticationEntryPoint((request, response, exception) -> {
+                            response.setStatus(401);
+                            response.setContentType("application/json;charset=UTF-8");
+                            response.getWriter().write("{\"message\":\"Login required\"}");
+                        })
+                        .accessDeniedHandler((request, response, exception) -> {
+                            response.setStatus(403);
+                            response.setContentType("application/json;charset=UTF-8");
+                            response.getWriter().write("{\"message\":\"Access denied\"}");
+                        })
+                )
+
                 .httpBasic(basic -> {})
 
                 .build();
