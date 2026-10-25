@@ -27,9 +27,17 @@ public class VisitMealBreakService {
 
     private final VisitMealBreakRepository visitMealBreakRepository;
     private final VisitRepository visitRepository;
+    private final PaymentOrderService paymentOrderService;
     private final VisitMemberRepository visitMemberRepository;
     private final AccountRepository accountRepository;
     private final com.example.sikka.Repository.PlanItemRepository planItemRepository;
+
+    private void requirePaidRepeatedEdit(Visit visit) {
+        if (visit == null) throw new ApiException("Visit not found");
+        if (visit.getReusedFromVisitId() != null && !paymentOrderService.hasPaidVisit(visit.getOrganizer().getId(), visit.getId())) {
+            throw new ApiException("Pay before changing meal preferences of a repeated visit");
+        }
+    }
 
     @Transactional(readOnly = true)
     public List<VisitMealBreakDtoOut> getVisitMealBreaks(
@@ -103,6 +111,7 @@ public class VisitMealBreakService {
         }
 
         Visit visit = visitRepository.findVisitByIdForUpdate(visitId);
+        requirePaidRepeatedEdit(visit);
 
         if (visit == null){
             throw new ApiException("Visit not found");
@@ -200,6 +209,7 @@ public class VisitMealBreakService {
         getVisitMealBreaks(accountId, visitId);
 
         Visit visit = visitRepository.findVisitByIdForUpdate(visitId);
+        requirePaidRepeatedEdit(visit);
 
         if (visit == null){
             throw new ApiException("Visit not found");
@@ -312,6 +322,7 @@ public class VisitMealBreakService {
         getVisitMealBreaks(accountId, visitId);
 
         Visit visit = visitRepository.findVisitByIdForUpdate(visitId);
+        requirePaidRepeatedEdit(visit);
 
         if (visit == null){
             throw new ApiException("Visit not found");
@@ -468,6 +479,7 @@ public class VisitMealBreakService {
         getVisitMealBreaks(accountId, visitId);
 
         Visit visit = visitRepository.findVisitByIdForUpdate(visitId);
+        requirePaidRepeatedEdit(visit);
 
         if (visit == null){
             throw new ApiException("Visit not found");
@@ -511,6 +523,7 @@ public class VisitMealBreakService {
         getVisitMealBreaks(accountId, visitId);
 
         Visit visit = visitRepository.findVisitByIdForUpdate(visitId);
+        requirePaidRepeatedEdit(visit);
 
         if (visit == null){
             throw new ApiException("Visit not found");
@@ -597,6 +610,7 @@ public class VisitMealBreakService {
     public void saveMealPreferences(Integer accountId, Integer visitId, com.example.sikka.DtoIn.MealPreferencesDtoIn dto) {
         getVisitMealBreaks(accountId, visitId);
         Visit visit = visitRepository.findVisitByIdForUpdate(visitId);
+        requirePaidRepeatedEdit(visit);
         if (!"DRAFT".equals(visit.getStatus()) || Boolean.TRUE.equals(visit.getMembersLocked())) {
             throw new ApiException("Meal preferences can only be saved before planning; deferred answers during the visit require schedule preparation");
         }

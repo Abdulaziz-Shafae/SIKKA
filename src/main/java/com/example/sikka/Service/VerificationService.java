@@ -30,8 +30,7 @@ public class VerificationService {
         account.setVerificationExpiresAt(LocalDateTime.now().plusMinutes(CODE_MINUTES));
         accountRepository.save(account);
 
-        deliver(account, "Sikka verification code",
-                "Your Sikka verification code is " + code + ". It expires in " + CODE_MINUTES + " minutes.");
+        emailService.sendEmail(account.getEmail(), "Sikka verification code", "Your Sikka verification code is " + code + ". It expires in " + CODE_MINUTES + " minutes.");
     }
 
     // resend: unknown email is ignored silently (we do not reveal which emails exist)
@@ -41,8 +40,7 @@ public class VerificationService {
             return;
 
         // a code sent less than a minute ago is still fresh: ask the user to wait
-        if (account.getVerificationExpiresAt() != null
-                && account.getVerificationExpiresAt().isAfter(LocalDateTime.now().plusMinutes(CODE_MINUTES - 1)))
+        if (account.getVerificationExpiresAt() != null && account.getVerificationExpiresAt().isAfter(LocalDateTime.now().plusMinutes(CODE_MINUTES - 1)))
             throw new ApiException("please wait a minute before requesting another code");
 
         sendVerificationCode(account);
@@ -50,13 +48,7 @@ public class VerificationService {
 
     public void verify(String email, String code) {
         Account account = accountRepository.findAccountByEmail(email);
-        if (account == null
-                || account.getVerificationTokenHash() == null
-                || account.getVerificationExpiresAt() == null
-                || account.getVerificationExpiresAt().isBefore(LocalDateTime.now())
-                || !MessageDigest.isEqual(
-                hash(code).getBytes(StandardCharsets.UTF_8),
-                account.getVerificationTokenHash().getBytes(StandardCharsets.UTF_8)))
+        if (account == null || account.getVerificationTokenHash() == null || account.getVerificationExpiresAt() == null || account.getVerificationExpiresAt().isBefore(LocalDateTime.now()) || !MessageDigest.isEqual(hash(code).getBytes(StandardCharsets.UTF_8), account.getVerificationTokenHash().getBytes(StandardCharsets.UTF_8)))
             throw new ApiException("invalid or expired code");
 
         account.setEmailVerified(true);
@@ -70,8 +62,7 @@ public class VerificationService {
         if (account == null)
             return;
 
-        if (account.getResetExpiresAt() != null
-                && account.getResetExpiresAt().isAfter(LocalDateTime.now().plusMinutes(CODE_MINUTES - 1)))
+        if (account.getResetExpiresAt() != null && account.getResetExpiresAt().isAfter(LocalDateTime.now().plusMinutes(CODE_MINUTES - 1)))
             throw new ApiException("please wait a minute before requesting another code");
 
         String code = newCode();
@@ -79,19 +70,12 @@ public class VerificationService {
         account.setResetExpiresAt(LocalDateTime.now().plusMinutes(CODE_MINUTES));
         accountRepository.save(account);
 
-        deliver(account, "Sikka password reset code",
-                "Your Sikka password reset code is " + code + ". It expires in " + CODE_MINUTES + " minutes.");
+        deliver(account, "Sikka password reset code", "Your Sikka password reset code is " + code + ". It expires in " + CODE_MINUTES + " minutes.");
     }
 
     public void resetPassword(String email, String code, String newPassword) {
         Account account = accountRepository.findAccountByEmail(email);
-        if (account == null
-                || account.getResetTokenHash() == null
-                || account.getResetExpiresAt() == null
-                || account.getResetExpiresAt().isBefore(LocalDateTime.now())
-                || !MessageDigest.isEqual(
-                hash(code).getBytes(StandardCharsets.UTF_8),
-                account.getResetTokenHash().getBytes(StandardCharsets.UTF_8)))
+        if (account == null || account.getResetTokenHash() == null || account.getResetExpiresAt() == null || account.getResetExpiresAt().isBefore(LocalDateTime.now()) || !MessageDigest.isEqual(hash(code).getBytes(StandardCharsets.UTF_8), account.getResetTokenHash().getBytes(StandardCharsets.UTF_8)))
             throw new ApiException("invalid or expired code");
 
         account.setPasswordHash(passwordEncoder.encode(newPassword));

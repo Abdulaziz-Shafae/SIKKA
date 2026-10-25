@@ -25,6 +25,7 @@ public class PlanItemService {
     private final VisitPlanRepository visitPlanRepository;
     private final AccountRepository accountRepository;
     private final VisitPlanService visitPlanService;
+    private final PaymentOrderService paymentOrderService;
 
     @Transactional(readOnly = true)
     public List<PlanItemDtoOut> getPlanItems(Integer accountId, Integer visitPlanId) {
@@ -88,6 +89,7 @@ public class PlanItemService {
         }
 
         Visit visit = visitPlan.getVisit();
+        if (visit.getReusedFromVisitId() != null && !paymentOrderService.hasPaidVisit(visit.getOrganizer().getId(), visit.getId())) throw new ApiException("Pay before editing repeated visit plan items");
 
         if ("GROUP".equals(visitPlan.getPlanKind())) {
 

@@ -105,6 +105,11 @@ public class Account implements UserDetails {
     @Column(nullable = false, columnDefinition = "bigint not null default 0")
     private Long archivedFreeGenerations = 0L;
 
+    @JsonIgnore
+    @Min(value = 0, message = "Archived free visits must not be negative")
+    @Column(nullable = false, columnDefinition = "bigint not null default 0")
+    private Long archivedFreeVisits = 0L;
+
     @Override
     @JsonIgnore
     public Collection<? extends GrantedAuthority> getAuthorities() {
