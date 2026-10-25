@@ -97,7 +97,7 @@ class ServiceValidationReviewTest {
         Account account = new Account();
         account.setStatus("SUSPENDED");
         when(accounts.findAccountById(1)).thenReturn(account);
-        assertThrows(ApiException.class, () -> new PaymentOrderService(payments, accounts, visits, mock(com.example.sikka.Repository.PlanHistoryRepository.class)).addPaymentOrder(1, 2));
+        assertThrows(ApiException.class, () -> new PaymentOrderService(mock(jakarta.persistence.EntityManager.class), payments, accounts, visits, mock(com.example.sikka.Repository.PlanHistoryRepository.class)).addPaymentOrder(1, 2));
         verifyNoInteractions(payments, visits);
     }
 }

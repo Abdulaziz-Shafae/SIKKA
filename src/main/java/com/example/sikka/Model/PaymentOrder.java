@@ -64,7 +64,7 @@ public class PaymentOrder {
     private String failureReason;
 
     @ManyToOne
-    @JoinColumn(name = "visit_id", nullable = false)
+    @JoinColumn(name = "visit_id", nullable = true)
     @JsonIgnore
     private Visit visit;
 

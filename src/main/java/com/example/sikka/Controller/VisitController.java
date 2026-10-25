@@ -41,9 +41,9 @@ public class VisitController {
     }
 
     @DeleteMapping("/delete/{id}")
-    public ResponseEntity<?> delete(@PathVariable Integer id) {
-        visitService.delete(id);
-        return ResponseEntity.status(200).body(new ApiResponse("deleted successfully"));
+    public ResponseEntity<?> delete(@AuthenticationPrincipal Account account, @PathVariable Integer id) {
+        visitService.delete(account.getId(), id);
+        return ResponseEntity.status(200).body(new ApiResponse("Visit and its related data deleted successfully"));
     }
 
     @PostMapping("/create")

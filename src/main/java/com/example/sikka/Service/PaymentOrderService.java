@@ -20,6 +20,7 @@ import java.util.UUID;
 @AllArgsConstructor
 public class PaymentOrderService {
 
+    private final jakarta.persistence.EntityManager entityManager;
     private final PaymentOrderRepository paymentOrderRepository;
     private final AccountRepository accountRepository;
     private final VisitRepository visitRepository;
@@ -141,7 +142,10 @@ public class PaymentOrderService {
     public com.example.sikka.DtoOut.PlanningAccessDtoOut getPlanningAccess(Integer accountId, Integer visitId) {
         Visit visit = getPlanningVisit(accountId, visitId);
         long reservedFree = planHistoryRepository.findAllByAccount_IdOrderByStartedAtDescIdDesc(accountId).stream().filter(history -> "FREE".equals(history.getBillingMode()) && ("PROCESSING".equals(history.getStatus()) || "SUCCEEDED".equals(history.getStatus()) && Boolean.TRUE.equals(history.getCountsTowardQuota()))).count();
-        int freeRemaining = (int) Math.max(0, 2 - reservedFree);
+        Account account = accountRepository.findAccountById(accountId);
+        entityManager.refresh(account);
+        long archivedFree = account.getArchivedFreeGenerations() == null ? 0L : account.getArchivedFreeGenerations();
+        int freeRemaining = (int) Math.max(0L, 2L - reservedFree - archivedFree);
         PaymentOrder payment = findAvailableGenerationPayment(accountId, visitId);
         boolean paymentRequired = freeRemaining == 0 && payment == null;
         boolean allowed = visit.getStartedAt() == null && java.util.Set.of("DRAFT", "PLANNING", "READY").contains(visit.getStatus());
@@ -221,7 +225,7 @@ public class PaymentOrderService {
     }
 
     private boolean isVerifiedGenerationPayment(PaymentOrder payment, Integer accountId, Integer visitId) {
-        return payment != null && payment.getBuyerAccount().getId().equals(accountId) && payment.getVisit().getId().equals(visitId) && "PAID".equals(payment.getStatus()) && payment.getVerifiedAt() != null && payment.getMoyasarPaymentId() != null && !payment.getMoyasarPaymentId().isBlank() && payment.getAmountSar() != null && payment.getAmountSar().compareTo(new BigDecimal("19.00")) == 0;
+        return payment != null && payment.getVisit() != null && payment.getBuyerAccount().getId().equals(accountId) && payment.getVisit().getId().equals(visitId) && "PAID".equals(payment.getStatus()) && payment.getVerifiedAt() != null && payment.getMoyasarPaymentId() != null && !payment.getMoyasarPaymentId().isBlank() && payment.getAmountSar() != null && payment.getAmountSar().compareTo(new BigDecimal("19.00")) == 0;
     }
 
     private PaymentOrder findAvailableGenerationPayment(Integer accountId, Integer visitId) {

@@ -57,7 +57,7 @@ class DeletionIntegrationTest {
     }
 
     @Test
-    void deleteVisitAndMembersButKeepGroupAccountsAndProfiles() {
+    void deleteVisitMembersAndGroupButKeepAccountsAndProfiles() {
         Account organizer = persistAccount("visit-delete");
         VisitorProfile profile = persistProfile(organizer);
         VisitGroup group = persistGroup(organizer);
@@ -70,13 +70,13 @@ class DeletionIntegrationTest {
         Integer profileId = profile.getId();
         Integer accountId = organizer.getId();
         flushAndClear();
-        visitService.delete(visitId);
+        visitService.delete(accountId, visitId);
         flushAndClear();
         assertNull(entityManager.find(Visit.class, visitId));
         assertNull(entityManager.find(VisitMember.class, memberId));
         assertNotNull(entityManager.find(Account.class, accountId));
         assertNotNull(entityManager.find(VisitorProfile.class, profileId));
-        assertNull(entityManager.find(VisitGroup.class, groupId).getVisit());
+        assertNull(entityManager.find(VisitGroup.class, groupId));
     }
 
     @Test
@@ -136,7 +136,7 @@ class DeletionIntegrationTest {
     }
 
     @Test
-    void rejectVisitDeletionWithPaymentHistory() {
+    void deleteVisitAndPreservePaymentHistory() {
         Account account = persistAccount("paid-visit");
         Visit visit = persistVisit(account);
         PaymentOrder payment = new PaymentOrder();
@@ -148,8 +148,12 @@ class DeletionIntegrationTest {
         Integer visitId = visit.getId();
         Integer paymentId = payment.getId();
         flushAndClear();
-        assertThrows(ApiException.class, () -> visitService.delete(visitId));
-        assertNotNull(entityManager.find(PaymentOrder.class, paymentId));
+        visitService.delete(account.getId(), visitId);
+        flushAndClear();
+        assertNull(entityManager.find(Visit.class, visitId));
+        PaymentOrder retainedPayment = entityManager.find(PaymentOrder.class, paymentId);
+        assertNotNull(retainedPayment);
+        assertNull(retainedPayment.getVisit());
     }
 
     @Test
@@ -167,6 +171,81 @@ class DeletionIntegrationTest {
         visitPlanService.deleteVisitPlan(accountId, planId);
         flushAndClear();
         assertNull(entityManager.find(VisitPlan.class, planId));
+    }
+
+    @Test
+    void rejectVisitDeletionByAnotherUser() {
+        Account owner = persistAccount("delete-owner");
+        Account stranger = persistAccount("delete-stranger");
+        Visit visit = persistVisit(owner);
+        Integer visitId = visit.getId();
+        Integer strangerId = stranger.getId();
+        flushAndClear();
+        assertThrows(ApiException.class, () -> visitService.delete(strangerId, visitId));
+        assertNotNull(entityManager.find(Visit.class, visitId));
+    }
+
+    @Test
+    void preserveUsedFreeQuotaAndClearReuseSourceAfterDeletion() {
+        Account account = persistAccount("delete-quota");
+        Visit source = persistVisit(account);
+        Visit retained = persistVisit(account);
+        PlanHistory used = new PlanHistory();
+        used.setAccount(account);
+        used.setVisit(source);
+        used.setRequestKey("delete-quota-used");
+        used.setOperationType("INITIAL");
+        used.setBillingMode("FREE");
+        used.setStatus("SUCCEEDED");
+        used.setCountsTowardQuota(true);
+        entityManager.persist(used);
+        PlanHistory reused = new PlanHistory();
+        reused.setAccount(account);
+        reused.setVisit(retained);
+        reused.setSourceVisit(source);
+        reused.setRequestKey("delete-quota-reused");
+        reused.setOperationType("REUSE");
+        reused.setBillingMode("FREE");
+        reused.setStatus("FAILED");
+        entityManager.persist(reused);
+        VisitPlan plan = new VisitPlan();
+        plan.setVisit(source);
+        plan.setPlanKind("GROUP");
+        plan.setGeneratedByHistory(used);
+        entityManager.persist(plan);
+        Integer accountId = account.getId();
+        Integer visitId = source.getId();
+        Integer retainedId = retained.getId();
+        Integer reusedId = reused.getId();
+        Integer usedId = used.getId();
+        Integer planId = plan.getId();
+        flushAndClear();
+        visitService.delete(accountId, visitId);
+        flushAndClear();
+        assertNull(entityManager.find(Visit.class, visitId));
+        assertNull(entityManager.find(VisitPlan.class, planId));
+        assertNull(entityManager.find(PlanHistory.class, usedId));
+        assertEquals(1L, entityManager.find(Account.class, accountId).getArchivedFreeGenerations());
+        assertNotNull(entityManager.find(Visit.class, retainedId));
+        assertNull(entityManager.find(PlanHistory.class, reusedId).getSourceVisit());
+    }
+
+    @Test
+    void rejectVisitDeletionDuringGeneration() {
+        Account account = persistAccount("delete-processing");
+        Visit visit = persistVisit(account);
+        PlanHistory history = new PlanHistory();
+        history.setAccount(account);
+        history.setVisit(visit);
+        history.setRequestKey("delete-processing-request");
+        history.setOperationType("INITIAL");
+        history.setBillingMode("FREE");
+        entityManager.persist(history);
+        Integer accountId = account.getId();
+        Integer visitId = visit.getId();
+        flushAndClear();
+        assertThrows(ApiException.class, () -> visitService.delete(accountId, visitId));
+        assertNotNull(entityManager.find(Visit.class, visitId));
     }
 
     private Account persistAccount(String name) {

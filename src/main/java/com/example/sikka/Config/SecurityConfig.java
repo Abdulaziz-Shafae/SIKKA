@@ -79,8 +79,7 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/api/v1/visit/get",
                                 "/api/v1/visit/add",
-                                "/api/v1/visit/update/**",
-                                "/api/v1/visit/delete/**"
+                                "/api/v1/visit/update/**"
                         ).hasAuthority("ADMIN")
 
                         .requestMatchers(

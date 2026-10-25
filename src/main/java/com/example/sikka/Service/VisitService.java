@@ -44,6 +44,9 @@ import java.util.List;
 @RequiredArgsConstructor
 public class VisitService {
 
+    @jakarta.persistence.PersistenceContext
+    private jakarta.persistence.EntityManager entityManager;
+
     private final VisitRepository visitRepository;
     private final AccountRepository accountRepository;
     private final VisitGroupRepository visitGroupRepository;
@@ -134,35 +137,54 @@ public class VisitService {
         visitRepository.save(visit);
     }
 
-    @org.springframework.transaction.annotation.Transactional
-    public void delete(Integer id) {
-        Visit visit = visitRepository.findVisitById(id);
-        if (visit == null)
-            throw new ApiException("visit not found");
-
-        if ((visit.getVisitPlans() != null && !visit.getVisitPlans().isEmpty()) || (visit.getNotifications() != null && !visit.getNotifications().isEmpty()) || (visit.getPaymentOrders() != null && !visit.getPaymentOrders().isEmpty())) {
-            throw new ApiException("Cannot delete a visit linked to plans, notifications or payments");
+    @Transactional
+    public void delete(Integer accountId, Integer visitId) {
+        Account account = accountRepository.findAccountById(accountId);
+        if (account == null || !"ACTIVE".equals(account.getStatus())) {
+            throw new ApiException("An active account is required");
         }
-        if (visit.getMembers() != null) {
-            for (VisitMember member : visit.getMembers()) {
-                if ((member.getVisitPlans() != null && !member.getVisitPlans().isEmpty()) || (member.getVisitRecords() != null && !member.getVisitRecords().isEmpty())) {
-                    throw new ApiException("Cannot delete a visit whose members have plans or ride records");
-                }
-            }
+        Visit reference = visitRepository.findVisitById(visitId);
+        if (reference == null) {
+            throw new ApiException("Visit not found");
         }
-        if (visit.getGroup() != null)
-            visit.getGroup().setVisit(null);
-        if (visit.getMembers() != null) {
-            for (VisitMember member : visit.getMembers()) {
-                if (member.getVisitorProfile() != null && member.getVisitorProfile().getVisitMembers() != null) {
-                    member.getVisitorProfile().getVisitMembers().remove(member);
-                }
-            }
+        Integer ownerId = reference.getOrganizer().getId();
+        if (!ownerId.equals(accountId) && !"ADMIN".equals(account.getRole())) {
+            throw new ApiException("Only the organizer or an admin can delete this visit");
         }
-        if (visit.getOrganizer().getOrganizedVisits() != null) {
-            visit.getOrganizer().getOrganizedVisits().remove(visit);
+        entityManager.createNativeQuery("SELECT id FROM account WHERE id = :ownerId FOR UPDATE").setParameter("ownerId", ownerId).getSingleResult();
+        Visit visit = visitRepository.findVisitByIdForUpdate(visitId);
+        if (visit == null) {
+            throw new ApiException("Visit not found");
         }
-        visitRepository.delete(visit);
+        entityManager.refresh(visit, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+        if (!visit.getOrganizer().getId().equals(ownerId)) {
+            throw new ApiException("The visit organizer changed; try again");
+        }
+        Number processing = (Number) entityManager.createNativeQuery("SELECT COUNT(*) FROM plan_history WHERE visit_id = :visitId AND status = 'PROCESSING'").setParameter("visitId", visitId).getSingleResult();
+        if (processing.longValue() > 0) {
+            throw new ApiException("Wait for the current plan generation to finish before deleting the visit");
+        }
+        Integer groupId = visit.getGroup() == null ? null : visit.getGroup().getId();
+        Number usedFree = (Number) entityManager.createNativeQuery("SELECT COUNT(*) FROM plan_history WHERE visit_id = :visitId AND account_id = :ownerId AND billing_mode = 'FREE' AND status = 'SUCCEEDED' AND counts_toward_quota = true").setParameter("visitId", visitId).setParameter("ownerId", ownerId).getSingleResult();
+        entityManager.flush();
+        entityManager.createNativeQuery("UPDATE account SET archived_free_generations = COALESCE(archived_free_generations, 0) + :used WHERE id = :ownerId").setParameter("used", usedFree.longValue()).setParameter("ownerId", ownerId).executeUpdate();
+        entityManager.createNativeQuery("UPDATE payment_order SET consumed_by_plan_history_id = NULL WHERE consumed_by_plan_history_id IN (SELECT id FROM plan_history WHERE visit_id = :visitId)").setParameter("visitId", visitId).executeUpdate();
+        entityManager.createNativeQuery("UPDATE payment_order SET visit_id = NULL WHERE visit_id = :visitId").setParameter("visitId", visitId).executeUpdate();
+        entityManager.createNativeQuery("UPDATE plan_history SET source_visit_id = NULL WHERE source_visit_id = :visitId").setParameter("visitId", visitId).executeUpdate();
+        entityManager.createNativeQuery("DELETE FROM notification WHERE visit_id = :visitId OR plan_item_id IN (SELECT i.id FROM plan_item i JOIN visit_plan p ON p.id = i.visit_plan_id WHERE p.visit_id = :visitId) OR activity_session_id IN (SELECT s.id FROM activity_session s JOIN visit_member m ON m.id = s.visit_member_id WHERE m.visit_id = :visitId)").setParameter("visitId", visitId).executeUpdate();
+        entityManager.createNativeQuery("DELETE FROM visit_meal_break WHERE visit_id = :visitId").setParameter("visitId", visitId).executeUpdate();
+        entityManager.createNativeQuery("DELETE FROM visit_record WHERE visit_member_id IN (SELECT id FROM visit_member WHERE visit_id = :visitId)").setParameter("visitId", visitId).executeUpdate();
+        entityManager.createNativeQuery("DELETE FROM activity_session WHERE visit_member_id IN (SELECT id FROM visit_member WHERE visit_id = :visitId)").setParameter("visitId", visitId).executeUpdate();
+        entityManager.createNativeQuery("DELETE FROM plan_approval WHERE visit_plan_id IN (SELECT id FROM visit_plan WHERE visit_id = :visitId)").setParameter("visitId", visitId).executeUpdate();
+        entityManager.createNativeQuery("DELETE FROM plan_item WHERE visit_plan_id IN (SELECT id FROM visit_plan WHERE visit_id = :visitId)").setParameter("visitId", visitId).executeUpdate();
+        entityManager.createNativeQuery("DELETE FROM visit_plan WHERE visit_id = :visitId").setParameter("visitId", visitId).executeUpdate();
+        entityManager.createNativeQuery("DELETE FROM plan_history WHERE visit_id = :visitId").setParameter("visitId", visitId).executeUpdate();
+        entityManager.createNativeQuery("DELETE FROM visit_member WHERE visit_id = :visitId").setParameter("visitId", visitId).executeUpdate();
+        entityManager.createNativeQuery("DELETE FROM visit WHERE id = :visitId").setParameter("visitId", visitId).executeUpdate();
+        if (groupId != null) {
+            entityManager.createNativeQuery("DELETE FROM visit_group WHERE id = :groupId").setParameter("groupId", groupId).executeUpdate();
+        }
+        entityManager.clear();
     }
 
     // ---------- Flow 1 extras ----------

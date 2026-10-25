@@ -97,6 +97,11 @@ public class Account implements UserDetails {
     @JsonIgnore
     private Set<PlanHistory> planHistories;
 
+    @JsonIgnore
+    @Min(value = 0, message = "Archived free generations must not be negative")
+    @Column(nullable = false, columnDefinition = "bigint not null default 0")
+    private Long archivedFreeGenerations = 0L;
+
     @Override
     @JsonIgnore
     public Collection<? extends GrantedAuthority> getAuthorities() {
