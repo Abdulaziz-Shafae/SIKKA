@@ -25,6 +25,9 @@ public class VisitDtoIn {
     @FutureOrPresent(message = "visit date cannot be in the past")
     private LocalDate visitDate;
 
+    @Pattern(regexp = "^(SOLO|FRIENDS|FAMILY)$")
+    private String visitType;
+
     private LocalTime plannedStartTime;
 
     private LocalTime plannedEndTime;
