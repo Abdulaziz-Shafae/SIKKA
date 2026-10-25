@@ -2,6 +2,7 @@
 -- Back up production data first.
 ALTER TABLE visit
     ADD COLUMN free_slot_reserved BOOLEAN NOT NULL DEFAULT FALSE,
+    ADD COLUMN date_change_used BOOLEAN NOT NULL DEFAULT FALSE,
     ADD COLUMN reused_from_visit_id INT NULL;
 
 -- reused_from_visit_id is intentionally a numeric snapshot rather than a foreign key.
