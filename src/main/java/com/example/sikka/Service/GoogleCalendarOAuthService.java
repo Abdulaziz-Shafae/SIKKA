@@ -3,7 +3,6 @@ package com.example.sikka.Service;
 import com.example.sikka.Api.ApiException;
 import com.example.sikka.Model.*;
 import com.example.sikka.Repository.*;
-import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
@@ -17,6 +16,8 @@ import javax.crypto.spec.SecretKeySpec;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.*;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -24,6 +25,7 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class GoogleCalendarOAuthService {
+    private final GoogleCalendarOAuthStateRepository stateRepository;
     private final GoogleCalendarConnectionRepository connectionRepository;
     private final GoogleCalendarEventRepository eventRepository;
     private final AccountRepository accountRepository;
@@ -51,26 +53,31 @@ public class GoogleCalendarOAuthService {
         }
     }
 
-    public String authorizationUrl(Integer accountId, HttpSession session) {
+    public String authorizationUrl(Integer accountId) {
         configured();
         byte[] randomBytes = new byte[32];
         random.nextBytes(randomBytes);
         String state = Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes);
-        session.setAttribute("sikka_google_state", state);
-        session.setAttribute("sikka_google_account", accountId);
+        Account account = accountRepository.findAccountById(accountId);
+        if (account == null) throw new ApiException("Account not found");
+        GoogleCalendarOAuthState record = new GoogleCalendarOAuthState();
+        record.setStateHash(hashState(state));
+        record.setAccount(account);
+        record.setExpiresAt(LocalDateTime.now(ZoneOffset.UTC).plusMinutes(10));
+        stateRepository.save(record);
         String scope = "https://www.googleapis.com/auth/calendar.events";
         return "https://accounts.google.com/o/oauth2/v2/auth?response_type=code&client_id=" + enc(clientId) + "&redirect_uri=" + enc(redirectUri) + "&scope=" + enc(scope) + "&access_type=offline&prompt=consent&state=" + enc(state);
     }
 
-    public void callback(Integer accountId, String state, String code, HttpSession session) {
+    public void callback(String state, String code) {
         configured();
-        Object savedState = session.getAttribute("sikka_google_state");
-        Object savedAccount = session.getAttribute("sikka_google_account");
-        session.removeAttribute("sikka_google_state");
-        session.removeAttribute("sikka_google_account");
-        if (!(savedState instanceof String) || !(savedAccount instanceof Integer) || !Objects.equals(savedState, state) || !Objects.equals(savedAccount, accountId)) {
-            throw new ApiException("Invalid Google Calendar authorization state");
+        if (state == null || state.isBlank()) throw new ApiException("Missing Google Calendar authorization state");
+        String stateHash = hashState(state);
+        GoogleCalendarOAuthState pending = stateRepository.findById(stateHash).orElseThrow(() -> new ApiException("Invalid or expired Google Calendar authorization state"));
+        if (stateRepository.consume(stateHash, LocalDateTime.now(ZoneOffset.UTC)) != 1) {
+            throw new ApiException("Google Calendar authorization state has expired or already been used");
         }
+        Integer accountId = pending.getAccount().getId();
         if (code == null || code.isBlank()) {
             throw new ApiException("Google authorization code is missing");
         }
@@ -185,6 +192,15 @@ public class GoogleCalendarOAuthService {
             return new String(cipher.doFinal(Arrays.copyOfRange(all, 12, all.length)), StandardCharsets.UTF_8);
         } catch (Exception e) {
             throw new IllegalStateException("Could not decrypt Google credentials", e);
+        }
+    }
+
+    private String hashState(String value) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));
+            return java.util.HexFormat.of().formatHex(digest);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 is unavailable", e);
         }
     }
 
