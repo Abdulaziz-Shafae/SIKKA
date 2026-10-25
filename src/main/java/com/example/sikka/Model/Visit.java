@@ -111,9 +111,6 @@ public class Visit {
     @Column(nullable = false)
     private Boolean freeSlotReserved = false;
 
-    @Column(nullable = false)
-    private Boolean dateChangeUsed = false;
-
     @Column(name = "reused_from_visit_id")
     private Integer reusedFromVisitId;
 
