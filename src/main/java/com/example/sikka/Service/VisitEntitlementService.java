@@ -42,7 +42,7 @@ public class VisitEntitlementService {
         if (Boolean.TRUE.equals(visit.getFreeGenerationUsed())) throw new ApiException("Regeneration requires verified payment");
         if (Boolean.TRUE.equals(visit.getFreeSlotReserved())) return;
         List<Visit> visits = visitRepository.findAllByOrganizer_Id(accountId);
-        long used = visits.stream().filter(v -> v.getStartedAt() != null || (Boolean.TRUE.equals(v.getFreeSlotReserved()) && !"CANCELLED".equals(v.getStatus()))).count();
+        long used = visits.stream().filter(v -> Boolean.TRUE.equals(v.getFreeSlotReserved()) && !"CANCELLED".equals(v.getStatus()) && !isPaid(v)).count();
         if (used >= 2) throw new ApiException("Free visits exhausted; verified payment required");
         visit.setFreeSlotReserved(true);
         visitRepository.save(visit);
@@ -63,6 +63,6 @@ public class VisitEntitlementService {
     public void verifyStartLocked(Visit visit) {
         if (!LocalDate.now(ZoneId.of("Asia/Riyadh")).equals(visit.getVisitDate())) throw new ApiException("Visit can start only on its scheduled date");
         if (!isPaid(visit) && !Boolean.TRUE.equals(visit.getFreeSlotReserved())) throw new ApiException("Free slot or verified payment required");
-        if (!isPaid(visit) && !Boolean.TRUE.equals(visit.getFreeGenerationUsed())) throw new ApiException("A successfully generated plan is required");
+        // Plan approval already verifies that the scheduled plan contains activities.
     }
 }
