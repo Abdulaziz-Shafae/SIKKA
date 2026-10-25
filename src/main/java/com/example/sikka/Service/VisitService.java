@@ -268,7 +268,7 @@ public class VisitService {
         if (!"DRAFT".equals(visit.getStatus()) || Boolean.TRUE.equals(visit.getMembersLocked()))
             throw new ApiException("Visit details can only be changed while the visit is in DRAFT");
 
-        if (visit.getReusedFromVisit() != null && !paymentOrderService.hasPaidVisit(accountId, visitId)) {
+        if (visit.getReusedFromVisitId() != null && !paymentOrderService.hasPaidVisit(accountId, visitId)) {
             if (!Objects.equals(visit.getName(), dto.getName()) || !Objects.equals(visit.getTripType(), dto.getTripType()) || !Objects.equals(visit.getMaxParticipants(), resolveMaxParticipants(dto)) || !Objects.equals(visit.getDurationMinutes(), dto.getDurationMinutes()) || !Objects.equals(visit.getGoals(), dto.getGoals()) || !Objects.equals(visit.getPrimaryGoal(), dto.getPrimaryGoal()) || !Objects.equals(visit.getTogetherMode(), dto.getTogetherMode()) || !Objects.equals(visit.getIncludePrayer(), dto.getIncludePrayer())) throw new ApiException("Payment is required before changing repeated visit preferences");
         }
 
@@ -369,10 +369,10 @@ public class VisitService {
             }
         }
 
-        if (visit.getReusedFromVisit() == null && !Boolean.TRUE.equals(visit.getFreeSlotReserved()) && !paymentOrderService.hasPaidVisit(accountId, visitId)) {
+        if (visit.getReusedFromVisitId() == null && !Boolean.TRUE.equals(visit.getFreeSlotReserved()) && !paymentOrderService.hasPaidVisit(accountId, visitId)) {
             throw new ApiException("Visit payment or free entitlement is required");
         }
-        if (visit.getReusedFromVisit() != null && !paymentOrderService.hasPaidVisit(accountId, visitId) && !Boolean.TRUE.equals(visit.getFreeSlotReserved())) {
+        if (visit.getReusedFromVisitId() != null && !paymentOrderService.hasPaidVisit(accountId, visitId) && !Boolean.TRUE.equals(visit.getFreeSlotReserved())) {
             // A copied, unchanged itinerary remains free.
         }
         changeStatus(visitId, "IN_PROGRESS");
@@ -787,7 +787,7 @@ public class VisitService {
 
         Visit newVisit = new Visit();
         newVisit.setOrganizer(account);
-        newVisit.setReusedFromVisit(sourceVisit);
+        newVisit.setReusedFromVisitId(sourceVisit.getId());
         newVisit.setName(sourceVisit.getName());
         newVisit.setVisitDate(dto.getVisitDate());
         newVisit.setMaxParticipants(sourceVisit.getMaxParticipants());
