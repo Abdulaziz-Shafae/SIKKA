@@ -31,8 +31,8 @@ class ServiceValidationReviewTest {
     @Test
     void rejectNullRsvpBeforeQueryingMembership() {
         VisitMemberRepository members = mock(VisitMemberRepository.class);
-        VisitMemberService service = new VisitMemberService(members, mock(VisitRepository.class), mock(VisitorProfileRepository.class), mock(VisitGroupService.class), mock(RideService.class), mock(com.example.sikka.Repository.FamilyMemberRepository.class), mock(com.example.sikka.Repository.VisitPlanRepository.class), mock(com.example.sikka.Repository.VisitRecordRepository.class));
-        assertThrows(ApiException.class, () -> service.updateRsvp(1, 2, null));
+        VisitMemberService service = new VisitMemberService(members, mock(VisitRepository.class), mock(PaymentOrderService.class), mock(VisitorProfileRepository.class), mock(VisitGroupService.class), mock(RideService.class), mock(com.example.sikka.Repository.FamilyMemberRepository.class), mock(com.example.sikka.Repository.VisitPlanRepository.class), mock(com.example.sikka.Repository.VisitRecordRepository.class));
+        assertThrows(ApiException.class, () -> service.updateRsvp(1, 2, 0));
         verifyNoInteractions(members);
     }
 
@@ -72,7 +72,7 @@ class ServiceValidationReviewTest {
         dto.setOrganizerId(1);
         dto.setVisitDate(LocalDate.now().plusDays(1));
         dto.setMaxParticipants(3);
-        VisitService service = new VisitService(visits, accounts, mock(VisitGroupRepository.class), mock(com.example.sikka.Repository.PlanItemRepository.class), mock(VisitMemberRepository.class), profiles, members, mock(VisitGroupService.class), mock(com.example.sikka.Service.PaymentOrderService.class), mock(com.example.sikka.Repository.VisitPlanRepository.class), mock(com.example.sikka.Service.VisitPlanService.class));
+        VisitService service = new VisitService(visits, accounts, mock(VisitGroupRepository.class), mock(com.example.sikka.Repository.PlanItemRepository.class), mock(VisitMemberRepository.class), profiles, members, mock(VisitGroupService.class), mock(com.example.sikka.Service.PaymentOrderService.class), mock(com.example.sikka.Repository.VisitPlanRepository.class), mock(com.example.sikka.Repository.PlanApprovalRepository.class), mock(com.example.sikka.Repository.VisitMealBreakRepository.class), mock(com.example.sikka.Repository.PlanHistoryRepository.class), mock(com.example.sikka.Service.VisitPlanService.class));
         service.add(dto);
         verify(members).addOrganizer(argThat(visit -> visit.getOrganizer() == organizer && "DRAFT".equals(visit.getStatus())), eq(profile));
     }
@@ -84,7 +84,7 @@ class ServiceValidationReviewTest {
         visit.setStatus("PLANNING");
         visit.setMembersLocked(true);
         when(visits.findVisitByIdForUpdate(2)).thenReturn(visit);
-        VisitService service = new VisitService(visits, mock(AccountRepository.class), mock(VisitGroupRepository.class), mock(com.example.sikka.Repository.PlanItemRepository.class), mock(VisitMemberRepository.class), mock(VisitorProfileRepository.class), mock(VisitMemberService.class), mock(VisitGroupService.class), mock(com.example.sikka.Service.PaymentOrderService.class), mock(com.example.sikka.Repository.VisitPlanRepository.class), mock(com.example.sikka.Service.VisitPlanService.class));
+        VisitService service = new VisitService(visits, mock(AccountRepository.class), mock(VisitGroupRepository.class), mock(com.example.sikka.Repository.PlanItemRepository.class), mock(VisitMemberRepository.class), mock(VisitorProfileRepository.class), mock(VisitMemberService.class), mock(VisitGroupService.class), mock(com.example.sikka.Service.PaymentOrderService.class), mock(com.example.sikka.Repository.VisitPlanRepository.class), mock(com.example.sikka.Repository.PlanApprovalRepository.class), mock(com.example.sikka.Repository.VisitMealBreakRepository.class), mock(com.example.sikka.Repository.PlanHistoryRepository.class), mock(com.example.sikka.Service.VisitPlanService.class));
         assertThrows(ApiException.class, () -> service.update(2, new VisitDtoIn()));
         verify(visits, never()).save(any());
     }
