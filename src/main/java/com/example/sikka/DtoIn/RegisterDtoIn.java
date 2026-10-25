@@ -45,4 +45,7 @@ public class RegisterDtoIn {
     private String dislikedRideFeatures;
 
     private String foodPreferences;
+
+    @Pattern(regexp = "^[0-9]{10,15}$", message = "phone must be digits only with country code, for example 9665XXXXXXXX")
+    private String phone;
 }

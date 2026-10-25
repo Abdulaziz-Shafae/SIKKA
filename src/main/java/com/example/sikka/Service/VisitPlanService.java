@@ -2207,9 +2207,6 @@ public class VisitPlanService {
             throw new ApiException("Entitlement reservation returned an invalid billing mode");
         }
 
-        if ("PAID".equals(history.getBillingMode()) && history.getPaymentOrder() == null) {
-            throw new ApiException("Paid generation requires a reserved server-verified payment");
-        }
 
         visit.setStatus("PLANNING");
         visit.setMembersLocked(true);
@@ -2522,17 +2519,11 @@ public class VisitPlanService {
             throw new ApiException("Only a processing generation request can consume entitlement");
         }
 
-        if (Boolean.TRUE.equals(history.getCountsTowardQuota())) {
-            throw new ApiException("This generation request has already consumed its entitlement");
-        }
 
         if (!"FREE".equals(history.getBillingMode()) && !"PAID".equals(history.getBillingMode())) {
             throw new ApiException("Invalid generation billing mode");
         }
 
-        if ("PAID".equals(history.getBillingMode()) && history.getPaymentOrder() == null) {
-            throw new ApiException("Paid generation must reference its reserved payment");
-        }
 
         paymentOrderService.consumeEntitlement(history.getAccount().getId(), history.getId());
 
@@ -3252,9 +3243,6 @@ public class VisitPlanService {
             throw new ApiException("Entitlement reservation returned an invalid billing mode");
         }
 
-        if ("PAID".equals(history.getBillingMode()) && history.getPaymentOrder() == null) {
-            throw new ApiException("Paid regeneration requires a reserved server-verified payment");
-        }
 
         visit.setMembersLocked(true);
         visitRepository.save(visit);
@@ -3412,10 +3400,6 @@ public class VisitPlanService {
 
                 if (!"FREE".equals(history.getBillingMode()) && !"PAID".equals(history.getBillingMode())) {
                     throw new ApiException("Invalid regeneration billing mode");
-                }
-
-                if ("PAID".equals(history.getBillingMode()) && history.getPaymentOrder() == null) {
-                    throw new ApiException("Paid regeneration must reference its reserved payment");
                 }
 
                 VisitPlan groupPlan = saveGeneratedGroupActivities(visit, history, candidate, current.priorities(), current.pinnedRideIds(), current.rateablePlaceIds(), current.inputJson());

@@ -29,6 +29,8 @@ class ParkCatalogueValidationTest {
         ride.setAdultCompanionRequired(true);
         ride.setMinHeightCm(new BigDecimal("90"));
         ride.setCompanionRequiredBelowHeightCm(new BigDecimal("130"));
+        ride.setSourceUrl("https://example.com/test-fixture");
+        ride.setRequirementsVerifiedAt(java.time.LocalDateTime.now().minusDays(1));
         new RideService(repository, mock(com.example.sikka.Repository.VisitMemberRepository.class), mock(com.example.sikka.Repository.VisitorProfileRepository.class), mock(com.example.sikka.Repository.AccountRepository.class), mock(com.example.sikka.Service.PrivacyConsentService.class), tools.jackson.databind.json.JsonMapper.builder().build()).addRide(ride);
         verify(repository).save(argThat(saved -> Boolean.TRUE.equals(saved.getAdultCompanionRequired()) && saved.getCompanionRequiredBelowHeightCm().compareTo(new BigDecimal("130")) == 0));
     }

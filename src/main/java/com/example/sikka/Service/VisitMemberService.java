@@ -32,6 +32,7 @@ public class VisitMemberService {
 
     private final VisitMemberRepository visitMemberRepository;
     private final VisitRepository visitRepository;
+    private final PaymentOrderService paymentOrderService;
     private final VisitorProfileRepository visitorProfileRepository;
     private final VisitGroupService visitGroupService;
     private final RideService rideService;
@@ -54,6 +55,7 @@ public class VisitMemberService {
         if (profile == null)
             throw new ApiException("visitor profile not found");
 
+        requirePaidRepeatedEdit(visit);
         createMember(visit, profile);
     }
 
@@ -65,6 +67,7 @@ public class VisitMemberService {
 
         visitRepository.findVisitByIdForUpdate(member.getVisit().getId());
         checkOpenForChanges(member.getVisit());
+        requirePaidRepeatedEdit(member.getVisit());
         if (isOrganizerMember(member, member.getVisit().getOrganizer().getId()))
             throw new ApiException("organizer cannot be removed");
         validateMemberDeletion(member);
@@ -121,6 +124,7 @@ public class VisitMemberService {
     public void updateSelectedRides(Integer accountId, Integer visitId, SelectedRidesDtoIn dto) {
         VisitMember member = getMemberLocked(accountId, visitId);
         checkOpenForChanges(member.getVisit());
+        requirePaidRepeatedEdit(member.getVisit());
 
         if (dto == null || dto.getRides() == null) {
             throw new ApiException("Selected rides list is required");
@@ -161,6 +165,7 @@ public class VisitMemberService {
         if (member.getVisit().getOrganizer().getId().equals(accountId))
             throw new ApiException("organizer cannot leave, cancel the visit instead");
         checkOpenForChanges(member.getVisit());
+        requirePaidRepeatedEdit(member.getVisit());
 
         validateMemberDeletion(member);
         detachMember(member);
@@ -226,6 +231,7 @@ public class VisitMemberService {
             throw new ApiException("organizer cannot be removed");
 
         checkOpenForChanges(visit);
+        requirePaidRepeatedEdit(visit);
         validateMemberDeletion(member);
         detachMember(member);
         visitMemberRepository.delete(member);
@@ -291,6 +297,12 @@ public class VisitMemberService {
     }
 
     // join, rsvp, rides, leave and remove are allowed in DRAFT only (generate moves the visit to PLANNING)
+    private void requirePaidRepeatedEdit(Visit visit) {
+        if (visit.getReusedFromVisitId() != null && !paymentOrderService.hasPaidVisit(visit.getOrganizer().getId(), visit.getId())) {
+            throw new ApiException("Pay before changing members or preferences of a repeated visit");
+        }
+    }
+
     private void checkOpenForChanges(Visit visit) {
         if (!"DRAFT".equals(visit.getStatus()) || Boolean.TRUE.equals(visit.getMembersLocked()))
             throw new ApiException("members can only be changed while the visit is in DRAFT");
@@ -308,6 +320,7 @@ public class VisitMemberService {
     private void createMember(Visit visit, VisitorProfile profile) {
         visit = visitRepository.findVisitByIdForUpdate(visit.getId());
         checkOpenForChanges(visit);
+        requirePaidRepeatedEdit(visit);
 
         if (visitMemberRepository.findVisitMemberByVisitAndVisitorProfile(visit, profile) != null)
             throw new ApiException("visitor is already a member of this visit");
@@ -369,6 +382,7 @@ public class VisitMemberService {
             throw new ApiException("Only the organizer can add family members to a family visit");
         }
         checkOpenForChanges(visit);
+        requirePaidRepeatedEdit(visit);
         if (dto == null || dto.getFamilyMemberIds() == null || dto.getFamilyMemberIds().isEmpty() || new HashSet<>(dto.getFamilyMemberIds()).size() != dto.getFamilyMemberIds().size()) {
             throw new ApiException("Select distinct saved family members");
         }
@@ -418,6 +432,7 @@ public class VisitMemberService {
         }
         Visit visit = visitRepository.findVisitByIdForUpdate(member.getVisit().getId());
         checkOpenForChanges(visit);
+        requirePaidRepeatedEdit(visit);
         boolean own = member.getVisitorProfile() != null && member.getVisitorProfile().getAccount().getId().equals(accountId);
         boolean managed = visit.getOrganizer().getId().equals(accountId) && "FAMILY".equals(visit.getTripType()) && member.getVisitorProfile() == null;
         if (!own && !managed || !"GOING".equals(member.getRsvpStatus())) {

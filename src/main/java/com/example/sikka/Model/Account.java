@@ -87,6 +87,9 @@ public class Account implements UserDetails {
     @OneToMany(mappedBy = "recordedByAccount")
     private Set<VisitRecord> visitRecords;
 
+    @Column(columnDefinition = "varchar(20)")
+    private String phone;
+
     @OneToMany(mappedBy = "buyerAccount")
     private Set<PaymentOrder> paymentOrders;
 
@@ -101,6 +104,11 @@ public class Account implements UserDetails {
     @Min(value = 0, message = "Archived free generations must not be negative")
     @Column(nullable = false, columnDefinition = "bigint not null default 0")
     private Long archivedFreeGenerations = 0L;
+
+    @JsonIgnore
+    @Min(value = 0, message = "Archived free visits must not be negative")
+    @Column(nullable = false, columnDefinition = "bigint not null default 0")
+    private Long archivedFreeVisits = 0L;
 
     @Override
     @JsonIgnore
