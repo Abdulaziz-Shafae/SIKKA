@@ -74,7 +74,9 @@ public class PaymentOrderService {
         if (!"ACTIVE".equals(account.getStatus())) {
             throw new ApiException("Account is not active");
         }
-        Visit visit = visitRepository.findVisitByIdForUpdate(visitId);
+        Visit visit = visitRepository.findVisitById(visitId);
+        if (visit != null) accountRepository.findAccountByIdForUpdate(visit.getOrganizer().getId());
+        visit = visitRepository.findVisitByIdForUpdate(visitId);
 
         if (visit == null){
             throw new ApiException("Visit not found");
@@ -127,7 +129,9 @@ public class PaymentOrderService {
         }
 
         if (visit.getVisitType() == null || !visit.getVisitType().matches("SOLO|FRIENDS|FAMILY")) throw new ApiException("Invalid visit type");
-        newPaymentOrder.setAmountSar(new BigDecimal("SOLO".equals(visit.getVisitType()) ? "19.00" : "29.00"));
+        String visitType = visit.getVisitType();
+        if (!"SOLO".equals(visitType) && !"FRIENDS".equals(visitType) && !"FAMILY".equals(visitType)) throw new ApiException("Invalid visit type");
+        newPaymentOrder.setAmountSar(new BigDecimal("SOLO".equals(visitType) ? "19.00" : "29.00"));
         newPaymentOrder.setStatus("PENDING");
         newPaymentOrder.setVisit(visit);
         newPaymentOrder.setBuyerAccount(account);
