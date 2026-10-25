@@ -268,6 +268,10 @@ public class VisitService {
         if (!"DRAFT".equals(visit.getStatus()) || Boolean.TRUE.equals(visit.getMembersLocked()))
             throw new ApiException("Visit details can only be changed while the visit is in DRAFT");
 
+        if (visit.getReusedFromVisit() != null && !paymentOrderService.hasPaidVisit(accountId, visitId)) {
+            if (!Objects.equals(visit.getName(), dto.getName()) || !Objects.equals(visit.getTripType(), dto.getTripType()) || !Objects.equals(visit.getMaxParticipants(), resolveMaxParticipants(dto)) || !Objects.equals(visit.getDurationMinutes(), dto.getDurationMinutes()) || !Objects.equals(visit.getGoals(), dto.getGoals()) || !Objects.equals(visit.getPrimaryGoal(), dto.getPrimaryGoal()) || !Objects.equals(visit.getTogetherMode(), dto.getTogetherMode()) || !Objects.equals(visit.getIncludePrayer(), dto.getIncludePrayer())) throw new ApiException("Payment is required before changing repeated visit preferences");
+        }
+
         if (visit.getTripType() != null && !visit.getTripType().equals(dto.getTripType()))
             throw new ApiException("trip type cannot be changed, create a new visit");
 
@@ -835,7 +839,7 @@ public class VisitService {
 
         boolean hasInvitedMembers = false;
 
-        if ("FAMILY".equals(tripType)) {
+        if ("FAMILY".equals(tripType) || "FRIENDS".equals(tripType)) {
 
             List<VisitMember> sourceMembers = visitMemberRepository.findAllByVisit_IdAndRsvpStatus(sourceVisitId, "GOING");
             sourceMembers.sort(Comparator.comparing(VisitMember::getId));
