@@ -50,6 +50,10 @@ public class VisitEntitlementService {
 
     @Transactional
     public void recordSuccessfulGeneration(Integer visitId) {
+        Visit existing = visitRepository.findVisitById(visitId);
+        if (existing == null) throw new ApiException("Visit not found");
+        Account account = accountRepository.findAccountByIdForUpdate(existing.getOrganizer().getId());
+        if (account == null) throw new ApiException("Account not found");
         Visit visit = visitRepository.findVisitByIdForUpdate(visitId);
         if (visit == null) throw new ApiException("Visit not found");
         if (isPaid(visit) || Boolean.TRUE.equals(visit.getFreeGenerationUsed())) return;
