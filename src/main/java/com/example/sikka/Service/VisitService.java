@@ -210,6 +210,8 @@ public class VisitService {
 
     @Transactional
     public void startVisit(Integer accountId, Integer visitId) {
+        Account account = accountRepository.findAccountByIdForUpdate(accountId);
+        if (account == null) throw new ApiException("Account not found");
         checkOrganizer(accountId, visitId);
         changeStatus(visitId, "IN_PROGRESS");
     }
