@@ -3,7 +3,6 @@ package com.example.sikka.Controller;
 import com.example.sikka.Model.Account;
 import com.example.sikka.Service.GoogleCalendarService;
 import com.example.sikka.Service.GoogleCalendarOAuthService;
-import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.HttpHeaders;
@@ -37,14 +36,14 @@ public class GoogleCalendarController {
         return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"sikka-visit-" + visitId + ".ics\"").contentType(MediaType.parseMediaType("text/calendar; charset=UTF-8")).body(file);
     }
     @GetMapping("/oauth/connect")
-    public ResponseEntity<?> connect(@AuthenticationPrincipal Account account, HttpSession session) {
-        return ResponseEntity.ok(Map.of("url", googleCalendarOAuthService.authorizationUrl(account.getId(), session)));
+    public ResponseEntity<?> connect(@AuthenticationPrincipal Account account) {
+        return ResponseEntity.ok(Map.of("url", googleCalendarOAuthService.authorizationUrl(account.getId())));
     }
 
     @GetMapping("/oauth/callback")
-    public ResponseEntity<?> callback(@AuthenticationPrincipal Account account, @RequestParam(required = false) String code, @RequestParam(required = false) String state, @RequestParam(required = false) String error, HttpSession session) {
+    public ResponseEntity<?> callback(@RequestParam(required = false) String code, @RequestParam(required = false) String state, @RequestParam(required = false) String error) {
         if (error != null) return ResponseEntity.badRequest().body(Map.of("message", "Google Calendar access was not granted"));
-        googleCalendarOAuthService.callback(account.getId(), state, code, session);
+        googleCalendarOAuthService.callback(state, code);
         return ResponseEntity.ok(Map.of("message", "Google Calendar connected"));
     }
 
