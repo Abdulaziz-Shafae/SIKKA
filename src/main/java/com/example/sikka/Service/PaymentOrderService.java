@@ -139,6 +139,11 @@ public class PaymentOrderService {
         return new BigDecimal("SOLO".equals(visit.getTripType()) ? "19.00" : "29.00");
     }
 
+    @Transactional(readOnly = true)
+    public boolean hasPaidVisit(Integer accountId, Integer visitId) {
+        return isPaid(accountId, getPlanningVisit(accountId, visitId));
+    }
+
     private boolean isPaid(Integer accountId, Visit visit) {
         return paymentOrderRepository.findPaymentOrdersByVisitId(visit.getId()).stream().anyMatch(p -> isVerifiedGenerationPayment(p, accountId, visit.getId()));
     }
