@@ -136,6 +136,7 @@ public class PaymentOrderService {
     }
 
     private BigDecimal getPrice(Visit visit) {
+        if (!Set.of("SOLO", "FRIENDS", "FAMILY").contains(visit.getTripType())) throw new ApiException("Valid tripType is required");
         return new BigDecimal("SOLO".equals(visit.getTripType()) ? "19.00" : "29.00");
     }
 
@@ -152,6 +153,7 @@ public class PaymentOrderService {
         return visitRepository.findAllByOrganizer_Id(accountId).stream()
                 .filter(v -> Boolean.TRUE.equals(v.getFreeSlotReserved()))
                 .filter(v -> !"CANCELLED".equals(v.getStatus()) || v.getStartedAt() != null)
+                .filter(v -> v.getStartedAt() != null || !isPaid(accountId, v))
                 .count();
     }
 
