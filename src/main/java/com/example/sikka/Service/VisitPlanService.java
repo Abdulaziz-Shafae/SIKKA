@@ -1658,6 +1658,7 @@ public class VisitPlanService {
         input.put("eligibilityByRideAndMember", eligibilityByRideAndMember);
         input.put("arrivalTimeKnown", false);
         input.put("prayerTimesVerified", false);
+        input.put("prayerReserveMinutes", Boolean.TRUE.equals(visit.getIncludePrayer()) ? 15 : 0);
 
         List<String> warnings = new ArrayList<>();
 
@@ -2678,6 +2679,12 @@ public class VisitPlanService {
         }
 
         validateExcludedRides(candidate, input, completedRideParticipants, rides, snapshot.eligibility());
+
+        if (input.path("includePrayer").asBoolean()) {
+            int latestEnd = candidate.getActivities().stream().mapToInt(AiPlanItemDtoOut::getRelativeEndMinutes).max().orElse(0);
+            int duration = requirePositiveInteger(input, "durationMinutes");
+            if (latestEnd > duration - 15) throw new ApiException("Initial planning must reserve 15 minutes for prayer without inventing a prayer time");
+        }
 
         validateSnapshotWalking(byMember, rides, places, input.path("walking"));
 
