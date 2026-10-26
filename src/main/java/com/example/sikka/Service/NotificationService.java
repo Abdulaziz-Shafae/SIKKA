@@ -40,6 +40,7 @@ import java.util.Objects;
 @RequiredArgsConstructor
 public class NotificationService {
 
+    private final NotificationEventService notificationEventService;
     private final NotificationRepository notificationRepository;
     private final com.example.sikka.Repository.PlanItemRepository planItemRepository;
     private final com.example.sikka.Repository.VisitRecordRepository visitRecordRepository;
@@ -224,6 +225,8 @@ public class NotificationService {
         setInitialDeliveryStatus(notification);
 
         notificationRepository.save(notification);
+
+        notificationEventService.forwardCriticalNotification(notification);
 
         session.setLastAlertKey(eventKey);
 
@@ -411,6 +414,7 @@ public class NotificationService {
             notification.setActionType(canSuggest ? "SUGGEST_REPLAN" : "VIEW_PLAN");
             setInitialDeliveryStatus(notification);
             notificationRepository.save(notification);
+            notificationEventService.forwardCriticalNotification(notification);
             created++;
         }
         return created;

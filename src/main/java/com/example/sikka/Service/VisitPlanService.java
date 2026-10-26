@@ -95,6 +95,7 @@ public class VisitPlanService {
     private final RidePreferenceRepository ridePreferenceRepository;
     private final PlatformTransactionManager transactionManager;
     private final PlanApprovalRepository planApprovalRepository;
+    private final NotificationEventService notificationEventService;
     private final NotificationRepository notificationRepository;
 
     @jakarta.persistence.PersistenceContext
@@ -2535,6 +2536,7 @@ public class VisitPlanService {
 
         planHistoryRepository.save(history);
         planHistoryRepository.flush();
+        notificationEventService.notifyPlanGenerated(history);
 
         return convertGenerationRequestToDtoOut(history);
     }
@@ -3455,6 +3457,7 @@ public class VisitPlanService {
                 history.setGenerationResultSnapshot(writeGenerationJson(candidate));
 
                 planHistoryRepository.save(history);
+                notificationEventService.notifyPlanGenerated(history);
                 planHistoryRepository.flush();
 
                 return convertGenerationRequestToDtoOut(history);
@@ -4019,6 +4022,7 @@ public class VisitPlanService {
                 notificationRepository.save(delayNotification);
             }
 
+            notificationEventService.notifyReplanRequested(plan, proposalKey);
             return new ReplanProposalDtoOut(plan.getId(), approval.getId(), prepared.scope(), "PENDING", accountId, approver.getId(), prepared.affectedIds(), proposalKey);
         });
     }
@@ -4467,6 +4471,9 @@ public class VisitPlanService {
 
             planItemRepository.saveAll(items);
         }
+
+        notificationEventService.notifyReplanResult(plan, dto.getProposalKey(),
+                "APPROVED".equals(status), affectedIds);
 
         approval.setStatus("APPROVED");
         approval.setApprovalScope("GROUP");

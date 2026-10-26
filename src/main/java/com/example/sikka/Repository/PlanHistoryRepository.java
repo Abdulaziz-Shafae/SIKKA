@@ -3,8 +3,8 @@ package com.example.sikka.Repository;
 import com.example.sikka.Model.PlanHistory;
 import com.example.sikka.Model.Account;
 import jakarta.persistence.LockModeType;
-import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -30,7 +30,6 @@ public interface PlanHistoryRepository extends JpaRepository<PlanHistory, Intege
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select a from Account a where a.id = :accountId")
     Account findAccountByIdForGenerationUpdate(@Param("accountId") Integer accountId);
-
     interface GeneratedPlanReference {
 
         Integer getHistoryId();

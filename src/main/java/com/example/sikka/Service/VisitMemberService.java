@@ -17,12 +17,13 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
+import java.util.*;
+
 import com.example.sikka.DtoIn.SelectedRideDtoIn;
 import com.example.sikka.DtoIn.SelectedRidesDtoIn;
-import java.util.HashSet;
-import java.util.Set;
-import java.util.List;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+
 import java.time.LocalDate;
 import java.time.ZoneId;
 
@@ -39,6 +40,8 @@ public class VisitMemberService {
     private final com.example.sikka.Repository.FamilyMemberRepository familyMemberRepository;
     private final com.example.sikka.Repository.VisitPlanRepository visitPlanRepository;
     private final com.example.sikka.Repository.VisitRecordRepository visitRecordRepository;
+    private final N8nNotificationService n8nNotificationService;
+    private final NotificationEventService notificationEventService;
     // ---------- CRUD ----------
 
     public List<VisitMember> get() {
@@ -111,13 +114,23 @@ public class VisitMemberService {
         if (statusInt < 1 || statusInt > 3) {
             throw new ApiException("Attendance action must be 1, 2 or 3");
         }
-        String rsvp = statusInt == 1 ? "GOING" : statusInt == 2 ? "MAYBE" : "NOT_GOING";
+
+        String rsvp = statusInt == 1 ? "GOING"
+                : statusInt == 2 ? "MAYBE" : "NOT_GOING";
 
         VisitMember member = getMemberLocked(accountId, visitId);
         checkOpenForChanges(member.getVisit());
 
+        if (rsvp.equals(member.getRsvpStatus())) {
+            return;
+        }
+
+        boolean firstResponse = "INVITED".equals(member.getRsvpStatus());
+
         member.setRsvpStatus(rsvp);
         visitMemberRepository.save(member);
+
+        notificationEventService.notifyMemberRsvp(member, firstResponse);
     }
 
     @Transactional

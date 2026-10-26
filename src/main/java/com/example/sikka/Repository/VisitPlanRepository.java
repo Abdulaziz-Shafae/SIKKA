@@ -21,8 +21,7 @@ public interface VisitPlanRepository extends JpaRepository<VisitPlan, Integer> {
 
     boolean existsByVisit_IdAndOwnerVisitMember_IdAndPlanKind(Integer visitId, Integer visitMemberId, String planKind);
 
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select p from VisitPlan p where p.id = :visitPlanId")
+    @Query(value = "select * from visit_plan where id = :visitPlanId for update", nativeQuery = true)
     VisitPlan findVisitPlanByIdForUpdate(@Param("visitPlanId") Integer visitPlanId);
 
     VisitPlan findVisitPlanByVisit_IdAndOwnerVisitMember_IdAndPlanKind(Integer visitId, Integer visitMemberId, String planKind);
