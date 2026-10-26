@@ -82,3 +82,10 @@ Do not merge into main until every critical case is verified.
 
 ## Release gate
 Do not merge to main until compile, automated tests, manual API flows, park map coordinates, and visit-based billing are verified.
+
+## Implementation audit notes (before running tests)
+- Initial plan generation still relies on AI candidate selection; the backend validates omissions but does not yet independently compute or prove the best feasible subset. Do not mark Task 1 complete.
+- Replanning currently preserves the original activity count and order; inserting a newly feasible excluded MUST_RIDE is not implemented. Do not mark Task 2 complete.
+- Existing MapController exposes GET /get/data, /get/walking-context and /route/{fromType}/{fromId}/{toType}/{toId}. End-to-end mapping of planned item order to individual walking route segments must be verified before marking Task 3 complete.
+- GoogleCalendarOAuthService supports explicit sync upsert, reconnect recovery for deleted remote events, disconnect, and cancelled-event removal. Automatic background sync triggered by plan changes is not implemented. Do not mark Task 4 complete.
+- A successful compilation and integration test have not been observed for the branch. Testing is intentionally deferred.
