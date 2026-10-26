@@ -62,6 +62,7 @@ public class VisitService {
     private final com.example.sikka.Repository.VisitMealBreakRepository visitMealBreakRepository;
     private final com.example.sikka.Repository.PlanHistoryRepository planHistoryRepository;
     private final VisitPlanService visitPlanService;
+    private final org.springframework.context.ApplicationEventPublisher calendarEventPublisher;
 
     // ---------- CRUD ----------
 
@@ -295,6 +296,7 @@ public class VisitService {
     public void cancel(Integer accountId, Integer visitId) {
         checkOrganizer(accountId, visitId);
         changeStatus(visitId, "CANCELLED");
+        calendarEventPublisher.publishEvent(new CalendarSyncOnApproval.CancelledVisitChanged(accountId, visitId));
     }
 
     @Transactional
