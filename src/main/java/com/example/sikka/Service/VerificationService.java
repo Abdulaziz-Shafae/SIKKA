@@ -23,27 +23,37 @@ public class VerificationService {
     private final WhatsAppService whatsAppService;
     private final SecureRandom random = new SecureRandom();
 
-    // creates a new code, stores only its hash, and sends the raw code to the user
     public void sendVerificationCode(Account account) {
+        sendEmailCode(account);
+        if (account.getPhone() != null && !account.getPhone().isBlank())
+            sendPhoneCode(account);
+    }
+
+    private void sendEmailCode(Account account) {
         String code = newCode();
         account.setVerificationTokenHash(hash(code));
         account.setVerificationExpiresAt(LocalDateTime.now().plusMinutes(CODE_MINUTES));
         accountRepository.save(account);
-
-        emailService.sendEmail(account.getEmail(), "Sikka verification code", "Your Sikka verification code is " + code + ". It expires in " + CODE_MINUTES + " minutes.");
+        emailService.sendEmail(account.getEmail(), "Sikka verification code", "Your Sikka email verification code is " + code + ". It expires in " + CODE_MINUTES + " minutes.");
     }
 
-    // resend: unknown email is ignored silently (we do not reveal which emails exist)
+    private void sendPhoneCode(Account account) {
+        String code = newCode();
+        account.setPhoneCodeHash(hash(code));
+        account.setPhoneCodeExpiresAt(LocalDateTime.now().plusMinutes(CODE_MINUTES));
+        accountRepository.save(account);
+        whatsAppService.sendMessage(account.getPhone(), "Your Sikka phone verification code is " + code + ". It expires in " + CODE_MINUTES + " minutes.");
+    }
+
     public void resendVerificationCode(String email) {
         Account account = accountRepository.findAccountByEmail(email);
         if (account == null || Boolean.TRUE.equals(account.getEmailVerified()))
             return;
 
-        // a code sent less than a minute ago is still fresh: ask the user to wait
         if (account.getVerificationExpiresAt() != null && account.getVerificationExpiresAt().isAfter(LocalDateTime.now().plusMinutes(CODE_MINUTES - 1)))
             throw new ApiException("please wait a minute before requesting another code");
 
-        sendVerificationCode(account);
+        sendEmailCode(account);
     }
 
     public void verify(String email, String code) {
@@ -56,6 +66,29 @@ public class VerificationService {
         account.setVerificationExpiresAt(null);
         accountRepository.save(account);
     }
+
+    public void resendPhoneCode(String email) {
+        Account account = accountRepository.findAccountByEmail(email);
+        if (account == null || account.getPhone() == null || account.getPhone().isBlank() || Boolean.TRUE.equals(account.getPhoneVerified()))
+            return;
+
+        if (account.getPhoneCodeExpiresAt() != null && account.getPhoneCodeExpiresAt().isAfter(LocalDateTime.now().plusMinutes(CODE_MINUTES - 1)))
+            throw new ApiException("please wait a minute before requesting another code");
+
+        sendPhoneCode(account);
+    }
+
+    public void verifyPhone(String email, String code) {
+        Account account = accountRepository.findAccountByEmail(email);
+        if (account == null || account.getPhoneCodeHash() == null || account.getPhoneCodeExpiresAt() == null || account.getPhoneCodeExpiresAt().isBefore(LocalDateTime.now()) || !MessageDigest.isEqual(hash(code).getBytes(StandardCharsets.UTF_8), account.getPhoneCodeHash().getBytes(StandardCharsets.UTF_8)))
+            throw new ApiException("invalid or expired code");
+
+        account.setPhoneVerified(true);
+        account.setPhoneCodeHash(null);
+        account.setPhoneCodeExpiresAt(null);
+        accountRepository.save(account);
+    }
+
     // forgot password: unknown email is ignored silently (we do not reveal which emails exist)
     public void sendResetCode(String email) {
         Account account = accountRepository.findAccountByEmail(email);
@@ -83,10 +116,10 @@ public class VerificationService {
         account.setResetExpiresAt(null);
         accountRepository.save(account);
     }
-    // WhatsApp first (if the user gave a phone); email is the fallback
+
     private void deliver(Account account, String subject, String text) {
         boolean sent = false;
-        if (account.getPhone() != null && !account.getPhone().isBlank())
+        if (Boolean.TRUE.equals(account.getPhoneVerified()) && account.getPhone() != null && !account.getPhone().isBlank())
             sent = whatsAppService.sendMessage(account.getPhone(), text);
         if (!sent)
             emailService.sendEmail(account.getEmail(), subject, text);
