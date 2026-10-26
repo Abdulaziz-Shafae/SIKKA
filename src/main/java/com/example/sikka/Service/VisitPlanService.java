@@ -4784,7 +4784,7 @@ public class VisitPlanService {
                     continue;
                 }
 
-                if (prayerAt.plusMinutes(20).isAfter(visitEndsAt)) {
+                if (prayerAt.plusMinutes(15).isAfter(visitEndsAt)) {
                     throw new ApiException("A prayer break would extend beyond the visit; review the arrival time or duration");
                 }
 
@@ -4794,7 +4794,7 @@ public class VisitPlanService {
                     throw new ApiException("The prayer service returned duplicate prayer event times");
                 }
 
-                prayerEvents.add(Map.of("name", name, "prayerAt", prayerAt.toString(), "relativePrayerMinute", minute, "activityMinutes", 20));
+                prayerEvents.add(Map.of("name", name, "prayerAt", prayerAt.toString(), "relativePrayerMinute", minute, "activityMinutes", 15));
             }
         }
 
@@ -5044,7 +5044,7 @@ public class VisitPlanService {
                         prayer.setRelativeEndMinutes(Math.toIntExact(end));
                         prayer.setWalkingMinutes(walk);
                         prayer.setWaitingMinutes(0);
-                        prayer.setActivityMinutes(20);
+                        prayer.setActivityMinutes(15);
                         prayerVisitActivities.add(prayer);
                         prayerVisitAvailable = end;
                     }
@@ -5093,8 +5093,8 @@ public class VisitPlanService {
 
                 int prayerMinute = Math.addExact(activity.getRelativeStartMinutes(), activity.getWalkingMinutes());
 
-                if (!"BREAK".equals(activity.getActivityKind()) || activity.getWaitingMinutes() != 0 || activity.getActivityMinutes() != 20 || !prayerMinutes.contains(prayerMinute) || activity.getRelativeEndMinutes() != prayerMinute + 20) {
-                    throw new ApiException("A prayer activity does not match an actual prayer event and its 20-minute duration");
+                if (!"BREAK".equals(activity.getActivityKind()) || activity.getWaitingMinutes() != 0 || activity.getActivityMinutes() != 15 || !prayerMinutes.contains(prayerMinute) || activity.getRelativeEndMinutes() != prayerMinute + 15) {
+                    throw new ApiException("A prayer activity does not match an actual prayer event and its 15-minute duration");
                 }
 
                 Set<Integer> covered = prayerParticipants.computeIfAbsent(prayerMinute, ignored -> new HashSet<>());
