@@ -55,6 +55,15 @@ public class Account implements UserDetails {
     @Column(columnDefinition = "datetime")
     private LocalDateTime verificationExpiresAt;
 
+    @Column(columnDefinition = "boolean not null default false")
+    private Boolean phoneVerified = false;
+
+    @Column(columnDefinition = "varchar(255)")
+    private String phoneCodeHash;
+
+    @Column(columnDefinition = "datetime")
+    private LocalDateTime phoneCodeExpiresAt;
+
     @Column(columnDefinition = "varchar(255)")
     private String resetTokenHash;
 

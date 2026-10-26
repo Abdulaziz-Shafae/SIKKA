@@ -32,6 +32,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/account/register").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/google-calendar/oauth/callback").permitAll()
                         .requestMatchers("/api/v1/auth/verify-email", "/api/v1/auth/resend-verification",
+                                "/api/v1/auth/verify-phone", "/api/v1/auth/resend-phone-verification",
                                 "/api/v1/auth/forgot-password", "/api/v1/auth/reset-password").permitAll()
                         .requestMatchers(HttpMethod.GET,
                                 "/api/v1/ride/get",
@@ -52,7 +53,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET,
                                 "/park-map.html",
                                 "/park-map.js",
-                                "/maps/park-map.jpg"
+                                "/maps/park-map.jpg",
+                                "/pay-test.html"
                         ).permitAll()
 
                         .requestMatchers(

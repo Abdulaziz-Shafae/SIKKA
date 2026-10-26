@@ -20,13 +20,25 @@ public class AuthController {
     @PostMapping("/verify-email")
     public ResponseEntity<?> verifyEmail(@RequestBody @Valid VerifyEmailDtoIn dto) {
         verificationService.verify(dto.getEmail(), dto.getCode());
-        return ResponseEntity.status(200).body(new ApiResponse("account verified successfully"));
+        return ResponseEntity.status(200).body(new ApiResponse("email verified successfully"));
     }
 
     @PostMapping("/resend-verification")
     public ResponseEntity<?> resendVerification(@RequestBody @Valid EmailDtoIn dto) {
         verificationService.resendVerificationCode(dto.getEmail());
         return ResponseEntity.status(200).body(new ApiResponse("if the account exists and is not verified, a new code was sent"));
+    }
+
+    @PostMapping("/verify-phone")
+    public ResponseEntity<?> verifyPhone(@RequestBody @Valid VerifyEmailDtoIn dto) {
+        verificationService.verifyPhone(dto.getEmail(), dto.getCode());
+        return ResponseEntity.status(200).body(new ApiResponse("phone verified successfully"));
+    }
+
+    @PostMapping("/resend-phone-verification")
+    public ResponseEntity<?> resendPhoneVerification(@RequestBody @Valid EmailDtoIn dto) {
+        verificationService.resendPhoneCode(dto.getEmail());
+        return ResponseEntity.status(200).body(new ApiResponse("if the account has an unverified phone, a new code was sent"));
     }
 
     @PostMapping("/forgot-password")

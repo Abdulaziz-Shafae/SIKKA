@@ -33,7 +33,7 @@ class MergedFlowValidationTest {
         ride.setPriority("PREFERRED");
         SelectedRidesDtoIn dto = new SelectedRidesDtoIn();
         dto.setRides(List.of(ride, ride));
-        VisitMemberService service = new VisitMemberService(members, visits, mock(PaymentOrderService.class), mock(VisitorProfileRepository.class), mock(VisitGroupService.class), rides, mock(com.example.sikka.Repository.FamilyMemberRepository.class), mock(com.example.sikka.Repository.VisitPlanRepository.class), mock(com.example.sikka.Repository.VisitRecordRepository.class), mock(N8nNotificationService.class), mock(NotificationEventService.class));
+        VisitMemberService service = new VisitMemberService(members, visits, mock(PaymentOrderService.class), mock(VisitorProfileRepository.class), mock(VisitGroupService.class), rides, mock(com.example.sikka.Repository.FamilyMemberRepository.class), mock(com.example.sikka.Repository.VisitPlanRepository.class), mock(com.example.sikka.Repository.VisitRecordRepository.class), mock(N8nNotificationService.class), mock(NotificationEventService.class), mock(AccountRepository.class));
         assertThrows(ApiException.class, () -> service.updateSelectedRides(1, 2, dto));
         verify(members, never()).save(any());
         verifyNoInteractions(rides);
@@ -44,7 +44,7 @@ class MergedFlowValidationTest {
         VisitMemberRepository members = mock(VisitMemberRepository.class);
         VisitRepository visits = mock(VisitRepository.class);
         when(visits.findVisitById(2)).thenReturn(new Visit());
-        VisitMemberService service = new VisitMemberService(members, visits, mock(PaymentOrderService.class), mock(VisitorProfileRepository.class), mock(VisitGroupService.class), mock(RideService.class), mock(com.example.sikka.Repository.FamilyMemberRepository.class), mock(com.example.sikka.Repository.VisitPlanRepository.class), mock(com.example.sikka.Repository.VisitRecordRepository.class), mock(N8nNotificationService.class), mock(NotificationEventService.class));
+        VisitMemberService service = new VisitMemberService(members, visits, mock(PaymentOrderService.class), mock(VisitorProfileRepository.class), mock(VisitGroupService.class), mock(RideService.class), mock(com.example.sikka.Repository.FamilyMemberRepository.class), mock(com.example.sikka.Repository.VisitPlanRepository.class), mock(com.example.sikka.Repository.VisitRecordRepository.class), mock(N8nNotificationService.class), mock(NotificationEventService.class), mock(AccountRepository.class));
         assertThrows(ApiException.class, () -> service.getSummary(1, 2));
         verify(members, never()).findAllByVisit_Id(any());
     }
@@ -59,7 +59,7 @@ class MergedFlowValidationTest {
         member.setVisit(visit);
         member.setRsvpStatus("GOING");
         when(members.findVisitMemberByVisit_IdAndVisitorProfile_Account_Id(2, 1)).thenReturn(member);
-        VisitMemberService service = new VisitMemberService(members, mock(VisitRepository.class), mock(PaymentOrderService.class), mock(VisitorProfileRepository.class), mock(VisitGroupService.class), mock(RideService.class), mock(com.example.sikka.Repository.FamilyMemberRepository.class), mock(com.example.sikka.Repository.VisitPlanRepository.class), mock(com.example.sikka.Repository.VisitRecordRepository.class), mock(N8nNotificationService.class), mock(NotificationEventService.class));
+        VisitMemberService service = new VisitMemberService(members, mock(VisitRepository.class), mock(PaymentOrderService.class), mock(VisitorProfileRepository.class), mock(VisitGroupService.class), mock(RideService.class), mock(com.example.sikka.Repository.FamilyMemberRepository.class), mock(com.example.sikka.Repository.VisitPlanRepository.class), mock(com.example.sikka.Repository.VisitRecordRepository.class), mock(N8nNotificationService.class), mock(NotificationEventService.class), mock(AccountRepository.class));
         assertThrows(ApiException.class, () -> service.checkIn(1, 2));
         verify(members, never()).save(any());
     }

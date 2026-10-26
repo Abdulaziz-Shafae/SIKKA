@@ -1,5 +1,6 @@
 package com.example.sikka.Controller;
-
+import com.example.sikka.DtoIn.ConfirmPaymentDtoIn;
+import jakarta.validation.Valid;
 import com.example.sikka.Model.Account;
 import com.example.sikka.Service.PaymentOrderService;
 import lombok.AllArgsConstructor;
@@ -32,5 +33,11 @@ public class PaymentOrderController {
     @PostMapping("/add/{visitId}")
     public ResponseEntity<?> addPaymentOrder(@AuthenticationPrincipal Account account, @PathVariable Integer visitId){
         return ResponseEntity.status(200).body(paymentOrderService.addPaymentOrder(account.getId(), visitId));
+    }
+
+    @PostMapping("/confirm/{paymentOrderId}")
+    public ResponseEntity<?> confirmPayment(@AuthenticationPrincipal Account account, @PathVariable Integer paymentOrderId,
+                                            @RequestBody @Valid ConfirmPaymentDtoIn dto){
+        return ResponseEntity.status(200).body(paymentOrderService.confirmPayment(account.getId(), paymentOrderId, dto.getPaymentId()));
     }
 }

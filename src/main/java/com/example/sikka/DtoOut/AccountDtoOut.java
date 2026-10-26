@@ -16,5 +16,6 @@ public class AccountDtoOut {
     private String role;
     private String status;
     private Boolean emailVerified;
+    private Boolean phoneVerified;
     private LocalDateTime createdAt;
 }

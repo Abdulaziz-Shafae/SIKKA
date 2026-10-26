@@ -1,5 +1,11 @@
 package com.example.sikka.Service;
-
+import com.google.zxing.BarcodeFormat;
+import com.google.zxing.client.j2se.MatrixToImageWriter;
+import com.google.zxing.common.BitMatrix;
+import com.google.zxing.qrcode.QRCodeWriter;
+import org.springframework.beans.factory.annotation.Value;
+import java.io.ByteArrayOutputStream;
+import java.net.URLEncoder;
 import com.example.sikka.Api.ApiException;
 import com.example.sikka.DtoIn.VisitGroupDtoIn;
 import com.example.sikka.DtoOut.VisitGroupDtoOut;
@@ -25,6 +31,8 @@ public class VisitGroupService {
     private final VisitGroupRepository visitGroupRepository;
     private final AccountRepository accountRepository;
     private final VisitRepository visitRepository;
+    @Value("${sikka.join-url}")
+    private String joinUrl;
 
     public List<VisitGroupDtoOut> get() {
         List<VisitGroupDtoOut> list = new ArrayList<>();
@@ -156,6 +164,28 @@ public class VisitGroupService {
         group.setInviteCodeHash(hash(code));
         visitGroupRepository.save(group);
         return code;
+    }
+
+    // checks the caller is the organizer and the code is the group's real code, then builds the join link
+    public String joinLink(Integer accountId, Integer visitId, String code) {
+        VisitGroup group = getOrganizerGroup(accountId, visitId);
+        if (!MessageDigest.isEqual(hash(code).getBytes(StandardCharsets.UTF_8),
+                group.getInviteCodeHash().getBytes(StandardCharsets.UTF_8)))
+            throw new ApiException("invalid invite code");
+        return joinUrl + "?code=" + URLEncoder.encode(code, StandardCharsets.UTF_8);
+    }
+
+    // QR image of the join link
+    public byte[] qrCode(Integer accountId, Integer visitId, String code) {
+        String link = joinLink(accountId, visitId, code);
+        try {
+            BitMatrix matrix = new QRCodeWriter().encode(link, BarcodeFormat.QR_CODE, 300, 300);
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            MatrixToImageWriter.writeToStream(matrix, "PNG", out);
+            return out.toByteArray();
+        } catch (Exception e) {
+            throw new ApiException("could not create QR code");
+        }
     }
 
     // flips invitations on/off, returns the new value

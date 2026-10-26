@@ -1,5 +1,5 @@
 package com.example.sikka.Service;
-
+import tools.jackson.databind.JsonNode;
 import com.example.sikka.Api.ApiException;
 import com.example.sikka.Model.Account;
 import com.example.sikka.Model.PaymentOrder;
@@ -26,6 +26,7 @@ public class PaymentOrderService {
     private final AccountRepository accountRepository;
     private final VisitRepository visitRepository;
     private final com.example.sikka.Repository.PlanHistoryRepository planHistoryRepository;
+    private final MoyasarService moyasarService;
 
     public List<PaymentOrder> getMyPaymentOrders(Integer accountId){
         Account account = accountRepository.findAccountById(accountId);
@@ -133,6 +134,54 @@ public class PaymentOrderService {
         newPaymentOrder.setBuyerAccount(account);
 
         return paymentOrderRepository.save(newPaymentOrder);
+    }
+
+    // confirms a payment by asking Moyasar itself; the frontend's word is never trusted
+    @Transactional
+    public PaymentOrder confirmPayment(Integer accountId, Integer paymentOrderId, String moyasarPaymentId) {
+        PaymentOrder order = paymentOrderRepository.findPaymentOrderById(paymentOrderId);
+        if (order == null)
+            throw new ApiException("Payment order not found");
+        if (!order.getBuyerAccount().getId().equals(accountId))
+            throw new ApiException("You cannot confirm another user's payment order");
+        if ("PAID".equals(order.getStatus()))
+            return order;
+        if (!"PENDING".equals(order.getStatus()))
+            throw new ApiException("Only a pending payment order can be confirmed");
+
+        // one Moyasar payment can settle only one order
+        PaymentOrder used = paymentOrderRepository.findPaymentOrderByMoyasarPaymentId(moyasarPaymentId);
+        if (used != null && !used.getId().equals(order.getId()))
+            throw new ApiException("This payment was already used for another order");
+
+        JsonNode payment = moyasarService.fetchPayment(moyasarPaymentId);
+        String status = payment.path("status").asString();
+
+        if ("failed".equals(status)) {
+            String reason = payment.path("source").path("message").asString();
+            if (reason == null || reason.isBlank())
+                reason = "Payment failed";
+            order.setStatus("FAILED");
+            order.setFailureReason(reason.length() > 500 ? reason.substring(0, 500) : reason);
+            return paymentOrderRepository.save(order);
+        }
+        if (!"paid".equals(status))
+            throw new ApiException("Payment is not completed yet");
+
+        // Moyasar amounts are in halalas: 29.00 SAR = 2900
+        long expected = order.getAmountSar().multiply(new BigDecimal("100")).longValue();
+        if (payment.path("amount").asLong() != expected || !"SAR".equals(payment.path("currency").asString()))
+            throw new ApiException("Payment amount does not match the order");
+        if (!String.valueOf(order.getId()).equals(payment.path("metadata").path("order_id").asString()))
+            throw new ApiException("Payment does not belong to this order");
+
+        java.time.LocalDateTime now = java.time.LocalDateTime.now(java.time.ZoneId.of("Asia/Riyadh"));
+        order.setStatus("PAID");
+        order.setMoyasarPaymentId(moyasarPaymentId);
+        order.setVerifiedAt(now);
+        order.setPaidAt(now);
+        order.setFailureReason(null);
+        return paymentOrderRepository.save(order);
     }
 
     private BigDecimal getPrice(Visit visit) {

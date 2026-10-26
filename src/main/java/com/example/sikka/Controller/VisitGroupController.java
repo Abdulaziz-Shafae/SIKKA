@@ -8,6 +8,8 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.http.MediaType;
+
 
 @RestController
 @RequestMapping("/api/v1/visit-group")
@@ -56,6 +58,20 @@ public class VisitGroupController {
     public ResponseEntity<?> toggleInvitations(@AuthenticationPrincipal Account account, @PathVariable Integer visitId) {
         boolean enabled = visitGroupService.toggleInvitations(account.getId(), visitId);
         return ResponseEntity.status(200).body(new ApiResponse(enabled ? "invitations enabled" : "invitations disabled"));
+    }
+
+    @GetMapping("/qr/{visitId}")
+    public ResponseEntity<byte[]> qr(@AuthenticationPrincipal Account account, @PathVariable Integer visitId,
+                                     @RequestParam String code) {
+        byte[] png = visitGroupService.qrCode(account.getId(), visitId, code);
+        return ResponseEntity.status(200).contentType(MediaType.IMAGE_PNG).body(png);
+    }
+
+    @GetMapping("/link/{visitId}")
+    public ResponseEntity<?> link(@AuthenticationPrincipal Account account, @PathVariable Integer visitId,
+                                  @RequestParam String code) {
+        String link = visitGroupService.joinLink(account.getId(), visitId, code);
+        return ResponseEntity.status(200).body(new ApiResponse(link));
     }
 
 }
