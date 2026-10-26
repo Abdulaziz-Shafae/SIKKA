@@ -77,6 +77,7 @@ public class VisitPlanService {
 
     private final VisitPlanRepository visitPlanRepository;
     private final ApplicationEventPublisher calendarEventPublisher;
+    private final MustRideSubsetService mustRideSubsetService;
     private final VisitMemberService visitMemberService;
     private final AccountRepository accountRepository;
     private final VisitRepository visitRepository;
@@ -2061,6 +2062,7 @@ public class VisitPlanService {
             AiPlanDtoOut validatedCandidate = null;
             ObjectNode generationInput = (ObjectNode) readGenerationJson(snapshot.inputJson());
             generationInput.set("planningEligibilityPolicy", participantJsonMapper.valueToTree(Map.of("UNKNOWN", "ALLOW_PROVISIONAL_WITH_WARNING", "ELIGIBLE", "ALLOW", "NOT_ELIGIBLE", "FORBID", "MISSING", "FORBID")));
+            generationInput.set("serverFeasibilityHint", participantJsonMapper.valueToTree(mustRideSubsetService.buildFeasibilityHint(generationInput)));
             String attemptInput = writeGenerationJson(generationInput);
 
             for (int attempt = 0; attempt < 2; attempt++) {
