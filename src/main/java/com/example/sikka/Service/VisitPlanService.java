@@ -5364,6 +5364,7 @@ public class VisitPlanService {
             visitPlanRepository.saveAll(headers);
             visitRepository.save(visit);
             planItemRepository.flush();
+            calendarEventPublisher.publishEvent(new CalendarSyncOnApproval.ApprovedVisitChanged(accountId, visitId));
             return null;
         });
     }
