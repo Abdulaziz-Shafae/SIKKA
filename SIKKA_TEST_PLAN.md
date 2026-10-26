@@ -90,6 +90,13 @@ Do not merge to main until compile, automated tests, manual API flows, park map 
 - GoogleCalendarOAuthService supports explicit sync upsert, reconnect recovery for deleted remote events, disconnect, and cancelled-event removal. Automatic background sync triggered by plan changes is not implemented. Do not mark Task 4 complete.
 - A successful compilation and integration test have not been observed for the branch. Testing is intentionally deferred.
 
+## Current implementation limits — do not treat these as passed tests
+- The server-side MustRideSubsetService packs conservative candidates from known wait times, directed walking routes and reserved breaks. This is a *hint*, not an exact optimizer or proof that the selected subset is optimal.
+- Existing REPLAN still requires unchanged activity count and order and cannot insert a newly feasible excluded MUST_RIDE into an itinerary; this is an outstanding implementation requirement.
+- Map route endpoint returns consecutive same-participant segments and declares that the entrance segment is not included. A true per-member split itinerary map is still required for complete multi-group routing.
+- The Calendar after-commit event handles organizer sync on approval/arrival and organizer event cancellation. Other linked members' events are not automatically synchronized.
+- Exact permitted primaryGoal values for less walking and more rest were not found in the backend's validation contract. Do not introduce guessed enum names.
+
 ## New branch changes to verify
 - [ ] GET /api/v1/visit-plan/get/map-route/{visitPlanId} returns authorized planned activities and a segment for each consecutive routable activity with the same participant IDs. Split-group transitions do not become fictional paths; entrance route is explicitly not supplied.
 - [ ] After APPROVED replanning, a connected organizer's existing Google event is updated only after database commit.
