@@ -4739,6 +4739,7 @@ public class VisitPlanService {
                 visitPlanRepository.save(groupPlan);
                 visitPlanRepository.saveAll(individualHeaders);
                 visitRepository.save(visit);
+                calendarEventPublisher.publishEvent(new CalendarSyncOnApproval.ApprovedVisitChanged(accountId, visitId));
                 return null;
             }
 
