@@ -111,7 +111,7 @@ public class AiPlanService {
             instructions.append("Preserve every approved non-prayer activity's identity, participants, subgroup, activity minutes and per-member activity order. Recalculate walking only from supplied directed routes and waiting only from supplied known estimates. ");
             instructions.append("Replace provisional prayer breaks with exactly the supplied prayer events. If prayerEvents is empty, include no prayer breaks. ");
             instructions.append("For each prayer event cover every planning participant exactly once, using supervised parallel subgroups only when splitting is allowed. Use only supplied OPEN PRAYER_ROOM places. ");
-            instructions.append("Prayer begins at relativePrayerMinute after walking: relativeStartMinutes + walkingMinutes must equal relativePrayerMinute, waitingMinutes must be zero and relativeEndMinutes must equal relativePrayerMinute + 20. ");
+            instructions.append("Prayer begins at relativePrayerMinute after walking: relativeStartMinutes + walkingMinutes must equal relativePrayerMinute, waitingMinutes must be zero and relativeEndMinutes must equal relativePrayerMinute + 15. ");
             instructions.append("Keep every fixedActivities entry at its supplied relative start and end offsets. Never silently remove, replace, shorten or reorder approved activities to make prayer times fit. ");
             instructions.append("If walking, prayer times, meal timing, fixed commitments or the visit duration conflict, return feasible=false and explain what the user needs to review. ");
         }
