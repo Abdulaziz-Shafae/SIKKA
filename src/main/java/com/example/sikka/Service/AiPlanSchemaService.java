@@ -35,6 +35,16 @@ public class AiPlanSchemaService {
 
         Map<String, Object> planProperties = new LinkedHashMap<>();
 
+        Map<String, Object> excludedProperties = new LinkedHashMap<>();
+        excludedProperties.put("rideId", Map.of("type", "integer", "minimum", 1));
+        excludedProperties.put("rideName", Map.of("type", "string"));
+        excludedProperties.put("visitMemberId", Map.of("type", "integer", "minimum", 1));
+        excludedProperties.put("priority", Map.of("type", "string", "enum", List.of("MUST_RIDE", "PREFERRED", "OPTIONAL")));
+        excludedProperties.put("reasonCode", Map.of("type", "string", "enum", List.of("INSUFFICIENT_TIME", "CLOSED", "NOT_ELIGIBLE", "MISSING_WAIT_DATA", "MISSING_ROUTE", "SCHEDULE_CONFLICT")));
+        excludedProperties.put("reasonMessage", Map.of("type", "string"));
+        Map<String, Object> excludedSchema = Map.of("type", "object", "properties", excludedProperties, "required", List.copyOf(excludedProperties.keySet()), "additionalProperties", false);
+
+        planProperties.put("excludedRides", Map.of("type", "array", "items", excludedSchema));
         planProperties.put("feasible", Map.of("type", "boolean"));
         planProperties.put("activities", Map.of("type", "array", "items", activitySchema));
         planProperties.put("warnings", Map.of("type", "array", "items", Map.of("type", "string", "minLength", 1, "maxLength", 500)));
