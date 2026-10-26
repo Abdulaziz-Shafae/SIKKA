@@ -64,6 +64,7 @@ public class AiPlanService {
         instructions.append("A meal lasts 60 activity minutes, a snack lasts 30, and a prayer break lasts 15. Walking is additional. ");
         instructions.append("Use the breakType values and prayer constraints supplied in the input. ");
         instructions.append("When prayerTimesVerified is not true or arrivalTimeKnown is false, do not emit any PRAYER activity, even when includePrayer=true. Defer prayer insertion until ARRIVAL supplies verified prayerEvents and add a warning explaining this deferral. Missing prayer times alone do not make initial ride planning infeasible. ");
+        instructions.append("For initial planning when prayerReserveMinutes=15, leave at least 15 minutes free within durationMinutes for the future prayer break. Do not assign a false prayer time. ");
         instructions.append("Do not claim prayer times were checked unless actual prayer time constraints were supplied. ");
         instructions.append("Do not repeat a ride unless explicitly allowed by the supplied preferences. ");
         instructions.append("MAX_RIDES means maximize distinct permitted rides, not repetitions. For each participant, include a ride at most once unless ridePreferencesByRideAndMember explicitly says REPEAT for that participant and ride. NEUTRAL, PREFERRED and MUST_RIDE do not grant repeat permission. For FAMILY use one shared activity per ride with all family participant IDs, never one copy of that ride for each member. Unused visit time is allowed. ");
