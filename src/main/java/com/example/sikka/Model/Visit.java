@@ -119,4 +119,8 @@ public class Visit {
     @Column(columnDefinition = "json")
     private String sharedSelectedRides;
 
+    public Integer getOrganizerAccountId() {
+        return organizer == null ? null : organizer.getId();
+    }
+
 }

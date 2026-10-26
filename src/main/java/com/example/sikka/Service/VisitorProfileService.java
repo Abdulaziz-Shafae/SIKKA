@@ -85,7 +85,7 @@ public class VisitorProfileService {
         if (profile == null)
             throw new ApiException("profile not found");
 
-        fill(profile, new VisitorProfileDtoIn(accountId, dto.getName(), dto.getBirthDate(), dto.getHeightCm(), dto.getWeightKg(), dto.getGender(), dto.getThrillPreference(), dto.getPreferredRideTypes(), dto.getDislikedRideFeatures(), dto.getFoodPreferences(), dto.getHealthData()));
+        fill(profile, new VisitorProfileDtoIn(accountId, dto.getName(), dto.getBirthDate(), dto.getHeightCm(), dto.getWeightKg(), dto.getGender(), dto.getThrillPreference(), dto.getPreferredRideTypes(), dto.getDislikedRideFeatures(), dto.getFoodPreferences(), dto.getHealthData() == null ? profile.getHealthData() : dto.getHealthData()));
         visitorProfileRepository.save(profile);
     }
 

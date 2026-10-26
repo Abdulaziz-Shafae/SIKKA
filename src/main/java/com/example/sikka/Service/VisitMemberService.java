@@ -437,6 +437,30 @@ public class VisitMemberService {
         }
     }
 
+    @Transactional(readOnly = true)
+    public java.util.Map<String, Object> getMemberPreferences(Integer accountId, Integer visitMemberId) {
+        VisitMember member = visitMemberRepository.findVisitMemberById(visitMemberId);
+        if (member == null) throw new ApiException("Visit member not found");
+        boolean own = member.getVisitorProfile() != null && member.getVisitorProfile().getAccount().getId().equals(accountId);
+        boolean managed = member.getVisit().getOrganizer().getId().equals(accountId) && "FAMILY".equals(member.getVisit().getTripType()) && member.getVisitorProfile() == null;
+        if (!own && !managed) throw new ApiException("You cannot view this participant's planning answers");
+        tools.jackson.databind.json.JsonMapper mapper = tools.jackson.databind.json.JsonMapper.builder().build();
+        try {
+            tools.jackson.databind.JsonNode selected = mapper.readTree(member.getSelectedRides() == null ? "[]" : member.getSelectedRides());
+            tools.jackson.databind.JsonNode preferences = mapper.readTree(member.getPreferences() == null ? "{}" : member.getPreferences());
+            tools.jackson.databind.JsonNode disliked = preferences.path("dislikedFeatures").isArray() ? preferences.path("dislikedFeatures") : mapper.readTree("[]");
+            if (!selected.isArray() || !preferences.isObject()) throw new ApiException("Saved planning answers are invalid");
+            for (tools.jackson.databind.JsonNode choice : selected) {
+                if (!choice.isObject() || !choice.path("rideId").isIntegralNumber() || choice.path("rideId").asInt() <= 0 || !java.util.Set.of("MUST_RIDE", "PREFERRED", "OPTIONAL").contains(choice.path("priority").asString())) throw new ApiException("Saved planning answers are invalid");
+            }
+            return java.util.Map.of("selectedRides", selected, "dislikedFeatures", disliked, "answerStatus", member.getAnswerStatus() == null ? "PENDING" : member.getAnswerStatus());
+        } catch (ApiException invalid) {
+            throw invalid;
+        } catch (Exception invalid) {
+            throw new ApiException("Saved planning answers are invalid");
+        }
+    }
+
     @Transactional
     public void saveMemberPreferences(Integer accountId, Integer visitMemberId, com.example.sikka.DtoIn.MemberPreferencesDtoIn dto, int statusInt) {
         if (statusInt != 1 && statusInt != 2) {

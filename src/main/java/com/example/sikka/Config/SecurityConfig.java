@@ -29,7 +29,7 @@ public class SecurityConfig {
                 )
 
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/v1/account/register").permitAll()
+                        .requestMatchers("/api/v1/account/register", "/api/v1/auth/login").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/google-calendar/oauth/callback").permitAll()
                         .requestMatchers("/api/v1/auth/verify-email", "/api/v1/auth/resend-verification",
                                 "/api/v1/auth/verify-phone", "/api/v1/auth/resend-phone-verification",
@@ -108,10 +108,13 @@ public class SecurityConfig {
                         .anyRequest().authenticated()
                 )
 
+                .formLogin(form -> form.loginProcessingUrl("/api/v1/auth/login").successHandler((request, response, authentication) -> { response.setStatus(200); response.setContentType("application/json;charset=UTF-8"); response.getWriter().write("{\"message\":\"Login successful\"}"); }).failureHandler((request, response, exception) -> { response.setStatus(401); response.setContentType("application/json;charset=UTF-8"); response.getWriter().write("{\"message\":\"Invalid email or password\"}"); }).permitAll())
+
                 .logout(logout -> logout
                         .logoutUrl("/api/v1/auth/logout")
                         .invalidateHttpSession(true)
                         .deleteCookies("JSESSIONID")
+                        .logoutSuccessHandler((request, response, authentication) -> { response.setStatus(200); response.setContentType("application/json;charset=UTF-8"); response.getWriter().write("{\"message\":\"Logged out\"}"); })
                 )
 
                 .exceptionHandling(ex -> ex

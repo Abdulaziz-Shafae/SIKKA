@@ -65,6 +65,7 @@ public class VerificationService {
         account.setVerificationTokenHash(null);
         account.setVerificationExpiresAt(null);
         accountRepository.save(account);
+        emailService.sendEmail(account.getEmail(), "Sikka email verified", "Your email has been verified successfully. Welcome to Sikka!");
     }
 
     public void resendPhoneCode(String email) {
@@ -87,6 +88,7 @@ public class VerificationService {
         account.setPhoneCodeHash(null);
         account.setPhoneCodeExpiresAt(null);
         accountRepository.save(account);
+        whatsAppService.sendMessage(account.getPhone(), "Your phone number has been verified successfully. Welcome to Sikka!");
     }
 
     // forgot password: unknown email is ignored silently (we do not reveal which emails exist)

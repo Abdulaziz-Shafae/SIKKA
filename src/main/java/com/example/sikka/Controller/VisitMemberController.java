@@ -112,6 +112,11 @@ public class VisitMemberController {
         return ResponseEntity.status(200).body(new ApiResponse("Planning answers saved successfully"));
     }
 
+    @GetMapping("/preferences/{visitMemberId}")
+    public ResponseEntity<?> getMemberPreferences(@AuthenticationPrincipal Account account, @PathVariable Integer visitMemberId) {
+        return ResponseEntity.status(200).body(visitMemberService.getMemberPreferences(account.getId(), visitMemberId));
+    }
+
     @PutMapping("/preferences/skip/{visitMemberId}")
     public ResponseEntity<?> skipMemberPreferences(@AuthenticationPrincipal Account account, @PathVariable Integer visitMemberId) {
         visitMemberService.saveMemberPreferences(account.getId(), visitMemberId, new com.example.sikka.DtoIn.MemberPreferencesDtoIn(), 2);
