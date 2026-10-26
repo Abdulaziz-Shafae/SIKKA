@@ -3942,7 +3942,7 @@ public class VisitPlanService {
                 throw new ApiException("The source delay event changed while preparing the proposal");
             }
 
-            GenerationSnapshot current = collectInitialGenerationSnapshot(accountId, visit);
+            GenerationSnapshot current = collectInitialGenerationSnapshot(visit.getOrganizer().getId(), visit);
 
             if (!generationSemanticInput(current.inputJson()).equals(generationSemanticInput(prepared.planning().inputJson()))) {
                 throw new ApiException("Planning data changed while preparing the proposal; request a new proposal");
