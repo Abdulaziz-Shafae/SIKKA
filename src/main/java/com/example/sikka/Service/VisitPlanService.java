@@ -61,6 +61,7 @@ import java.time.Period;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -270,7 +271,12 @@ public class VisitPlanService {
             planResult.setAffectedMemberIds(null);
         }
 
-        List<ExcludedRideDtoOut> exclusions = sourcePlan.getExcludedRides() == null ? List.of() : Arrays.asList(participantJsonMapper.readValue(sourcePlan.getExcludedRides(), ExcludedRideDtoOut[].class));
+        List<ExcludedRideDtoOut> exclusions;
+        try {
+            exclusions = sourcePlan.getExcludedRides() == null ? List.of() : Arrays.asList(participantJsonMapper.readValue(sourcePlan.getExcludedRides(), ExcludedRideDtoOut[].class));
+        } catch (JacksonException exception) {
+            throw new ApiException("Saved excluded rides are invalid");
+        }
         if ("INDIVIDUAL".equals(plan.getPlanKind())) exclusions = exclusions.stream().filter(ride -> ownerVisitMemberId.equals(ride.getVisitMemberId())).toList();
         return new VisitPlanDetailsDtoOut(planResult, approvalStatus, activityResults, proposedResults, pendingProposal, exclusions);
     }
