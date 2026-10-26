@@ -2713,10 +2713,10 @@ public class VisitPlanService {
             if (ride != null && ride.path("planningWaitMinutes").isNull() && !"MISSING_WAIT_DATA".equals(reason) && !"NOT_ELIGIBLE".equals(reason)) throw new ApiException("Missing wait data must be reported before time-based exclusions");
             if ("NOT_ELIGIBLE".equals(reason) && !"NOT_ELIGIBLE".equals(status)) throw new ApiException("Ride ineligibility is not supported by planning data");
             if ("INSUFFICIENT_TIME".equals(reason) && ride != null && ride.path("planningWaitMinutes").isNumber()) {
-                int requiredMinutes = ride.path("planningWaitMinutes").asInt() + ride.path("planningActivityMinutes").asInt();
-                int deadline = requirePositiveInteger(input, "durationMinutes") - (input.path("includePrayer").asBoolean() ? 15 : 0);
-                int occupiedMinutes = candidate.getActivities().stream().filter(activity -> activity.getParticipantVisitMemberIds().contains(memberId)).mapToInt(activity -> activity.getWalkingMinutes() + activity.getWaitingMinutes() + activity.getActivityMinutes()).sum();
-                if (requiredMinutes + occupiedMinutes <= deadline) throw new ApiException("Excluded ride insufficient-time reason is not supported by the schedule");
+                long requiredMinutes = (long) ride.path("planningWaitMinutes").asInt() + ride.path("planningActivityMinutes").asInt();
+                long deadline = (long) requirePositiveInteger(input, "durationMinutes") - (input.path("includePrayer").asBoolean() ? 15 : 0);
+                long occupiedMinutes = candidate.getActivities().stream().filter(activity -> activity.getParticipantVisitMemberIds().contains(memberId)).mapToLong(activity -> (long) activity.getWalkingMinutes() + activity.getWaitingMinutes() + activity.getActivityMinutes()).sum();
+                if (requiredMinutes + occupiedMinutes <= deadline) throw new ApiException("Insufficient-time exclusion is not established by the supplied activity durations; use a grounded route, scheduling, or goal conflict reason");
             }
             if ("MISSING_WAIT_DATA".equals(reason) && ride != null && ride.path("planningWaitMinutes").isNumber()) throw new ApiException("Ride waiting data exists in the planning snapshot");
             if ("CLOSED".equals(reason) && (ride != null && "OPEN".equals(ride.path("status").asString()) || ride == null && (rideRepository.findRideById(rideId) == null || "OPEN".equals(rideRepository.findRideById(rideId).getStatus())))) throw new ApiException("Ride closure is not confirmed by planning data");
