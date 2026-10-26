@@ -146,14 +146,21 @@ public class GoogleCalendarOAuthService {
         String token = accessToken(decrypt(connection.getEncryptedRefreshToken()));
         Optional<GoogleCalendarEvent> existing = eventRepository.findByAccount_IdAndVisit_Id(accountId, visitId);
         Map<?, ?> response;
+        boolean createEvent = existing.isEmpty();
+        response = null;
         if (existing.isPresent()) {
-            response = client.patch().uri("https://www.googleapis.com/calendar/v3/calendars/primary/events/" + enc(existing.get().getGoogleEventId()))
-                    .headers(h -> h.setBearerAuth(token)).contentType(MediaType.APPLICATION_JSON).body(event).retrieve().body(Map.class);
-        } else {
+            try {
+                response = client.patch().uri("https://www.googleapis.com/calendar/v3/calendars/primary/events/" + enc(existing.get().getGoogleEventId()))
+                        .headers(h -> h.setBearerAuth(token)).contentType(MediaType.APPLICATION_JSON).body(event).retrieve().body(Map.class);
+            } catch (org.springframework.web.client.HttpClientErrorException.NotFound removedRemotely) {
+                createEvent = true;
+            }
+        }
+        if (createEvent) {
             response = client.post().uri("https://www.googleapis.com/calendar/v3/calendars/primary/events")
                     .headers(h -> h.setBearerAuth(token)).contentType(MediaType.APPLICATION_JSON).body(event).retrieve().body(Map.class);
             if (response == null || !(response.get("id") instanceof String eventId)) throw new ApiException("Google event was not created");
-            GoogleCalendarEvent record = new GoogleCalendarEvent();
+            GoogleCalendarEvent record = existing.orElseGet(GoogleCalendarEvent::new);
             record.setAccount(connection.getAccount());
             record.setVisit(visit);
             record.setGoogleEventId(eventId);
