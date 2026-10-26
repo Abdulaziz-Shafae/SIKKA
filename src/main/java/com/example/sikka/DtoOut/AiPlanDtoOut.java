@@ -27,4 +27,6 @@ public class AiPlanDtoOut {
 
     @Size(max = 1000, message = "Infeasibility reason must not exceed 1000 characters")
     private String infeasibilityReason;
+
+    private List<ExcludedRideDtoOut> excludedRides;
 }
