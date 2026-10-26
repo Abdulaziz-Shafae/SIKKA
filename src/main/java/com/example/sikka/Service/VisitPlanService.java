@@ -2706,6 +2706,11 @@ public class VisitPlanService {
             String status = eligibility.getOrDefault(rideId, Map.of()).get(memberId);
             String reason = item.getReasonCode();
             if (!"MUST_RIDE".equals(item.getPriority())) throw new ApiException("Excluded required ride priority does not match the original selection");
+            Ride persistedRide = rideRepository.findRideById(rideId);
+            if (persistedRide == null || !Objects.equals(item.getRideName(), persistedRide.getName())) throw new ApiException("Excluded ride must match a real park ride");
+            if (ride == null && !"CLOSED".equals(reason)) throw new ApiException("A non-closed excluded ride must have a planning snapshot");
+            if ("NOT_ELIGIBLE".equals(status) && !"NOT_ELIGIBLE".equals(reason)) throw new ApiException("Ineligible ride exclusion must state the eligibility reason");
+            if (ride != null && ride.path("planningWaitMinutes").isNull() && !"MISSING_WAIT_DATA".equals(reason) && !"NOT_ELIGIBLE".equals(reason)) throw new ApiException("Missing wait data must be reported before time-based exclusions");
             if ("NOT_ELIGIBLE".equals(reason) && !"NOT_ELIGIBLE".equals(status)) throw new ApiException("Ride ineligibility is not supported by planning data");
             if ("INSUFFICIENT_TIME".equals(reason) && ride != null && ride.path("planningWaitMinutes").isNumber()) {
                 int requiredMinutes = ride.path("planningWaitMinutes").asInt() + ride.path("planningActivityMinutes").asInt();
