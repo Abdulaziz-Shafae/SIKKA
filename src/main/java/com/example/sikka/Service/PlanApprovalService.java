@@ -24,6 +24,7 @@ import java.time.ZoneId;
 @RequiredArgsConstructor
 public class PlanApprovalService {
 
+    private final NotificationEventService notificationEventService;
     private final PlanApprovalRepository planApprovalRepository;
     private final VisitPlanRepository visitPlanRepository;
     private final AccountRepository accountRepository;
@@ -92,6 +93,7 @@ public class PlanApprovalService {
         planApprovalRepository.save(approval);
 
         visitPlan.setPlanApproval(approval);
+        notificationEventService.notifyPlanApprovalRequested(approval);
     }
 
     @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED, timeout = 60)
@@ -171,6 +173,7 @@ public class PlanApprovalService {
         approval.setRespondedAt(LocalDateTime.now(ZoneId.of("Asia/Riyadh")));
 
         planApprovalRepository.save(approval);
+        notificationEventService.notifyPlanApprovalResult(approval);
     }
 
     private Account validateActiveAccount(Integer accountId) {

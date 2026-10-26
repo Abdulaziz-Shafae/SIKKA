@@ -47,6 +47,7 @@ public class VisitService {
     @jakarta.persistence.PersistenceContext
     private jakarta.persistence.EntityManager entityManager;
 
+    private final NotificationEventService notificationEventService;
     private final VisitRepository visitRepository;
     private final AccountRepository accountRepository;
     private final VisitGroupRepository visitGroupRepository;
@@ -421,6 +422,7 @@ public class VisitService {
 
         visit.setStatus(status);
         visitRepository.save(visit);
+        notificationEventService.notifyVisitStatus(visit);
     }
 
     // called when plan generation starts, members list becomes fixed

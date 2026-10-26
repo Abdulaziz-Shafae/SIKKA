@@ -69,5 +69,3 @@ public class GoogleCalendarController {
         return ResponseEntity.ok(Map.of("message", "Google Calendar disconnected"));
     }
 }
-
-
