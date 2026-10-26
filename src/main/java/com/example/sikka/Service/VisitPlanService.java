@@ -3818,6 +3818,11 @@ public class VisitPlanService {
         Set<Integer> replacementIndexes = new HashSet<>();
         executionRules.path("replaceableIndexes").forEach(index -> replacementIndexes.add(index.intValue()));
 
+        int substantialChanges = replacementIndexes.size();
+        if (substantialChanges > 1 && substantialChanges * 4 > prepared.editableIndexes().size()) {
+            throw new ApiException("A replan must change no more than 25 percent of remaining editable activities; keep the approved schedule or request a separate review");
+        }
+
         for (int index = 0; index < candidate.getActivities().size(); index++) {
             candidate.getActivities().get(index).setExecutionEndMinutes(prepared.originalActivities().get(index).getExecutionEndMinutes());
         }
