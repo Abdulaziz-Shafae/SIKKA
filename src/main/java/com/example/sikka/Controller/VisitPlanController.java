@@ -35,7 +35,7 @@ public class VisitPlanController {
         for (PlanItemDtoOut item : ordered) {
             String currentType = "RIDE".equals(item.getActivityKind()) ? "RIDE" : item.getPlaceId() != null ? "PLACE" : null;
             if (currentType == null) continue;
-            if (previous != null) {
+            if (previous != null && Objects.equals(previous.getParticipantVisitMemberIds(), item.getParticipantVisitMemberIds())) {
                 String previousType = "RIDE".equals(previous.getActivityKind()) ? "RIDE" : "PLACE";
                 Integer fromId = "RIDE".equals(previousType) ? previous.getRideId() : previous.getPlaceId();
                 Integer toId = "RIDE".equals(currentType) ? item.getRideId() : item.getPlaceId();
@@ -48,7 +48,7 @@ public class VisitPlanController {
             }
             previous = item;
         }
-        return ResponseEntity.ok(Map.of("visitPlanId", visitPlanId, "planItems", ordered, "segments", segments));
+        return ResponseEntity.ok(Map.of("visitPlanId", visitPlanId, "planItems", ordered, "segments", segments, "routeScope", "CONSECUTIVE_SAME_PARTICIPANTS", "includesEntranceRoute", false));
     }
 
     @GetMapping("/get/plans/{visitId}")
