@@ -3580,7 +3580,7 @@ public class VisitPlanService {
             DelayProposalSource delaySource = lockAndValidateDelayProposalSource(sourceDelayNotificationId, accountId, visitId, visit, plan);
             String delaySnapshot = delaySource.snapshot();
 
-            GenerationSnapshot planning = collectInitialGenerationSnapshot(accountId, visit);
+            GenerationSnapshot planning = collectInitialGenerationSnapshot(visit.getOrganizer().getId(), visit);
             boolean organizer = visit.getOrganizer().getId().equals(accountId);
             Set<Integer> selected = requestedIds == null ? new HashSet<>(organizer ? planning.memberIds() : Set.of(requester.getId())) : new HashSet<>(requestedIds);
 
