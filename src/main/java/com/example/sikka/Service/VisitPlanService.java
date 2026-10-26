@@ -270,7 +270,9 @@ public class VisitPlanService {
             planResult.setAffectedMemberIds(null);
         }
 
-        return new VisitPlanDetailsDtoOut(planResult, approvalStatus, activityResults, proposedResults, pendingProposal);
+        List<ExcludedRideDtoOut> exclusions = sourcePlan.getExcludedRides() == null ? List.of() : Arrays.asList(participantJsonMapper.readValue(sourcePlan.getExcludedRides(), ExcludedRideDtoOut[].class));
+        if ("INDIVIDUAL".equals(plan.getPlanKind())) exclusions = exclusions.stream().filter(ride -> ownerVisitMemberId.equals(ride.getVisitMemberId())).toList();
+        return new VisitPlanDetailsDtoOut(planResult, approvalStatus, activityResults, proposedResults, pendingProposal, exclusions);
     }
 
     @Transactional
@@ -2669,12 +2671,7 @@ public class VisitPlanService {
             }
         }
 
-        for (Map.Entry<Integer, Set<Integer>> required : buildRequiredRideParticipants(input).entrySet()) {
-
-            if (!completedRideParticipants.getOrDefault(required.getKey(), Set.of()).containsAll(required.getValue())) {
-                throw new ApiException("The generated plan omitted a requested ride or one of its required participants");
-            }
-        }
+        validateExcludedRides(candidate, input, completedRideParticipants, rides, snapshot.eligibility());
 
         validateSnapshotWalking(byMember, rides, places, input.path("walking"));
 
@@ -2683,6 +2680,33 @@ public class VisitPlanService {
         }
 
         validateSnapshotMeals(candidate, input.path("mealPolicy"), byMember);
+    }
+
+    private void validateExcludedRides(AiPlanDtoOut candidate, JsonNode input, Map<Integer, Set<Integer>> scheduled, Map<Integer, JsonNode> rides, Map<Integer, Map<Integer, String>> eligibility) {
+        Map<Integer, Set<Integer>> required = buildRequiredRideParticipants(input);
+        Set<String> seen = new HashSet<>();
+        List<ExcludedRideDtoOut> excluded = candidate.getExcludedRides() == null ? List.of() : candidate.getExcludedRides();
+        for (ExcludedRideDtoOut item : excluded) {
+            if (item == null || item.getRideId() == null || item.getVisitMemberId() == null || item.getReasonCode() == null || item.getReasonMessage() == null || item.getReasonMessage().isBlank()) throw new ApiException("Excluded ride details are incomplete");
+            Integer rideId = item.getRideId();
+            Integer memberId = item.getVisitMemberId();
+            if (!required.getOrDefault(rideId, Set.of()).contains(memberId) || !seen.add(rideId + ":" + memberId)) throw new ApiException("Excluded ride is not an omitted required selection");
+            if (scheduled.getOrDefault(rideId, Set.of()).contains(memberId)) throw new ApiException("A ride cannot be scheduled and excluded for the same member");
+            JsonNode ride = rides.get(rideId);
+            String status = eligibility.getOrDefault(rideId, Map.of()).get(memberId);
+            String reason = item.getReasonCode();
+            if (!"MUST_RIDE".equals(item.getPriority())) throw new ApiException("Excluded required ride priority does not match the original selection");
+            if ("NOT_ELIGIBLE".equals(reason) && !"NOT_ELIGIBLE".equals(status)) throw new ApiException("Ride ineligibility is not supported by planning data");
+            if ("MISSING_WAIT_DATA".equals(reason) && ride != null && ride.path("planningWaitMinutes").isNumber()) throw new ApiException("Ride waiting data exists in the planning snapshot");
+            if ("CLOSED".equals(reason) && ride != null && "OPEN".equals(ride.path("status").asString())) throw new ApiException("Ride is open in planning snapshot");
+            if (!Set.of("INSUFFICIENT_TIME", "CLOSED", "NOT_ELIGIBLE", "MISSING_WAIT_DATA", "MISSING_ROUTE", "SCHEDULE_CONFLICT").contains(reason)) throw new ApiException("Unknown excluded ride reason");
+            if (ride != null && !Objects.equals(item.getRideName(), ride.path("name").asString())) throw new ApiException("Excluded ride name does not match the planning snapshot");
+        }
+        for (Map.Entry<Integer, Set<Integer>> request : required.entrySet()) {
+            for (Integer memberId : request.getValue()) {
+                if (!scheduled.getOrDefault(request.getKey(), Set.of()).contains(memberId) && !seen.contains(request.getKey() + ":" + memberId)) throw new ApiException("A requested MUST_RIDE must be scheduled or explicitly excluded");
+            }
+        }
     }
 
     private void validateMinorTimelineCoverage(Map<Integer, List<AiPlanItemDtoOut>> byMember, Map<Integer, Integer> ages) {
@@ -5708,6 +5732,7 @@ public class VisitPlanService {
         groupPlan.setTimingMode("RELATIVE");
         groupPlan.setIsActive(false);
         groupPlan.setGeneratedByHistory(history);
+        groupPlan.setExcludedRides(writeGenerationJson(participantJsonMapper.valueToTree(candidate.getExcludedRides() == null ? List.of() : candidate.getExcludedRides())));
 
         groupPlan = visitPlanRepository.save(groupPlan);
 
