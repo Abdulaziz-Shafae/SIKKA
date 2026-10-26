@@ -89,3 +89,11 @@ Do not merge to main until compile, automated tests, manual API flows, park map 
 - Existing MapController exposes GET /get/data, /get/walking-context and /route/{fromType}/{fromId}/{toType}/{toId}. End-to-end mapping of planned item order to individual walking route segments must be verified before marking Task 3 complete.
 - GoogleCalendarOAuthService supports explicit sync upsert, reconnect recovery for deleted remote events, disconnect, and cancelled-event removal. Automatic background sync triggered by plan changes is not implemented. Do not mark Task 4 complete.
 - A successful compilation and integration test have not been observed for the branch. Testing is intentionally deferred.
+
+## New branch changes to verify
+- [ ] GET /api/v1/visit-plan/get/map-route/{visitPlanId} returns authorized planned activities and a segment for each consecutive routable activity with the same participant IDs. Split-group transitions do not become fictional paths; entrance route is explicitly not supplied.
+- [ ] After APPROVED replanning, a connected organizer's existing Google event is updated only after database commit.
+- [ ] Arrival scheduling updates a connected organizer's event after successful schedule commit.
+- [ ] Cancelling a visit schedules organizer Google event removal after commit; failure does not undo local cancellation.
+- [ ] Verify no Google event is created when not connected.
+- [ ] Verify 15-minute prayer activity duration on both initial reserve and actual ARRIVAL prayer event checks.
