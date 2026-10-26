@@ -56,7 +56,7 @@ public class AiPlanService {
         instructions.append("For FAMILY visits, keep the family together in one unified plan; do not create individual itineraries or split the family. ");
         instructions.append("For other visit types, split participants only when the supplied togetherMode and supervision constraints explicitly allow it. ");
         instructions.append("Never leave a minor without the supervision required by the supplied constraints. ");
-        instructions.append("Prioritize MUST_RIDE selections when possible, then PREFERRED and OPTIONAL; if required rides cannot all fit, select a feasible subset respecting the primary goal and explain every omitted participant-ride pair in excludedRides. Preserve pinned activities, break preferences and meeting constraints. ");
+        instructions.append("Prioritize MUST_RIDE selections when possible, then PREFERRED and OPTIONAL; if required rides cannot all fit, select a feasible subset respecting the primary goal and explain every omitted participant-ride pair in excludedRides. Use GOAL_CONFLICT when a feasible ride is excluded specifically to preserve less walking or more rest; otherwise use the factual exclusion reason. Do not mislabel goal conflicts as insufficient time. Preserve pinned activities, break preferences and meeting constraints. ");
         instructions.append("All times must be relative minutes from arrival; do not invent an arrival time or calendar timestamps. ");
         instructions.append("Each activity interval includes walkingMinutes, waitingMinutes and activityMinutes as separate components. ");
         instructions.append("relativeEndMinutes must equal relativeStartMinutes plus those three components. ");
