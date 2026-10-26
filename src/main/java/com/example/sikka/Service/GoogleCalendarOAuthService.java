@@ -162,6 +162,28 @@ public class GoogleCalendarOAuthService {
         return response != null && response.get("htmlLink") instanceof String link ? link : "Synced";
     }
 
+    @Transactional
+    public void removeCancelledVisit(Integer accountId, Integer visitId) {
+        Visit visit = visitRepository.findVisitById(visitId);
+        if (visit == null) throw new ApiException("Visit not found");
+        boolean organizer = visit.getOrganizer() != null && accountId.equals(visit.getOrganizer().getId());
+        boolean member = visitMemberRepository.findVisitMemberByVisit_IdAndVisitorProfile_Account_Id(visitId, accountId) != null;
+        if (!organizer && !member) throw new ApiException("You are not a member of this visit");
+        if (!"CANCELLED".equals(visit.getStatus())) throw new ApiException("Only cancelled visits can be removed this way");
+        Optional<GoogleCalendarEvent> existing = eventRepository.findByAccount_IdAndVisit_Id(accountId, visitId);
+        if (existing.isEmpty()) return;
+        GoogleCalendarConnection connection = connectionRepository.findById(accountId).orElseThrow(() -> new ApiException("Connect Google Calendar first"));
+        configured();
+        String token = accessToken(decrypt(connection.getEncryptedRefreshToken()));
+        try {
+            client.delete().uri("https://www.googleapis.com/calendar/v3/calendars/primary/events/" + enc(existing.get().getGoogleEventId()))
+                    .headers(h -> h.setBearerAuth(token)).retrieve().toBodilessEntity();
+        } catch (org.springframework.web.client.HttpClientErrorException.NotFound alreadyDeleted) {
+            // The event is already absent remotely.
+        }
+        eventRepository.delete(existing.get());
+    }
+
     private String accessToken(String refreshToken) {
         Map<?, ?> response = client.post().uri("https://oauth2.googleapis.com/token").contentType(MediaType.APPLICATION_FORM_URLENCODED)
                 .body("client_id=" + enc(clientId) + "&client_secret=" + enc(clientSecret) + "&refresh_token=" + enc(refreshToken) + "&grant_type=refresh_token")
