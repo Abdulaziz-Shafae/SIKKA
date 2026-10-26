@@ -14,6 +14,16 @@ public class CalendarSyncOnApproval {
     private final GoogleCalendarOAuthService calendarService;
 
     public record ApprovedVisitChanged(Integer accountId, Integer visitId) {}
+    public record CancelledVisitChanged(Integer accountId, Integer visitId) {}
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void removeCancelled(CancelledVisitChanged event) {
+        try {
+            if (calendarService.connected(event.accountId())) calendarService.removeCancelledVisit(event.accountId(), event.visitId());
+        } catch (RuntimeException exception) {
+            log.warn("Google Calendar cancellation cleanup failed; visit cancellation remains saved: {}", event.visitId(), exception);
+        }
+    }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void sync(ApprovedVisitChanged event) {
