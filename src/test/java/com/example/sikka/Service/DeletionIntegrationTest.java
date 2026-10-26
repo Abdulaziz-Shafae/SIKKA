@@ -189,6 +189,8 @@ class DeletionIntegrationTest {
     void preserveUsedFreeQuotaAndClearReuseSourceAfterDeletion() {
         Account account = persistAccount("delete-quota");
         Visit source = persistVisit(account);
+        source.setFreeSlotReserved(true);
+        source.setStartedAt(java.time.LocalDateTime.now());
         Visit retained = persistVisit(account);
         PlanHistory used = new PlanHistory();
         used.setAccount(account);
@@ -225,7 +227,7 @@ class DeletionIntegrationTest {
         assertNull(entityManager.find(Visit.class, visitId));
         assertNull(entityManager.find(VisitPlan.class, planId));
         assertNull(entityManager.find(PlanHistory.class, usedId));
-        assertEquals(1L, entityManager.find(Account.class, accountId).getArchivedFreeGenerations());
+        assertEquals(1L, entityManager.find(Account.class, accountId).getArchivedFreeVisits());
         assertNotNull(entityManager.find(Visit.class, retainedId));
         assertNull(entityManager.find(PlanHistory.class, reusedId).getSourceVisit());
     }

@@ -283,6 +283,7 @@ class TeamFlowsIntegrationTest {
         account.setEmail(UUID.randomUUID() + "@example.com");
         account.setPasswordHash("test-password");
         account.setStatus("ACTIVE");
+        account.setEmailVerified(true);
         account.setRole("USER");
         entityManager.persist(account);
         return account;
