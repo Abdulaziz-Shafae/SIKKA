@@ -57,6 +57,12 @@ public class GoogleCalendarController {
         return ResponseEntity.ok(Map.of("url", googleCalendarOAuthService.syncVisit(account.getId(), visitId)));
     }
 
+    @DeleteMapping("/sync/cancelled/{visitId}")
+    public ResponseEntity<?> removeCancelledVisit(@AuthenticationPrincipal Account account, @PathVariable Integer visitId) {
+        googleCalendarOAuthService.removeCancelledVisit(account.getId(), visitId);
+        return ResponseEntity.ok(Map.of("message", "Cancelled visit removed from Google Calendar"));
+    }
+
     @DeleteMapping("/oauth/disconnect")
     public ResponseEntity<?> disconnect(@AuthenticationPrincipal Account account) {
         googleCalendarOAuthService.disconnect(account.getId());
