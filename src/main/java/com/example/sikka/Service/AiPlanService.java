@@ -51,6 +51,7 @@ public class AiPlanService {
         instructions.append("Use only the ride IDs, place IDs and visit member IDs supplied in the input. ");
         instructions.append("Never invent rides, places, participants, eligibility decisions, walking durations or waiting estimates. ");
         instructions.append("Use the supplied eligible participant sets and walking and waiting data. ");
+        instructions.append("When serverFeasibilityHint is present, use it only as a conservative candidate ordering produced from actual input wait times, directed walking routes and reserved breaks. It is not a schedule or proof of feasibility; all participant supervision, meal timings, eligibility, objectives and the final server-side validations still apply. Do not claim an optimal solution unless proven. ");
         instructions.append("If essential planning data is missing, return feasible=false with a clear reason. ");
         instructions.append("Create one shared itinerary containing the activities and their participant IDs. ");
         instructions.append("For FAMILY visits, keep the family together in one unified plan; do not create individual itineraries or split the family. ");
