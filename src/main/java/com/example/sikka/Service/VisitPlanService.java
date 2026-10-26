@@ -44,6 +44,7 @@ import com.example.sikka.Repository.VisitRecordRepository;
 import com.example.sikka.Repository.VisitRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.JacksonException;
@@ -75,6 +76,7 @@ import java.util.LinkedHashMap;
 public class VisitPlanService {
 
     private final VisitPlanRepository visitPlanRepository;
+    private final ApplicationEventPublisher calendarEventPublisher;
     private final VisitMemberService visitMemberService;
     private final AccountRepository accountRepository;
     private final VisitRepository visitRepository;
@@ -4537,6 +4539,9 @@ public class VisitPlanService {
         plan.setProposalBaseSnapshot(null);
         visitPlanRepository.save(plan);
         planItemRepository.flush();
+        if ("APPROVED".equals(status)) {
+            calendarEventPublisher.publishEvent(new CalendarSyncOnApproval.ApprovedVisitChanged(visit.getOrganizer().getId(), visit.getId()));
+        }
     }
 
 
