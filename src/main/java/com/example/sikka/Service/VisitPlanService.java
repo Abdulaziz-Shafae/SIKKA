@@ -3522,6 +3522,10 @@ public class VisitPlanService {
         }
     }
 
+    private boolean isTogetherGroupProposalAllowed(Visit visit) {
+        return "FRIENDS".equals(visit.getTripType()) && togetherModeValue.equals(visit.getTogetherMode());
+    }
+
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public ReplanProposalDtoOut suggestReplan(Integer accountId, Integer visitId, SuggestReplanDtoIn dto) {
 
@@ -3601,13 +3605,14 @@ public class VisitPlanService {
                 throw new ApiException("A member can only request changes within their own scope");
             }
 
-            boolean individual = !isFamilyVisit(visit) && selected.size() == 1 && selected.contains(requester.getId());
+            boolean sharedTogether = isTogetherGroupProposalAllowed(visit);
+            boolean individual = !sharedTogether && !isFamilyVisit(visit) && selected.size() == 1 && selected.contains(requester.getId());
 
-            if (!individual && !organizer) {
+            if (!individual && !organizer && !sharedTogether) {
                 throw new ApiException("Only the organizer can request a group change");
             }
 
-            if (individual && (planning.ages().get(requester.getId()) == null || planning.ages().get(requester.getId()) < 18)) {
+            if ((individual || sharedTogether && !organizer) && (planning.ages().get(requester.getId()) == null || planning.ages().get(requester.getId()) < 18)) {
                 throw new ApiException("Changes involving minors require a supervised group proposal from the organizer");
             }
 
@@ -3958,7 +3963,7 @@ public class VisitPlanService {
 
             VisitMember requester = getRequiredAccountMember(accountId, visitId);
 
-            if (!requester.getId().equals(prepared.requesterId()) || !"GOING".equals(requester.getRsvpStatus()) || ("GROUP".equals(prepared.scope()) && !visit.getOrganizer().getId().equals(accountId))) {
+            if (!requester.getId().equals(prepared.requesterId()) || !"GOING".equals(requester.getRsvpStatus()) || ("GROUP".equals(prepared.scope()) && !visit.getOrganizer().getId().equals(accountId) && !isTogetherGroupProposalAllowed(visit))) {
                 throw new ApiException("The proposal requester's permissions changed");
             }
 
@@ -4183,7 +4188,7 @@ public class VisitPlanService {
 
         if ("GROUP".equals(plan.getPendingScope())) {
 
-            if (!visit.getOrganizer().getId().equals(accountId) || !approval.getRequestedByAccount().getId().equals(accountId)) {
+            if (!visit.getOrganizer().getId().equals(accountId) || (!approval.getRequestedByAccount().getId().equals(accountId) && !isTogetherGroupProposalAllowed(visit))) {
                 throw new ApiException("Only the organizer can approve or reject a group execution proposal");
             }
 
