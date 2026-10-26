@@ -56,12 +56,12 @@ public class AiPlanService {
         instructions.append("For FAMILY visits, keep the family together in one unified plan; do not create individual itineraries or split the family. ");
         instructions.append("For other visit types, split participants only when the supplied togetherMode and supervision constraints explicitly allow it. ");
         instructions.append("Never leave a minor without the supervision required by the supplied constraints. ");
-        instructions.append("Honor MUST_RIDE selections as mandatory; favor PREFERRED selections when feasible and treat OPTIONAL as optional. Preserve pinned activities, break preferences and meeting constraints. ");
+        instructions.append("Prioritize MUST_RIDE selections when possible, then PREFERRED and OPTIONAL; if required rides cannot all fit, select a feasible subset respecting the primary goal and explain every omitted participant-ride pair in excludedRides. Preserve pinned activities, break preferences and meeting constraints. ");
         instructions.append("All times must be relative minutes from arrival; do not invent an arrival time or calendar timestamps. ");
         instructions.append("Each activity interval includes walkingMinutes, waitingMinutes and activityMinutes as separate components. ");
         instructions.append("relativeEndMinutes must equal relativeStartMinutes plus those three components. ");
         instructions.append("Do not overlap activities for the same participant. All activities must fit within durationMinutes. ");
-        instructions.append("A meal lasts 60 activity minutes, a snack lasts 30, and a prayer break lasts 20. Walking is additional. ");
+        instructions.append("A meal lasts 60 activity minutes, a snack lasts 30, and a prayer break lasts 15. Walking is additional. ");
         instructions.append("Use the breakType values and prayer constraints supplied in the input. ");
         instructions.append("When prayerTimesVerified is not true or arrivalTimeKnown is false, do not emit any PRAYER activity, even when includePrayer=true. Defer prayer insertion until ARRIVAL supplies verified prayerEvents and add a warning explaining this deferral. Missing prayer times alone do not make initial ride planning infeasible. ");
         instructions.append("Do not claim prayer times were checked unless actual prayer time constraints were supplied. ");
@@ -71,7 +71,7 @@ public class AiPlanService {
         instructions.append("Use Arabic for warnings and infeasibilityReason. ");
         instructions.append("When feasible=true, return a non-empty activities array and infeasibilityReason=null. ");
         instructions.append("When feasible=false, return activities=[] and explain what prevents planning. ");
-        instructions.append("Never silently remove required activities to make the plan fit. Explain whether more time or a user-approved reduction is needed. ");
+        instructions.append("Never silently remove requested rides. Return omitted rides in excludedRides with evidence-based reason codes; never invent wait times, routes, or eligibility. ");
         instructions.append("An explicit UNKNOWN eligibility result may be included with a warning that eligibility is unconfirmed. Never treat UNKNOWN as confirmed eligibility, and never include a NOT_ELIGIBLE participant on that ride. Missing eligibility results are not equivalent to an explicit UNKNOWN result. ");
         instructions.append("Apply planningEligibilityPolicy consistently to initial FAMILY, SOLO, FRIENDS and ARRIVAL planning. This output is a provisional itinerary, not authorization to board a ride. If all eligibility entries are explicitly UNKNOWN, you may still plan supplied OPEN rides for those members and must warn that requirements need checking before boarding. UNKNOWN alone must not make feasible=false. Continue to reject NOT_ELIGIBLE and absent eligibility results. Confirmed ELIGIBLE is required for replacement rides only when REPLAN executionRules.replaceUnavailableRides=true. ");
 
@@ -82,7 +82,7 @@ public class AiPlanService {
         instructions.append("For each activity, calculate relativeEndMinutes = relativeStartMinutes + walkingMinutes + waitingMinutes + activityMinutes. For example start 0, walk 1, wait 15 and activity 8 means end 24. Never stretch a ride or its queue to fill the entire visit duration; unused visit time is allowed. ");
         instructions.append("A food break with no selected restaurant stays at the member's previous node and has zero walking until a restaurant is selected. ");
         instructions.append("Preserve mealPolicy.breaks exactly, including participant sets, type, restaurantId and earliest/latest start bounds. START food breaks form the leading food-only cluster, END breaks the trailing food-only cluster, and MIDDLE has non-food activities before and after. A null restaurantId must remain unassigned. ");
-        instructions.append("Shared selected ride IDs apply to all members. For SOLO or allowSplit=true, selectedRideIds apply to the corresponding member. Never omit a required ride silently. ");
+        instructions.append("Shared selected ride IDs apply to all members. For SOLO or allowSplit=true, selectedRideIds apply to the corresponding member. Never omit a required ride silently: include an excludedRides entry for each omitted ride and participant. ");
         instructions.append("ridePreferencesByRideAndMember contains permanent or family visit preferences. AVOID forbids that ride for that member. Only REPEAT allows scheduling that ride more than once for that member. ");
         instructions.append("When allowSplit=true, explicitly cover every minor or unknown-age member from relative minute zero to the itinerary end with contiguous supervised activities, including waiting; do not leave implicit idle gaps. ");
         if ("REPLAN".equals(operationType)) {
@@ -542,7 +542,7 @@ public class AiPlanService {
             switch (breakType) {
                 case "MEAL" -> expectedMinutes = 60;
                 case "SNACK" -> expectedMinutes = 30;
-                case "PRAYER" -> expectedMinutes = 20;
+                case "PRAYER" -> expectedMinutes = 15;
                 default -> throw new ApiException("Unsupported generated break type");
             }
 
