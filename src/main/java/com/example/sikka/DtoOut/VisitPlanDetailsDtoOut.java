@@ -22,4 +22,6 @@ public class VisitPlanDetailsDtoOut {
     private List<PlanItemDtoOut> proposedPlanItems;
 
     private ReplanProposalDtoOut pendingProposal;
+
+    private List<ExcludedRideDtoOut> excludedRides;
 }
