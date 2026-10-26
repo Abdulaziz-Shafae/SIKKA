@@ -426,6 +426,14 @@ public class MapService {
         Integer startNodeId = getDestinationNodeId(fromType, fromId);
         Integer endNodeId = getDestinationNodeId(toType, toId);
 
+        return calculateRoute(fromType, fromId, toType, toId, startNodeId, endNodeId);
+    }
+
+    public MapRouteDtoOut getEntranceRoute(String toType, Integer toId) {
+        return calculateRoute("ENTRANCE", entranceNodeId, toType, toId, entranceNodeId, getDestinationNodeId(toType, toId));
+    }
+
+    private MapRouteDtoOut calculateRoute(String fromType, Integer fromId, String toType, Integer toId, Integer startNodeId, Integer endNodeId) {
         Map<Integer, JsonNode> nodes = new HashMap<>();
         Map<Integer, List<JsonNode>> connectedEdges = new HashMap<>();
         Map<Integer, Double> distances = new HashMap<>();

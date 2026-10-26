@@ -77,7 +77,7 @@ public class VisitPlanService {
 
     private final VisitPlanRepository visitPlanRepository;
     private final ApplicationEventPublisher calendarEventPublisher;
-    private final MustRideSubsetService mustRideSubsetService;
+    private final ServerItineraryService serverItineraryService;
     private final VisitMemberService visitMemberService;
     private final AccountRepository accountRepository;
     private final VisitRepository visitRepository;
@@ -1660,7 +1660,7 @@ public class VisitPlanService {
         input.put("walking", walkingContext);
         input.put("mealPolicy", mealPolicy);
         input.put("eligibilityByRideAndMember", eligibilityByRideAndMember);
-        input.put("arrivalTimeKnown", false);
+        input.put("arrivalTimeKnown", visit.getPlannedStartTime() != null && ("READY".equals(visit.getStatus()) || "IN_PROGRESS".equals(visit.getStatus())));
         input.put("prayerTimesVerified", false);
         input.put("prayerReserveMinutes", Boolean.TRUE.equals(visit.getIncludePrayer()) ? 15 : 0);
 
@@ -2060,61 +2060,16 @@ public class VisitPlanService {
                 throw new ApiException("The OpenAI call must run outside the database transaction");
             }
 
-            AiPlanDtoOut validatedCandidate = null;
-            ObjectNode generationInput = (ObjectNode) readGenerationJson(snapshot.inputJson());
-            generationInput.set("planningEligibilityPolicy", participantJsonMapper.valueToTree(Map.of("UNKNOWN", "ALLOW_PROVISIONAL_WITH_WARNING", "ELIGIBLE", "ALLOW", "NOT_ELIGIBLE", "FORBID", "MISSING", "FORBID")));
-            generationInput.set("serverFeasibilityHint", participantJsonMapper.valueToTree(mustRideSubsetService.buildFeasibilityHint(generationInput)));
-            String attemptInput = writeGenerationJson(generationInput);
-
-            for (int attempt = 0; attempt < 2; attempt++) {
-                AiPlanDtoOut attemptCandidate = null;
-
-                try {
-                    attemptCandidate = aiPlanService.generateValidatedPlanCandidate(attemptInput, snapshot.durationMinutes(), snapshot.memberIds(), snapshot.tripType(), snapshot.eligibility(), snapshot.ages());
-                    mergeGenerationWarnings(attemptCandidate, readGenerationJson(snapshot.inputJson()));
-
-                    if (Boolean.TRUE.equals(attemptCandidate.getFeasible())) {
-                        validateInitialCandidateAgainstSnapshot(attemptCandidate, snapshot);
-                    }
-
-                    if (attempt == 0 && !Boolean.TRUE.equals(attemptCandidate.getFeasible())) {
-                        ObjectNode reviewInput = (ObjectNode) readGenerationJson(writeGenerationJson(generationInput));
-                        reviewInput.put("validationFeedback", "Review the infeasibility decision once against the supplied facts. Explicit UNKNOWN eligibility is permitted for provisional planning with warnings and is not itself a reason to reject a plan. Known planning wait estimates are valid even when marked estimated. Preserve every actual prohibition, missing-data constraint, supervision rule and duration limit. If a real conflict remains, return feasible=false and identify that conflict precisely; do not invent eligibility or force feasibility.");
-                        reviewInput.set("previousRejectedCandidate", participantJsonMapper.valueToTree(attemptCandidate));
-                        attemptInput = writeGenerationJson(reviewInput);
-                        continue;
-                    }
-
-                    validatedCandidate = attemptCandidate;
-                    break;
-                } catch (ApiException invalidCandidate) {
-                    String reason = invalidCandidate.getMessage();
-                    boolean repairable = reason != null && (reason.startsWith("Timing mismatch:") || "Activity interval must equal walking, waiting and activity minutes".equals(reason) || "The generated plan repeats a ride without explicit repeat permission".equals(reason) || ("The plan contains an unknown or incorrect walking route".equals(reason) || reason.startsWith("Walking route mismatch:")) || reason.startsWith("Waiting time mismatch for ride ") || "Initial prayer scheduling must be deferred until arrival supplies verified prayer events".equals(reason) || "The selected ride sequence exceeds the visit duration using supplied walking, waiting and activity times".equals(reason) || "A shared ride requires separate approach activities when participant walking durations differ".equals(reason));
-
-                    if (attempt == 1 || !repairable) {
-                        throw invalidCandidate;
-                    }
-
-                    ObjectNode repairInput = (ObjectNode) readGenerationJson(writeGenerationJson(generationInput));
-                    repairInput.put("validationFeedback", reason + (generationInput.path("allowSplit").asBoolean() ? ". SPLIT is allowed: reconsider participant assignments, not only timestamps. Schedule each member's own required rides with that member; independent adult subgroups may run concurrently from the entrance using their own supplied routes and clocks. Shared membership is optional unless explicitly required. Omit optional rides when they do not fit. Do not duplicate a ride without explicit repeat permission, invent travel or wait times, change requirements, or exceed the visit duration. Preserve supervision constraints. If no valid assignment exists, return feasible=false with a precise reason." : ""));
-
-                    if (attemptCandidate != null) {
-                        repairInput.set("previousRejectedCandidate", participantJsonMapper.valueToTree(attemptCandidate));
-                    }
-
-                    attemptInput = writeGenerationJson(repairInput);
-                }
-            }
-
-            if (validatedCandidate == null) {
-                throw new ApiException("No validated planning result was produced");
-            }
-
-            AiPlanDtoOut candidate = validatedCandidate;
-
-            if (!Boolean.TRUE.equals(candidate.getFeasible())) {
-                return runGenerationTransaction(() -> failInitialGeneration(accountId, visitId, start.historyId(), "تعذر ترتيب المطلوب ضمن البيانات والمدة المتاحة؛ راجع تفاصيل النتيجة.", candidate));
-            }
+            JsonNode generationInput = readGenerationJson(snapshot.inputJson());
+            AiPlanDtoOut candidate = serverItineraryService.selectInitialPlan(generationInput);
+            resolveExcludedRideNames(candidate);
+            if (!Boolean.TRUE.equals(candidate.getFeasible())) return runGenerationTransaction(() -> failInitialGeneration(accountId, visitId, start.historyId(), candidate.getInfeasibilityReason(), candidate));
+            aiPlanService.validatePlanCandidateTiming(candidate, snapshot.durationMinutes(), snapshot.memberIds(), snapshot.tripType());
+            aiPlanService.validatePlanCandidateSupervision(candidate, snapshot.ages());
+            aiPlanService.validatePlanCandidateActivityKinds(candidate);
+            aiPlanService.validatePlanCandidateEligibility(candidate, snapshot.eligibility());
+            validateInitialCandidateAgainstSnapshot(candidate, snapshot);
+            mergeGenerationWarnings(candidate, generationInput);
 
             return runGenerationTransaction(() -> finishInitialGeneration(accountId, visitId, start.historyId(), snapshot, candidate));
 
@@ -2502,7 +2457,7 @@ public class VisitPlanService {
             throw new ApiException("Generation input does not match the saved request snapshot");
         }
 
-        GenerationSnapshot current = collectInitialGenerationSnapshot(accountId, visit);
+        GenerationSnapshot current = collectInitialGenerationSnapshot(visit.getOrganizer().getId(), visit);
 
         if (!generationSemanticInput(prepared.inputJson()).equals(generationSemanticInput(current.inputJson()))) {
             throw new ApiException("Planning data changed while generating the plan; a new request is required");
@@ -2602,6 +2557,8 @@ public class VisitPlanService {
     private void validateInitialCandidateAgainstSnapshot(AiPlanDtoOut candidate, GenerationSnapshot snapshot) {
 
         JsonNode input = readGenerationJson(snapshot.inputJson());
+        candidate.setExcludedRides(serverItineraryService.explainRequiredExclusions(input, candidate.getActivities()));
+        resolveExcludedRideNames(candidate);
         Map<Integer, JsonNode> rides = indexSnapshotResources(input.path("rides"));
         Map<Integer, JsonNode> places = indexSnapshotResources(input.path("places"));
         Map<Integer, JsonNode> members = new HashMap<>();
@@ -2683,7 +2640,7 @@ public class VisitPlanService {
 
         validateExcludedRides(candidate, input, completedRideParticipants, rides, snapshot.eligibility());
 
-        if (input.path("includePrayer").asBoolean()) {
+        if (input.path("includePrayer").asBoolean() && !input.path("arrivalTimeKnown").asBoolean() && !"ARRIVAL".equals(input.path("operationType").asString()) && candidate.getActivities().stream().noneMatch(activity -> "PRAYER".equals(activity.getBreakType()))) {
             int latestEnd = candidate.getActivities().stream().mapToInt(AiPlanItemDtoOut::getRelativeEndMinutes).max().orElse(0);
             int duration = requirePositiveInteger(input, "durationMinutes");
             if (latestEnd > duration - 15) throw new ApiException("Initial planning must reserve 15 minutes for prayer without inventing a prayer time");
@@ -2696,6 +2653,42 @@ public class VisitPlanService {
         }
 
         validateSnapshotMeals(candidate, input.path("mealPolicy"), byMember);
+    }
+
+    private void validateAdditionalRides(JsonNode input, List<AiPlanItemDtoOut> baseline, List<AiPlanItemDtoOut> additions, List<Integer> affected) {
+        List<AiPlanItemDtoOut> combined = new ArrayList<>(baseline);
+        combined.addAll(additions);
+        Set<AiPlanItemDtoOut> inserted = new HashSet<>(additions);
+        Map<Integer, JsonNode> rides = indexSnapshotResources(input.path("rides"));
+        for (AiPlanItemDtoOut addition : additions) {
+            if (!"RIDE".equals(addition.getActivityKind()) || addition.getPlaceId() != null || addition.getBreakType() != null || !new HashSet<>(affected).containsAll(addition.getParticipantVisitMemberIds())) throw new ApiException("A new ride is outside the approved proposal scope");
+            JsonNode ride = rides.get(addition.getRideId());
+            if (!serverItineraryService.canRide(input, ride, addition.getParticipantVisitMemberIds()) || addition.getWaitingMinutes() != requireNonNegativeInteger(ride, "planningWaitMinutes") || addition.getActivityMinutes() != requirePositiveInteger(ride, "planningActivityMinutes")) throw new ApiException("A new ride no longer matches planning data");
+            if (!input.path("allowSplit").asBoolean() && !new HashSet<>(affected).equals(new HashSet<>(addition.getParticipantVisitMemberIds()))) throw new ApiException("A unified visit cannot add a split activity");
+            for (Integer memberId : addition.getParticipantVisitMemberIds()) if (combined.stream().filter(activity -> addition.getRideId().equals(activity.getRideId()) && activity.getParticipantVisitMemberIds().contains(memberId)).count() != 1) throw new ApiException("An added ride must not repeat an existing activity");
+        }
+        for (Integer memberId : affected) {
+            String node = requireText(input.path("walking"), "entranceNodeKey");
+            AiPlanItemDtoOut previous = null;
+            for (AiPlanItemDtoOut activity : combined.stream().filter(item -> item.getParticipantVisitMemberIds().contains(memberId)).sorted(Comparator.comparing(AiPlanItemDtoOut::getRelativeStartMinutes)).toList()) {
+                String destination = serverItineraryService.destinationNode(input, activity, node);
+                if (inserted.contains(activity) || previous != null && inserted.contains(previous)) {
+                    Integer walk = serverItineraryService.walking(input, node, destination);
+                    if (walk == null || !walk.equals(activity.getWalkingMinutes())) throw new ApiException("An added ride changes an approved walking route or uses a missing route");
+                    if (previous != null && activity.getRelativeStartMinutes() < (previous.getExecutionEndMinutes() == null ? previous.getRelativeEndMinutes() : previous.getExecutionEndMinutes())) throw new ApiException("An added ride overlaps an existing activity");
+                }
+                node = destination;
+                previous = activity;
+            }
+        }
+    }
+
+    private void resolveExcludedRideNames(AiPlanDtoOut candidate) {
+        for (ExcludedRideDtoOut exclusion : candidate.getExcludedRides()) {
+            Ride ride = rideRepository.findRideById(exclusion.getRideId());
+            if (ride == null) throw new ApiException("A selected ride no longer exists");
+            exclusion.setRideName(ride.getName());
+        }
     }
 
     private void validateExcludedRides(AiPlanDtoOut candidate, JsonNode input, Map<Integer, Set<Integer>> scheduled, Map<Integer, JsonNode> rides, Map<Integer, Map<Integer, String>> eligibility) {
@@ -2726,7 +2719,8 @@ public class VisitPlanService {
             }
             if ("MISSING_WAIT_DATA".equals(reason) && ride != null && ride.path("planningWaitMinutes").isNumber()) throw new ApiException("Ride waiting data exists in the planning snapshot");
             if ("CLOSED".equals(reason) && (ride != null && "OPEN".equals(ride.path("status").asString()) || ride == null && (rideRepository.findRideById(rideId) == null || "OPEN".equals(rideRepository.findRideById(rideId).getStatus())))) throw new ApiException("Ride closure is not confirmed by planning data");
-            if (!Set.of("INSUFFICIENT_TIME", "CLOSED", "NOT_ELIGIBLE", "MISSING_WAIT_DATA", "MISSING_ROUTE", "SCHEDULE_CONFLICT", "GOAL_CONFLICT").contains(reason)) throw new ApiException("Unknown excluded ride reason");
+            if (!Set.of("INSUFFICIENT_TIME", "CLOSED", "NOT_ELIGIBLE", "MISSING_WAIT_DATA", "MISSING_ROUTE", "SCHEDULE_CONFLICT", "GOAL_CONFLICT", "PREFERENCE_CONFLICT").contains(reason)) throw new ApiException("Unknown excluded ride reason");
+            if ("PREFERENCE_CONFLICT".equals(reason) && ride != null && serverItineraryService.canRide(input, ride, List.of(memberId))) throw new ApiException("Preference exclusion is not supported by current planning data");
             if ("GOAL_CONFLICT".equals(reason) && (!input.path("primaryGoal").isTextual() || input.path("primaryGoal").asString().isBlank())) throw new ApiException("Goal conflict requires a matching primary goal");
             if (ride != null && !Objects.equals(item.getRideName(), ride.path("name").asString())) throw new ApiException("Excluded ride name does not match the planning snapshot");
         }
@@ -3014,6 +3008,7 @@ public class VisitPlanService {
 
     private void mergeGenerationWarnings(AiPlanDtoOut candidate, JsonNode input) {
         Set<String> warnings = new LinkedHashSet<>();
+        if (candidate.getWarnings() != null) warnings.addAll(candidate.getWarnings());
         Set<Integer> plannedRideIds = new HashSet<>();
 
         for (JsonNode member : input.path("members")) {
@@ -3375,7 +3370,7 @@ public class VisitPlanService {
             throw new ApiException("Regeneration input does not match the saved request snapshot");
         }
 
-        GenerationSnapshot current = collectInitialGenerationSnapshot(accountId, visit);
+        GenerationSnapshot current = collectInitialGenerationSnapshot(visit.getOrganizer().getId(), visit);
 
         if (!generationSemanticInput(prepared.inputJson()).equals(generationSemanticInput(current.inputJson()))) {
             throw new ApiException("Planning data changed while regenerating the plan; a new request is required");
@@ -3411,7 +3406,8 @@ public class VisitPlanService {
                 throw new ApiException("The OpenAI call must run outside the database transaction");
             }
 
-            AiPlanDtoOut candidate = aiPlanService.generateValidatedPlanCandidate(prepared.inputJson(), prepared.durationMinutes(), prepared.memberIds(), prepared.tripType(), prepared.eligibility(), prepared.ages());
+            AiPlanDtoOut candidate = serverItineraryService.selectInitialPlan(readGenerationJson(prepared.inputJson()));
+            resolveExcludedRideNames(candidate);
 
             mergeGenerationWarnings(candidate, readGenerationJson(prepared.inputJson()));
 
@@ -3683,9 +3679,6 @@ public class VisitPlanService {
                 }
             }
 
-            if (editable.isEmpty()) {
-                throw new ApiException("No unstarted activities can be changed within this scope; shared activities require a group request");
-            }
 
             Set<Integer> replaceable = new HashSet<>();
             Map<Integer, JsonNode> availableRides = indexSnapshotResources(readGenerationJson(planning.inputJson()).path("rides"));
@@ -3806,6 +3799,11 @@ public class VisitPlanService {
             candidate.setFeasible(true);
             candidate.setActivities(timedActivities);
             candidate.setWarnings(new ArrayList<>());
+        } else if (prepared.editableIndexes().isEmpty()) {
+            candidate = new AiPlanDtoOut();
+            candidate.setFeasible(true);
+            candidate.setActivities(new ArrayList<>(prepared.originalActivities()));
+            candidate.setWarnings(new ArrayList<>());
         } else {
             AiPlanDtoOut generatedCandidate = aiPlanService.generatePlanCandidate(prepared.aiInput());
 
@@ -3916,7 +3914,20 @@ public class VisitPlanService {
             validateReplacementWalking(activitiesByMember, rides, executionRules, readGenerationJson(prepared.planning().inputJson()));
         }
 
-        if (!changed) {
+        List<AiPlanItemDtoOut> additions = serverItineraryService.selectAdditionalRides(readGenerationJson(prepared.planning().inputJson()), candidate.getActivities(), prepared.affectedIds(), requireNonNegativeInteger(timingInput, "currentRelativeMinute"));
+        changedActivities.addAll(additions);
+        List<AiPlanItemDtoOut> allProposedActivities = new ArrayList<>(candidate.getActivities());
+        allProposedActivities.addAll(additions);
+        validateAdditionalRides(readGenerationJson(prepared.planning().inputJson()), candidate.getActivities(), additions, prepared.affectedIds());
+        AiPlanDtoOut completeProposal = new AiPlanDtoOut();
+        completeProposal.setFeasible(true);
+        completeProposal.setActivities(allProposedActivities);
+        completeProposal.setWarnings(new ArrayList<>());
+        aiPlanService.validatePlanCandidateTiming(completeProposal, prepared.planning().durationMinutes(), prepared.planning().memberIds(), prepared.planning().tripType());
+        aiPlanService.validatePlanCandidateSupervision(completeProposal, prepared.planning().ages());
+        for (AiPlanItemDtoOut addition : additions) for (Integer memberId : addition.getParticipantVisitMemberIds()) activitiesByMember.computeIfAbsent(memberId, key -> new ArrayList<>()).add(addition);
+
+        if (!changed && additions.isEmpty()) {
             throw new ApiException("No schedule change is needed; the current plan remains unchanged");
         }
 
@@ -4033,6 +4044,18 @@ public class VisitPlanService {
                 proposedItems.add(item);
             }
 
+            int nextSortOrder = prepared.items().stream().mapToInt(PlanItemDtoOut::getSortOrder).max().orElse(-1) + 1;
+            List<PlanItemDtoOut> additionItems = new ArrayList<>();
+            for (AiPlanItemDtoOut addition : additions) {
+                if (addition.getRelativeStartMinutes() < currentMinute) throw new ApiException("A new activity would already be in the past; request a fresh proposal");
+                PlanItem item = convertAiActivityToPlanItem(addition, plan, nextSortOrder++, current.priorities().getOrDefault(addition.getRideId(), "OPTIONAL"), false, false);
+                item.setStartsAt(prepared.startsAt().plusMinutes(addition.getRelativeStartMinutes()));
+                item.setEndsAt(prepared.startsAt().plusMinutes(addition.getRelativeEndMinutes()));
+                PlanItemDtoOut additionItem = convertPlanItemToDtoOut(item);
+                additionItems.add(additionItem);
+                proposedItems.add(additionItem);
+            }
+
             PlanApproval approval = planApprovalRepository.findPlanApprovalByVisitPlan_Id(plan.getId());
 
             if (approval == null || !"APPROVED".equals(approval.getStatus()) || !"GROUP".equals(approval.getApprovalScope())) {
@@ -4057,7 +4080,7 @@ public class VisitPlanService {
             plan.setRequestedByVisitMember(requester);
             plan.setProposalReason(reason);
             plan.setProposedAt(proposedAt);
-            plan.setProposalBaseSnapshot(writeGenerationJson(Map.of("execution", readGenerationJson(prepared.executionJson()), "planning", generationSemanticInput(current.inputJson()), "startsAt", prepared.startsAt().toString(), "editableIndexes", prepared.editableIndexes().stream().sorted().toList(), "baselineApproval", baselineApproval, "proposalKey", proposalKey, "executionRules", executionRules)));
+            plan.setProposalBaseSnapshot(writeGenerationJson(Map.of("execution", readGenerationJson(prepared.executionJson()), "planning", generationSemanticInput(current.inputJson()), "startsAt", prepared.startsAt().toString(), "editableIndexes", prepared.editableIndexes().stream().sorted().toList(), "baselineApproval", baselineApproval, "proposalKey", proposalKey, "executionRules", executionRules, "additionSnapshot", additionItems)));
             visitPlanRepository.save(plan);
 
             if (delayNotification != null) {
@@ -4242,7 +4265,7 @@ public class VisitPlanService {
                 memberIds.add(locked.getId());
             }
 
-            GenerationSnapshot current = collectInitialGenerationSnapshot(accountId, visit);
+            GenerationSnapshot current = collectInitialGenerationSnapshot(visit.getOrganizer().getId(), visit);
 
             if (!generationSemanticInput(current.inputJson()).equals(snapshot.path("planning"))) {
                 throw new ApiException("Planning data changed; reject this proposal and request a new one");
@@ -4322,7 +4345,7 @@ public class VisitPlanService {
                 throw new ApiException("The proposed activities contain invalid data");
             }
 
-            if (proposedItems.size() != items.size() || proposedItems.isEmpty() || !snapshot.path("editableIndexes").isArray()) {
+            if (proposedItems.size() < items.size() || proposedItems.isEmpty() || !snapshot.path("editableIndexes").isArray()) {
                 throw new ApiException("The proposed activities do not match the original plan");
             }
 
@@ -4478,6 +4501,20 @@ public class VisitPlanService {
                 }
             }
 
+            List<PlanItemDtoOut> newItems = proposedItems.subList(items.size(), proposedItems.size());
+            JsonNode expectedAdditions = snapshot.path("additionSnapshot");
+            if (!newItems.isEmpty() && (!expectedAdditions.isArray() || !readGenerationJson(writeGenerationJson(newItems)).equals(expectedAdditions))) throw new ApiException("New proposal activities do not match their server snapshot");
+            if (expectedAdditions.isArray() && expectedAdditions.size() != newItems.size()) throw new ApiException("The proposed additions changed");
+            List<AiPlanItemDtoOut> newActivities = new ArrayList<>();
+            for (PlanItemDtoOut proposed : newItems) {
+                if (proposed.getId() != null || !"RIDE".equals(proposed.getActivityKind()) || Boolean.TRUE.equals(proposed.getPinned()) || proposed.getRelativeStartMinutes() < currentMinute || !startsAt.plusMinutes(proposed.getRelativeStartMinutes()).equals(proposed.getStartsAt()) || !startsAt.plusMinutes(proposed.getRelativeEndMinutes()).equals(proposed.getEndsAt())) throw new ApiException("New activity scope or timing is invalid");
+                newActivities.add(convertPlanItemToAiActivity(proposed, new ArrayList<>(parseActivityParticipantIds(proposed.getParticipantVisitMemberIds()))));
+            }
+            validateAdditionalRides(readGenerationJson(current.inputJson()), candidateActivities, newActivities, affectedIds);
+            candidateActivities.addAll(newActivities);
+            editableActivities.addAll(newActivities);
+            for (AiPlanItemDtoOut addition : newActivities) for (Integer memberId : addition.getParticipantVisitMemberIds()) activitiesByMember.computeIfAbsent(memberId, key -> new ArrayList<>()).add(addition);
+
             if (replacementMode) {
                 validateReplacementWalking(activitiesByMember, rides, executionRules, readGenerationJson(current.inputJson()));
             }
@@ -4524,6 +4561,19 @@ public class VisitPlanService {
                 }
             }
 
+            int nextSortOrder = items.stream().mapToInt(PlanItem::getSortOrder).max().orElse(-1) + 1;
+            for (int index = 0; index < newActivities.size(); index++) {
+                AiPlanItemDtoOut addition = newActivities.get(index);
+                PlanItem item = convertAiActivityToPlanItem(addition, plan, nextSortOrder++, current.priorities().getOrDefault(addition.getRideId(), "OPTIONAL"), false, false);
+                item.setStartsAt(startsAt.plusMinutes(addition.getRelativeStartMinutes()));
+                item.setEndsAt(startsAt.plusMinutes(addition.getRelativeEndMinutes()));
+                items.add(item);
+            }
+            if (!newActivities.isEmpty() && plan.getExcludedRides() != null) {
+                List<ExcludedRideDtoOut> exclusions = new ArrayList<>(Arrays.asList(participantJsonMapper.treeToValue(readGenerationJson(plan.getExcludedRides()), ExcludedRideDtoOut[].class)));
+                exclusions.removeIf(exclusion -> newActivities.stream().anyMatch(activity -> exclusion.getRideId().equals(activity.getRideId()) && activity.getParticipantVisitMemberIds().contains(exclusion.getVisitMemberId())));
+                plan.setExcludedRides(writeGenerationJson(exclusions));
+            }
             planItemRepository.saveAll(items);
         }
 
@@ -5218,7 +5268,7 @@ public class VisitPlanService {
                 throw new ApiException("Individual plan headers changed while preparing arrival");
             }
 
-            GenerationSnapshot current = collectInitialGenerationSnapshot(accountId, visit);
+            GenerationSnapshot current = collectInitialGenerationSnapshot(visit.getOrganizer().getId(), visit);
 
             if (!generationSemanticInput(current.inputJson()).equals(generationSemanticInput(prepared.planning().inputJson()))) {
                 throw new ApiException("Planning data changed while preparing arrival; retry with current data");
@@ -5265,7 +5315,11 @@ public class VisitPlanService {
                 currentInput.set("mealPolicy", readGenerationJson(prepared.resolvedMealPolicy()));
             }
 
+            currentInput.put("arrivalTimeKnown", true);
+            currentInput.put("prayerTimesVerified", true);
             GenerationSnapshot finalPlanning = new GenerationSnapshot(writeGenerationJson(currentInput), current.durationMinutes(), current.tripType(), current.memberIds(), current.ages(), current.eligibility(), current.priorities(), current.pinnedRideIds(), current.rateablePlaceIds());
+            arrivalCandidate.setExcludedRides(serverItineraryService.explainRequiredExclusions(currentInput, arrivalCandidate.getActivities()));
+            resolveExcludedRideNames(arrivalCandidate);
             validateInitialCandidateAgainstSnapshot(arrivalCandidate, finalPlanning);
             Map<Integer, List<AiPlanItemDtoOut>> foodActivitiesByMember = new HashMap<>();
 

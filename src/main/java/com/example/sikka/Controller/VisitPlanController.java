@@ -5,11 +5,6 @@ import com.example.sikka.DtoIn.GeneratePlanDtoIn;
 import com.example.sikka.DtoIn.SuggestReplanDtoIn;
 import com.example.sikka.DtoOut.GenerateVisitPlansDtoOut;
 import com.example.sikka.Service.VisitPlanService;
-import com.example.sikka.Service.MapService;
-import com.example.sikka.DtoOut.VisitPlanDetailsDtoOut;
-import com.example.sikka.DtoOut.PlanItemDtoOut;
-import com.example.sikka.DtoOut.MapRouteDtoOut;
-import java.util.*;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -23,32 +18,11 @@ import org.springframework.web.bind.annotation.*;
 public class VisitPlanController {
 
     private final VisitPlanService visitPlanService;
-    private final MapService mapService;
+    private final com.example.sikka.Service.VisitPlanMapService visitPlanMapService;
 
     @GetMapping("/get/map-route/{visitPlanId}")
     public ResponseEntity<?> getVisitPlanMapRoute(@AuthenticationPrincipal Account account, @PathVariable Integer visitPlanId) {
-        VisitPlanDetailsDtoOut details = visitPlanService.getVisitPlanDetails(account.getId(), visitPlanId);
-        List<PlanItemDtoOut> ordered = new ArrayList<>(details.getPlanItems());
-        ordered.sort(Comparator.comparing(PlanItemDtoOut::getRelativeStartMinutes).thenComparing(PlanItemDtoOut::getRelativeEndMinutes));
-        List<Map<String, Object>> segments = new ArrayList<>();
-        PlanItemDtoOut previous = null;
-        for (PlanItemDtoOut item : ordered) {
-            String currentType = "RIDE".equals(item.getActivityKind()) ? "RIDE" : item.getPlaceId() != null ? "PLACE" : null;
-            if (currentType == null) continue;
-            if (previous != null && Objects.equals(previous.getParticipantVisitMemberIds(), item.getParticipantVisitMemberIds())) {
-                String previousType = "RIDE".equals(previous.getActivityKind()) ? "RIDE" : "PLACE";
-                Integer fromId = "RIDE".equals(previousType) ? previous.getRideId() : previous.getPlaceId();
-                Integer toId = "RIDE".equals(currentType) ? item.getRideId() : item.getPlaceId();
-                try {
-                    MapRouteDtoOut route = mapService.getRoute(previousType, fromId, currentType, toId);
-                    segments.add(Map.of("fromPlanItemId", previous.getId(), "toPlanItemId", item.getId(), "route", route, "available", true));
-                } catch (com.example.sikka.Api.ApiException routeUnavailable) {
-                    segments.add(Map.of("fromPlanItemId", previous.getId(), "toPlanItemId", item.getId(), "available", false, "reason", "NO_VERIFIED_ROUTE"));
-                }
-            }
-            previous = item;
-        }
-        return ResponseEntity.ok(Map.of("visitPlanId", visitPlanId, "planItems", ordered, "segments", segments, "routeScope", "CONSECUTIVE_SAME_PARTICIPANTS", "includesEntranceRoute", false));
+        return ResponseEntity.ok(visitPlanMapService.getVisitPlanMapRoute(account.getId(), visitPlanId));
     }
 
     @GetMapping("/get/plans/{visitId}")

@@ -1,0 +1,140 @@
+package com.example.sikka.Service;
+
+import com.example.sikka.DtoOut.*;
+import org.junit.jupiter.api.Test;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
+import java.util.*;
+import static org.junit.jupiter.api.Assertions.*;
+
+class ServerItineraryServiceTest {
+    private final ServerItineraryService planner = new ServerItineraryService();
+    private final JsonMapper mapper = JsonMapper.builder().build();
+
+    private ObjectNode input(int duration, boolean split) {
+        List<Map<String, Object>> routes = new ArrayList<>();
+        for (String from : List.of("ENTRANCE", "RIDE:1", "RIDE:2", "RIDE:3")) for (String to : List.of("ENTRANCE", "RIDE:1", "RIDE:2", "RIDE:3")) routes.add(Map.of("fromNodeKey", from, "toNodeKey", to, "minutes", from.equals(to) ? 0 : 1));
+        Map<String, Object> member = Map.of("visitMemberId", 1, "ageKnown", true, "ageYears", 25, "selectedRideIds", List.of(1, 2), "selectedRides", List.of(Map.of("rideId", 1, "priority", "MUST_RIDE"), Map.of("rideId", 2, "priority", "MUST_RIDE")), "dislikedFeatures", List.of());
+        List<Map<String, Object>> rides = new ArrayList<>();
+        for (int id = 1; id <= 3; id++) rides.add(Map.of("id", id, "name", "Ride " + id, "status", "OPEN", "nodeKey", "RIDE:" + id, "planningWaitMinutes", 5, "planningActivityMinutes", 5, "features", List.of()));
+        return (ObjectNode) mapper.valueToTree(Map.of("durationMinutes", duration, "primaryGoal", "MAX_RIDES", "tripType", "SOLO", "allowSplit", split, "members", List.of(member), "rides", rides, "walking", Map.of("entranceNodeKey", "ENTRANCE", "routes", routes), "mealPolicy", Map.of("breaks", List.of()), "eligibilityByRideAndMember", Map.of("1", Map.of("1", "UNKNOWN"), "2", Map.of("1", "UNKNOWN"), "3", Map.of("1", "UNKNOWN"))));
+    }
+
+    @Test
+    void includeRequiredRidesAndFillSpareTimeWithoutRepeats() {
+        AiPlanDtoOut plan = planner.selectInitialPlan(input(40, false));
+        assertTrue(plan.getFeasible());
+        assertEquals(3, plan.getActivities().size());
+        assertTrue(plan.getExcludedRides().isEmpty());
+        assertEquals(3, plan.getActivities().stream().map(AiPlanItemDtoOut::getRideId).distinct().count());
+        for (AiPlanItemDtoOut activity : plan.getActivities()) assertEquals(activity.getWalkingMinutes() + activity.getWaitingMinutes() + activity.getActivityMinutes(), activity.getRelativeEndMinutes() - activity.getRelativeStartMinutes());
+    }
+
+    @Test
+    void chooseRequiredSubsetAndExplainTheOtherChoice() {
+        AiPlanDtoOut plan = planner.selectInitialPlan(input(15, false));
+        assertEquals(1, plan.getActivities().size());
+        assertTrue(Set.of(1, 2).contains(plan.getActivities().get(0).getRideId()));
+        assertEquals(1, plan.getExcludedRides().size());
+        assertEquals("MUST_RIDE", plan.getExcludedRides().get(0).getPriority());
+    }
+
+    @Test
+    void reportInfeasibleWhenEvenOneRideCannotFit() {
+        AiPlanDtoOut plan = planner.selectInitialPlan(input(5, false));
+        assertFalse(plan.getFeasible());
+        assertTrue(plan.getActivities().isEmpty());
+        assertEquals(2, plan.getExcludedRides().size());
+    }
+
+    @Test
+    void neverInventUnknownWaitOrMissingWalkingRoute() {
+        ObjectNode input = input(40, false);
+        ((ObjectNode) input.path("rides").get(0)).putNull("planningWaitMinutes");
+        ((ObjectNode) input.path("walking")).set("routes", mapper.valueToTree(List.of()));
+        AiPlanDtoOut plan = planner.selectInitialPlan(input);
+        assertFalse(plan.getFeasible());
+        assertTrue(plan.getExcludedRides().stream().anyMatch(exclusion -> "MISSING_WAIT_DATA".equals(exclusion.getReasonCode())));
+    }
+
+    @Test
+    void respectAvoidanceAndClosuresBeforeSelectingOptionalRides() {
+        ObjectNode input = input(40, false);
+        ((ObjectNode) input.path("rides").get(0)).put("status", "CLOSED");
+        input.set("ridePreferencesByRideAndMember", mapper.valueToTree(Map.of("2", Map.of("1", "AVOID"))));
+        AiPlanDtoOut plan = planner.selectInitialPlan(input);
+        assertEquals(List.of(3), plan.getActivities().stream().map(AiPlanItemDtoOut::getRideId).toList());
+    }
+
+    @Test
+    void reconsiderOmittedRequiredRideAfterEarlyReleaseWithoutChangingHistory() {
+        ObjectNode input = input(35, false);
+        JsonNode ride = input.path("rides").get(0);
+        AiPlanItemDtoOut completed = planner.rideActivity(ride, List.of(1), 0, 1);
+        completed.setExecutionEndMinutes(3);
+        List<AiPlanItemDtoOut> additions = planner.selectAdditionalRides(input, List.of(completed), List.of(1), 4);
+        assertTrue(additions.stream().anyMatch(activity -> activity.getRideId() == 2));
+        assertEquals(11, completed.getRelativeEndMinutes());
+        assertTrue(additions.stream().allMatch(activity -> activity.getRelativeStartMinutes() >= 4));
+        assertTrue(additions.stream().noneMatch(activity -> activity.getRideId() == 1));
+    }
+
+    @Test
+    void preferLessWalkingWhenRequiredCountAndRideCountTie() {
+        ObjectNode input = input(15, false);
+        input.put("primaryGoal", "MIN_WALKING");
+        for (JsonNode route : input.path("walking").path("routes")) if ("ENTRANCE".equals(route.path("fromNodeKey").asString()) && "RIDE:1".equals(route.path("toNodeKey").asString())) ((ObjectNode) route).put("minutes", 4);
+        AiPlanDtoOut plan = planner.selectInitialPlan(input);
+        assertEquals(2, plan.getActivities().get(0).getRideId());
+    }
+    @Test
+    void planIndependentAdultGroupsConcurrently() {
+        ObjectNode input = input(12, true);
+        input.put("tripType", "FRIENDS");
+        input.set("members", mapper.valueToTree(List.of(Map.of("visitMemberId", 1, "ageKnown", true, "ageYears", 25, "selectedRideIds", List.of(1), "selectedRides", List.of(Map.of("rideId", 1, "priority", "MUST_RIDE"))), Map.of("visitMemberId", 2, "ageKnown", true, "ageYears", 26, "selectedRideIds", List.of(2), "selectedRides", List.of(Map.of("rideId", 2, "priority", "MUST_RIDE"))))));
+        input.set("eligibilityByRideAndMember", mapper.valueToTree(Map.of("1", Map.of("1", "UNKNOWN", "2", "UNKNOWN"), "2", Map.of("1", "UNKNOWN", "2", "UNKNOWN"), "3", Map.of("1", "UNKNOWN", "2", "UNKNOWN"))));
+        AiPlanDtoOut plan = planner.selectInitialPlan(input);
+        assertTrue(plan.getFeasible());
+        assertEquals(2, plan.getActivities().size());
+        assertTrue(plan.getActivities().stream().allMatch(activity -> activity.getRelativeStartMinutes() == 0));
+        assertTrue(plan.getExcludedRides().isEmpty());
+    }
+
+    @Test
+    void reserveActualMealAndSnackDurationsAndHonorTheirPlacement() {
+        ObjectNode input = input(130, false);
+        Map<String, Object> meal = new LinkedHashMap<>(Map.of("breakKey", "meal", "breakType", "MEAL", "timingPreference", "START", "durationMinutes", 60, "earliestStartMinutes", 0, "latestStartMinutes", 129, "participantVisitMemberIds", List.of(1)));
+        meal.put("restaurantId", null);
+        Map<String, Object> snack = new LinkedHashMap<>(Map.of("breakKey", "snack", "breakType", "SNACK", "timingPreference", "END", "durationMinutes", 30, "earliestStartMinutes", 0, "latestStartMinutes", 129, "participantVisitMemberIds", List.of(1)));
+        snack.put("restaurantId", null);
+        ((ObjectNode) input.path("mealPolicy")).set("breaks", mapper.valueToTree(List.of(meal, snack)));
+        AiPlanDtoOut plan = planner.selectInitialPlan(input);
+        assertTrue(plan.getFeasible());
+        assertEquals("MEAL", plan.getActivities().get(0).getBreakType());
+        assertEquals(60, plan.getActivities().get(0).getActivityMinutes());
+        assertEquals("SNACK", plan.getActivities().get(plan.getActivities().size() - 1).getBreakType());
+        assertEquals(30, plan.getActivities().get(plan.getActivities().size() - 1).getActivityMinutes());
+        assertTrue(plan.getActivities().get(plan.getActivities().size() - 1).getRelativeEndMinutes() <= 130);
+    }
+
+    @Test
+    void leavePrayerReserveInsteadOfFillingItWithOptionalRides() {
+        ObjectNode input = input(40, false);
+        input.set("includePrayer", mapper.valueToTree(true));
+        AiPlanDtoOut plan = planner.selectInitialPlan(input);
+        assertEquals(2, plan.getActivities().size());
+        assertTrue(plan.getActivities().stream().allMatch(activity -> activity.getRelativeEndMinutes() <= 25));
+    }
+
+    @Test
+    void insertIntoGapBeforeFixedCommitmentWithoutChangingItsApproachWalk() {
+        ObjectNode input = input(45, false);
+        AiPlanItemDtoOut fixed = planner.rideActivity(input.path("rides").get(0), List.of(1), 30, 1);
+        List<AiPlanItemDtoOut> additions = planner.selectAdditionalRides(input, List.of(fixed), List.of(1), 0);
+        assertTrue(additions.stream().anyMatch(activity -> activity.getRideId() == 2 && activity.getRelativeEndMinutes() <= 30));
+        assertEquals(30, fixed.getRelativeStartMinutes());
+        assertEquals(1, fixed.getWalkingMinutes());
+    }
+
+}

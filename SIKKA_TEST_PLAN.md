@@ -83,24 +83,26 @@ Do not merge into main until every critical case is verified.
 ## Release gate
 Do not merge to main until compile, automated tests, manual API flows, park map coordinates, and visit-based billing are verified.
 
-## Implementation audit notes (before running tests)
-- Initial plan generation still relies on AI candidate selection; the backend validates omissions but does not yet independently compute or prove the best feasible subset. Do not mark Task 1 complete.
-- Replanning currently preserves the original activity count and order; inserting a newly feasible excluded MUST_RIDE is not implemented. Do not mark Task 2 complete.
-- Existing MapController exposes GET /get/data, /get/walking-context and /route/{fromType}/{fromId}/{toType}/{toId}. End-to-end mapping of planned item order to individual walking route segments must be verified before marking Task 3 complete.
-- GoogleCalendarOAuthService supports explicit sync upsert, reconnect recovery for deleted remote events, disconnect, and cancelled-event removal. Automatic background sync triggered by plan changes is not implemented. Do not mark Task 4 complete.
-- A successful compilation and integration test have not been observed for the branch. Testing is intentionally deferred.
+## Current implementation and verification status
+- Initial generation and regeneration now use ServerItineraryService for the final schedule rather than AI subset hints. MUST_RIDE count, then PREFERRED count, then distinct ride count determine priority. Equal-count schedules favor lower walking for MIN_WALKING / LESS_WALKING / MINIMIZE_WALKING / مشي أقل; other goals, including MORE_REST, favor lower occupied time and thus more free time. The bounded beam search does not claim globally optimal results.
+- The server uses only supplied OPEN rides, explicit ELIGIBLE/UNKNOWN eligibility, non-missing queue estimates and directed walking routes. Avoided rides and disliked features are rejected. Meals retain their supplied placement/windows and 60/30-minute durations; initial prayer reserve is 15 minutes. Verified arrival prayer scheduling remains unchanged.
+- A split itinerary can use independent adult groups; shared food participants are grouped together, and minors remain supervised. Incompatible overlapping food groups fail explicitly rather than inventing travel or supervision.
+- Excluded MUST_RIDE pairs are derived by the server and persisted through existing VisitPlan.excludedRides. Schedule conflicts describe a bounded selection decision, never a proof that all possible schedules are impossible.
+- REPLAN can insert eligible, unplayed rides into verified gaps or after existing commitments when there is remaining time. Original activities retain identity, order and frozen execution data. New activities have null IDs in the pending proposal, are saved only on approval, and are removed from excludedRides only after approval. Rejection leaves the active plan and exclusions intact.
+- Inserted activities are revalidated at approval against exact server proposal snapshots, current resources, wait estimates, eligibility, participant scope, duration and directed routes, including the unchanged approach walk to the following fixed activity. Individual proposals remain restricted to that adult's scope; group proposals require organizer approval.
+- GET /api/v1/visit-plan/get/map-route/{visitPlanId} returns PER_MEMBER segments including an attempted entrance segment for each member. Each segment includes visitMemberId, fromPlanItemId, toPlanItemId, fromEntrance, estimated, entrancesVerified and available. Missing routes have no invented geometry. The graph's unverified entrance status is preserved; field calibration still requires Nawaf's confirmation.
+- Calendar after-commit events synchronize all connected GOING accounts separately, with descriptions filtered to each account's participating activities. One account's failure does not prevent the next account's synchronization. Cancellation removes linked members' saved events too. Calendar writes use independent transactions after commit.
+- Existing endpoint paths and approval request bodies remain compatible. Frontend consumers must handle proposed new activities with id=null and PER_MEMBER route segments.
 
-## Current implementation limits — do not treat these as passed tests
-- The server-side MustRideSubsetService packs conservative candidates from known wait times, directed walking routes and reserved breaks. This is a *hint*, not an exact optimizer or proof that the selected subset is optimal.
-- Existing REPLAN still requires unchanged activity count and order and cannot insert a newly feasible excluded MUST_RIDE into an itinerary; this is an outstanding implementation requirement.
-- Map route endpoint returns consecutive same-participant segments and declares that the entrance segment is not included. A true per-member split itinerary map is still required for complete multi-group routing.
-- The Calendar after-commit event handles organizer sync on approval/arrival and organizer event cancellation. Other linked members' events are not automatically synchronized.
-- Exact permitted primaryGoal values for less walking and more rest were not found in the backend's validation contract. Do not introduce guessed enum names.
+## Verification in this environment
+- Maven test execution was attempted but the Spring Boot 4.1.1 parent is unavailable in the local cache and Maven Central was unreachable. No successful build or JUnit execution is claimed.
+- Added focused tests for server subset selection, optional filling, insufficient duration, missing data, avoidance/closures, early-release additions, lower walking, independent split groups, food durations and prayer reserve.
+- Added tests for per-member route chains, missing route geometry, all-member calendar dispatch, isolated provider failures and personal activity filtering.
+- Java syntax parsing and git diff whitespace checks are run separately; they are not substitutes for compilation, integration tests or real OAuth verification.
 
-## New branch changes to verify
-- [ ] GET /api/v1/visit-plan/get/map-route/{visitPlanId} returns authorized planned activities and a segment for each consecutive routable activity with the same participant IDs. Split-group transitions do not become fictional paths; entrance route is explicitly not supplied.
-- [ ] After APPROVED replanning, a connected organizer's existing Google event is updated only after database commit.
-- [ ] Arrival scheduling updates a connected organizer's event after successful schedule commit.
-- [ ] Cancelling a visit schedules organizer Google event removal after commit; failure does not undo local cancellation.
-- [ ] Verify no Google event is created when not connected.
-- [ ] Verify 15-minute prayer activity duration on both initial reserve and actual ARRIVAL prayer event checks.
+## Remaining deployment checks
+- Run ./mvnw test in an environment that can resolve dependencies.
+- Verify a pending appended ride does not appear in active PlanItems before approval; rejection changes nothing; approval creates the new item and clears its exclusion.
+- Verify stale proposal keys, changed wait snapshots, started activities and out-of-scope member additions are rejected.
+- Confirm Google OAuth environment variables and n8n/Moyasar credentials, then exercise provider success/failure paths.
+- Confirm map entrance calibration and the frontend's handling of the extended route/proposal contract.

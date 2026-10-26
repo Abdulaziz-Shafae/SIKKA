@@ -109,7 +109,20 @@ public class GoogleCalendarOAuthService {
         connectionRepository.deleteById(accountId);
     }
 
-    @Transactional
+    @Transactional(readOnly = true, propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    public List<Integer> getVisitCalendarAccounts(Integer visitId, boolean cancellation) {
+        Visit visit = visitRepository.findVisitById(visitId);
+        if (visit == null) return List.of();
+        Set<Integer> accounts = new TreeSet<>();
+        if (visit.getOrganizer() != null) accounts.add(visit.getOrganizer().getId());
+        for (VisitMember member : visitMemberRepository.findAllByVisit_IdAndRsvpStatus(visitId, "GOING")) {
+            if (member.getVisitorProfile() != null) accounts.add(member.getVisitorProfile().getAccount().getId());
+        }
+        if (cancellation) for (GoogleCalendarEvent event : eventRepository.findAllByVisit_Id(visitId)) accounts.add(event.getAccount().getId());
+        return new ArrayList<>(accounts);
+    }
+
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
     public String syncVisit(Integer accountId, Integer visitId) {
         configured();
         GoogleCalendarConnection connection = connectionRepository.findById(accountId).orElseThrow(() -> new ApiException("Connect Google Calendar first"));
@@ -117,19 +130,24 @@ public class GoogleCalendarOAuthService {
         if (visit == null) throw new ApiException("Visit not found");
         if (visit.getVisitDate() == null) throw new ApiException("Visit date is required");
         boolean organizer = visit.getOrganizer() != null && accountId.equals(visit.getOrganizer().getId());
-        boolean member = visitMemberRepository.findVisitMemberByVisit_IdAndVisitorProfile_Account_Id(visitId, accountId) != null;
-        if (!organizer && !member) throw new ApiException("You are not a member of this visit");
+        VisitMember participant = visitMemberRepository.findVisitMemberByVisit_IdAndVisitorProfile_Account_Id(visitId, accountId);
+        boolean member = participant != null && "GOING".equals(participant.getRsvpStatus());
+        if (!organizer && !member) throw new ApiException("You are not a confirmed member of this visit");
         if ("CANCELLED".equals(visit.getStatus())) throw new ApiException("Cancelled visits cannot be synced");
 
         VisitPlan plan = visitPlanRepository.findAllByVisit_IdAndPlanKind(visitId, "GROUP").stream()
                 .filter(p -> Boolean.TRUE.equals(p.getIsActive()) && p.getPlanApproval() != null && "APPROVED".equals(p.getPlanApproval().getStatus()))
                 .max(Comparator.comparing(VisitPlan::getCreatedAt)).orElseThrow(() -> new ApiException("An approved group plan is required"));
 
-        List<PlanItem> items = plan.getPlanItems().stream().filter(Objects::nonNull)
+        List<PlanItem> items = plan.getPlanItems().stream().filter(Objects::nonNull).filter(item -> calendarItemBelongsToMember(item, participant))
                 .sorted(Comparator.comparing(PlanItem::getStartsAt, Comparator.nullsLast(Comparator.naturalOrder()))).toList();
         LocalTime arrival = visit.getPlannedStartTime() != null ? visit.getPlannedStartTime() : visit.getExpectedArrivalTime();
         LocalDateTime start = arrival != null ? visit.getVisitDate().atTime(arrival) : items.stream().map(PlanItem::getStartsAt).filter(Objects::nonNull).min(LocalDateTime::compareTo).orElse(null);
         LocalDateTime end = visit.getPlannedEndTime() != null ? visit.getVisitDate().atTime(visit.getPlannedEndTime()) : items.stream().map(PlanItem::getEndsAt).filter(Objects::nonNull).max(LocalDateTime::compareTo).orElse(null);
+        if ("SPLIT".equals(visit.getTogetherMode())) {
+            start = items.stream().map(PlanItem::getStartsAt).filter(Objects::nonNull).min(LocalDateTime::compareTo).orElse(start);
+            end = items.stream().map(PlanItem::getEndsAt).filter(Objects::nonNull).max(LocalDateTime::compareTo).orElse(end);
+        }
         if (start == null || end == null) throw new ApiException("Visit start and end times are required");
         if (!end.isAfter(start) && visit.getPlannedEndTime() != null) end = end.plusDays(1);
         if (!end.isAfter(start)) throw new ApiException("Visit end must be after start");
@@ -169,15 +187,15 @@ public class GoogleCalendarOAuthService {
         return response != null && response.get("htmlLink") instanceof String link ? link : "Synced";
     }
 
-    @Transactional
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
     public void removeCancelledVisit(Integer accountId, Integer visitId) {
         Visit visit = visitRepository.findVisitById(visitId);
         if (visit == null) throw new ApiException("Visit not found");
         boolean organizer = visit.getOrganizer() != null && accountId.equals(visit.getOrganizer().getId());
         boolean member = visitMemberRepository.findVisitMemberByVisit_IdAndVisitorProfile_Account_Id(visitId, accountId) != null;
-        if (!organizer && !member) throw new ApiException("You are not a member of this visit");
-        if (!"CANCELLED".equals(visit.getStatus())) throw new ApiException("Only cancelled visits can be removed this way");
         Optional<GoogleCalendarEvent> existing = eventRepository.findByAccount_IdAndVisit_Id(accountId, visitId);
+        if (!organizer && !member && existing.isEmpty()) throw new ApiException("You are not a member of this visit");
+        if (!"CANCELLED".equals(visit.getStatus())) throw new ApiException("Only cancelled visits can be removed this way");
         if (existing.isEmpty()) return;
         GoogleCalendarConnection connection = connectionRepository.findById(accountId).orElseThrow(() -> new ApiException("Connect Google Calendar first"));
         configured();
@@ -189,6 +207,16 @@ public class GoogleCalendarOAuthService {
             // The event is already absent remotely.
         }
         eventRepository.delete(existing.get());
+    }
+
+    boolean calendarItemBelongsToMember(PlanItem item, VisitMember member) {
+        if (member == null || item.getParticipantVisitMemberIds() == null) return false;
+        try {
+            Integer[] ids = tools.jackson.databind.json.JsonMapper.builder().build().readValue(item.getParticipantVisitMemberIds(), Integer[].class);
+            return Arrays.asList(ids).contains(member.getId());
+        } catch (Exception invalidParticipants) {
+            throw new ApiException("Saved calendar activity participants are invalid");
+        }
     }
 
     private String accessToken(String refreshToken) {

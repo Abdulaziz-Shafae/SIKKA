@@ -25,6 +25,7 @@ import java.time.ZoneId;
 public class PlanApprovalService {
 
     private final NotificationEventService notificationEventService;
+    private final org.springframework.context.ApplicationEventPublisher calendarEventPublisher;
     private final PlanApprovalRepository planApprovalRepository;
     private final VisitPlanRepository visitPlanRepository;
     private final AccountRepository accountRepository;
@@ -174,6 +175,7 @@ public class PlanApprovalService {
 
         planApprovalRepository.save(approval);
         notificationEventService.notifyPlanApprovalResult(approval);
+        if ("APPROVED".equals(status) && "SCHEDULED".equals(visitPlan.getTimingMode())) calendarEventPublisher.publishEvent(new CalendarSyncOnApproval.ApprovedVisitChanged(accountId, visitPlan.getVisit().getId()));
     }
 
     private Account validateActiveAccount(Integer accountId) {
