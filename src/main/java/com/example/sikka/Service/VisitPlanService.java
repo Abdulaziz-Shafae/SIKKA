@@ -2711,7 +2711,7 @@ public class VisitPlanService {
             if (!"MUST_RIDE".equals(item.getPriority())) throw new ApiException("Excluded required ride priority does not match the original selection");
             if ("NOT_ELIGIBLE".equals(reason) && !"NOT_ELIGIBLE".equals(status)) throw new ApiException("Ride ineligibility is not supported by planning data");
             if ("MISSING_WAIT_DATA".equals(reason) && ride != null && ride.path("planningWaitMinutes").isNumber()) throw new ApiException("Ride waiting data exists in the planning snapshot");
-            if ("CLOSED".equals(reason) && ride != null && "OPEN".equals(ride.path("status").asString())) throw new ApiException("Ride is open in planning snapshot");
+            if ("CLOSED".equals(reason) && (ride != null && "OPEN".equals(ride.path("status").asString()) || ride == null && (rideRepository.findRideById(rideId) == null || "OPEN".equals(rideRepository.findRideById(rideId).getStatus())))) throw new ApiException("Ride closure is not confirmed by planning data");
             if (!Set.of("INSUFFICIENT_TIME", "CLOSED", "NOT_ELIGIBLE", "MISSING_WAIT_DATA", "MISSING_ROUTE", "SCHEDULE_CONFLICT").contains(reason)) throw new ApiException("Unknown excluded ride reason");
             if (ride != null && !Objects.equals(item.getRideName(), ride.path("name").asString())) throw new ApiException("Excluded ride name does not match the planning snapshot");
         }
