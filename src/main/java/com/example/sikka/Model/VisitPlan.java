@@ -39,6 +39,9 @@ public class VisitPlan {
     @Column(columnDefinition = "JSON")
     private String proposedItems;
 
+    @Column(columnDefinition = "JSON")
+    private String excludedRides;
+
     @Pattern(regexp = "^(INDIVIDUAL|GROUP)$", message = "Pending scope must be INDIVIDUAL or GROUP")
     @Column(columnDefinition = "VARCHAR(20)")
     private String pendingScope;
