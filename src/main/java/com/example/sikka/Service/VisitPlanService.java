@@ -2721,7 +2721,7 @@ public class VisitPlanService {
             if ("MISSING_WAIT_DATA".equals(reason) && ride != null && ride.path("planningWaitMinutes").isNumber()) throw new ApiException("Ride waiting data exists in the planning snapshot");
             if ("CLOSED".equals(reason) && (ride != null && "OPEN".equals(ride.path("status").asString()) || ride == null && (rideRepository.findRideById(rideId) == null || "OPEN".equals(rideRepository.findRideById(rideId).getStatus())))) throw new ApiException("Ride closure is not confirmed by planning data");
             if (!Set.of("INSUFFICIENT_TIME", "CLOSED", "NOT_ELIGIBLE", "MISSING_WAIT_DATA", "MISSING_ROUTE", "SCHEDULE_CONFLICT", "GOAL_CONFLICT").contains(reason)) throw new ApiException("Unknown excluded ride reason");
-            if ("GOAL_CONFLICT".equals(reason) && !Set.of("LESS_WALKING", "LESS_WALK", "MIN_WALKING", "MORE_REST", "REST").contains(input.path("primaryGoal").asString())) throw new ApiException("Goal conflict requires a matching primary goal");
+            if ("GOAL_CONFLICT".equals(reason) && (!input.path("primaryGoal").isTextual() || input.path("primaryGoal").asString().isBlank())) throw new ApiException("Goal conflict requires a matching primary goal");
             if (ride != null && !Objects.equals(item.getRideName(), ride.path("name").asString())) throw new ApiException("Excluded ride name does not match the planning snapshot");
         }
         for (Map.Entry<Integer, Set<Integer>> request : required.entrySet()) {
