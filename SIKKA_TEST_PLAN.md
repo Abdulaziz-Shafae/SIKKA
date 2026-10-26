@@ -1,0 +1,84 @@
+# SIKKA — Deferred Integration Test Plan
+
+Status: TESTS DEFERRED by project owner. This file is a checklist, not proof of successful execution.
+Branch: feature/four-updates
+Do not merge into main until every critical case is verified.
+
+## Environment and preparation
+1. Configure MySQL, Spring Boot environment, OpenAI credentials, and sample park data.
+2. Use test accounts: organizer, adult group member, family member with minor, and unrelated account.
+3. Create SOLO, FRIENDS (together and split), and FAMILY visits.
+4. Record the visit IDs, member IDs, generated plan IDs, and test ride IDs.
+5. Confirm park statuses, directed walking routes, planning wait estimates, eligibility, meals, and prayer data.
+6. Run `./mvnw clean test` (Windows: `.\mvnw.cmd clean test`) after implementation is complete.
+7. Check DB migrations / schema updates for VisitPlan.excludedRides.
+
+## Task 1 — MUST_RIDE
+- [ ] A feasible MUST_RIDE is scheduled once for its selected participant.
+- [ ] If all selected MUST_RIDE do not fit, return the best feasible subset for MAX_RIDES.
+- [ ] MIN_WALKING / walking reduction goal prefers the lower walking feasible option.
+- [ ] MORE_REST goal preserves chosen rest intervals rather than adding distant rides.
+- [ ] Missing or untrusted waiting estimates do not become zero-minute waits.
+- [ ] Missing directed route is not replaced with fictional straight-line walking.
+- [ ] CLOSED ride is excluded with grounded reason; do not incorrectly reject entire plan.
+- [ ] NOT_ELIGIBLE participant cannot be scheduled. UNKNOWN is provisional only with warnings.
+- [ ] AVOID, disliked ride features and minor supervision remain enforced.
+- [ ] Meals have 60 minutes, snacks 30 minutes, initial prayer reserve 15 minutes.
+- [ ] No overlapping participant activities and no visit-deadline overflow.
+- [ ] Every omitted MUST_RIDE has exactly one reason record per participant.
+- [ ] No participant's ride is simultaneously scheduled and excluded.
+- [ ] GET existing plan-details endpoint returns excluded rides for GROUP and correct filtered INDIVIDUAL view.
+- [ ] Existing original selections persist after generation and regeneration.
+- [ ] Infeasible empty plan is not persisted as a valid plan.
+- [ ] Free entitlement is per VISIT, not per generate/re-generate request. Verify billing separately before launch.
+
+## Task 2 — Replanning
+- [ ] Member can request an INDIVIDUAL proposal for their own solo editable items.
+- [ ] Member cannot edit another member's activities or shared group itinerary.
+- [ ] Organizer can request a GROUP proposal.
+- [ ] Closed MUST_RIDE can be replaced when authorized without failure during snapshot preparation.
+- [ ] Earlier completion is detected from recorded execution release time, not assumed.
+- [ ] Previously excluded MUST_RIDE is reconsidered when time genuinely becomes available.
+- [ ] Finished, ongoing, pinned, meal, prayer and meeting point items are preserved.
+- [ ] Alter no more than 25% of remaining substantive activities unless approved one-item exception.
+- [ ] Proposal stays pending until the proper approver responds.
+- [ ] Rejection leaves approved itinerary unchanged.
+- [ ] If no real improvement is feasible, keep the existing itinerary without unnecessary alerts.
+
+## Task 3 — Map API
+- [ ] GET /api/v1/map/get/data returns park image and mapped ride/place coordinates.
+- [ ] GET /api/v1/map/get/walking-context returns the same directed network used during planning.
+- [ ] GET /api/v1/map/route/{fromType}/{fromId}/{toType}/{toId} returns a navigable path, not an arbitrary straight line.
+- [ ] Missing routing data returns an explicit unavailable/error state.
+- [ ] Plan-details PlanItems have usable rideId/placeId, chronology, startsAt/endsAt and participant identity.
+- [ ] Frontend can focus map marker from its matching schedule card.
+- [ ] For closed/missing place, do not invent a marker or entrance coordinate.
+- [ ] Guest public map endpoints remain accessible, protected edit endpoints remain protected.
+- [ ] Verify the Nawaf image and node mapping physically match park locations.
+
+## Task 4 — Google Calendar
+- [ ] OAuth connect and status work with correct account.
+- [ ] Syncing approved plan creates one event.
+- [ ] Syncing the same visit again updates the existing Google event (no duplicate).
+- [ ] Updating visit time/date and explicitly re-syncing changes the existing event.
+- [ ] Cancelled visit is denied new sync.
+- [ ] DELETE /api/v1/google-calendar/sync/cancelled/{visitId} removes an existing cancelled event, or returns success when already absent.
+- [ ] Unauthorized user cannot remove a different person's event.
+- [ ] Token expiry is refreshed; revoked refresh tokens produce actionable error.
+- [ ] Google network failure never cancels or rolls back the core visit plan.
+- [ ] Disconnect deletes local stored authorization and event mappings.
+- [ ] Check if remote events persist after disconnect and communicate policy clearly.
+- [ ] Automatic sync after plan approval/change is NOT assumed until actually wired and confirmed.
+
+## Acceptance record
+| Area | Tester | Date | Outcome | Issues |
+| --- | --- | --- | --- | --- |
+| MUST_RIDE | | | NOT RUN | |
+| Replanning | | | NOT RUN | |
+| Map API | | | NOT RUN | |
+| Google Calendar | | | NOT RUN | |
+| Security / approvals | | | NOT RUN | |
+| Entitlements / billing | | | NOT RUN | |
+
+## Release gate
+Do not merge to main until compile, automated tests, manual API flows, park map coordinates, and visit-based billing are verified.
