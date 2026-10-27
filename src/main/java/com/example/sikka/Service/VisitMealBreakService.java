@@ -31,6 +31,7 @@ public class VisitMealBreakService {
     private final VisitMemberRepository visitMemberRepository;
     private final AccountRepository accountRepository;
     private final com.example.sikka.Repository.PlanItemRepository planItemRepository;
+    private final com.example.sikka.Repository.PlaceRepository placeRepository;
 
     private void requirePaidRepeatedEdit(Visit visit) {
         if (visit == null) throw new ApiException("Visit not found");
@@ -623,6 +624,18 @@ public class VisitMealBreakService {
         if (timings.size() != types.size() || timings.stream().anyMatch(timing -> timing == null || !java.util.Set.of("START", "MIDDLE", "END").contains(timing))) {
             throw new ApiException("Provide one valid timing for each food break");
         }
+        List<Integer> restaurantIds = dto.getRestaurantIds() == null ? List.of() : dto.getRestaurantIds();
+        if (!restaurantIds.isEmpty() && restaurantIds.size() != types.size()) {
+            throw new ApiException("Provide one restaurant selection for each food break");
+        }
+        List<com.example.sikka.Model.Place> restaurants = new ArrayList<>();
+        for (Integer restaurantId : restaurantIds) {
+            com.example.sikka.Model.Place restaurant = restaurantId == null ? null : placeRepository.findPlaceById(restaurantId);
+            if (restaurantId != null && (restaurant == null || !"RESTAURANT".equals(restaurant.getKind()) || !PlanningAvailability.canPlanPlace(restaurant))) {
+                throw new ApiException("Choose an open restaurant");
+            }
+            restaurants.add(restaurant);
+        }
         List<VisitMember> members = visitMemberRepository.findAllByVisit_IdAndRsvpStatus(visitId, "GOING");
         if (members.isEmpty()) {
             throw new ApiException("At least one GOING participant is required");
@@ -641,6 +654,7 @@ public class VisitMealBreakService {
                 meal.setBreakKey(breakKey);
                 meal.setMealChoice(types.isEmpty() ? dto.getChoice() : types.get(index));
                 meal.setPreferredTiming(types.isEmpty() ? null : timings.get(index));
+                meal.setPlace(restaurants.isEmpty() ? null : restaurants.get(index));
                 visitMealBreakRepository.save(meal);
             }
         }

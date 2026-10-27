@@ -120,6 +120,24 @@ class TeamFlowsIntegrationTest {
     }
 
     @Test
+    void draftRestaurantSelectionPersistsInPlanningPolicyAndRejectsClosedPlaces() {
+        Visit visit = createVisit("SOLO");
+        Place restaurant = new Place();
+        restaurant.setName("QA Restaurant");
+        restaurant.setKind("RESTAURANT");
+        restaurant.setStatus("OPEN");
+        entityManager.persist(restaurant);
+        MealPreferencesDtoIn dto = new MealPreferencesDtoIn("ONE_MEAL", List.of("MIDDLE"));
+        dto.setRestaurantIds(List.of(restaurant.getId()));
+        visitMealBreakService.saveMealPreferences(visit.getOrganizer().getId(), visit.getId(), dto);
+        Map<String, Object> policy = visitMealBreakService.getMealBreakPolicy(visit.getOrganizer().getId(), visit.getId());
+        assertEquals(restaurant.getId(), ((Map<?, ?>) ((List<?>) policy.get("breaks")).get(0)).get("restaurantId"));
+        restaurant.setStatus("CLOSED");
+        assertThrows(ApiException.class, () -> visitMealBreakService.saveMealPreferences(visit.getOrganizer().getId(), visit.getId(), dto));
+        assertEquals(restaurant.getId(), mealBreakRepository.findVisitMealBreaksByVisitId(visit.getId()).get(0).getPlace().getId());
+    }
+
+    @Test
     void deferredFoodPreferenceIsExplicitAndDoesNotCreateAnActualFoodActivity() {
         Visit visit = createVisit("SOLO");
         visitMealBreakService.saveMealPreferences(visit.getOrganizer().getId(), visit.getId(), new MealPreferencesDtoIn("DEFERRED", List.of()));

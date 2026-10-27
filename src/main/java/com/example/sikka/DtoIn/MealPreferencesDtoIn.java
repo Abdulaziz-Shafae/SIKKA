@@ -13,5 +13,12 @@ public class MealPreferencesDtoIn {
     @Pattern(regexp = "^(NONE|ONE_MEAL|TWO_MEALS|SNACK|MEAL_AND_SNACK|DEFERRED|SKIPPED)$")
     private String choice;
 
+    private List<@Positive Integer> restaurantIds;
+
+    public MealPreferencesDtoIn(String choice, List<String> timings) {
+        this.choice = choice;
+        this.timings = timings;
+    }
+
     private List<@Pattern(regexp = "^(START|MIDDLE|END)$") String> timings;
 }
