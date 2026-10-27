@@ -304,6 +304,49 @@ class TeamFlowsIntegrationTest {
         entityManager.flush();
     }
 
+    @Test
+    void friendConfirmingAfterMealsAreSavedJoinsTheSameFoodBreak() {
+        Visit visit = createVisit("FRIENDS");
+        visitMealBreakService.saveMealPreferences(visit.getOrganizer().getId(), visit.getId(), new MealPreferencesDtoIn("ONE_MEAL", List.of("END")));
+        VisitorProfile profile = createProfile(createAccount());
+        VisitMember friend = new VisitMember();
+        friend.setVisit(visit);
+        friend.setVisitorProfile(profile);
+        friend.setRsvpStatus("INVITED");
+        entityManager.persist(friend);
+        visitMemberService.updateRsvp(profile.getAccount().getId(), visit.getId(), 1);
+        var policy = visitMealBreakService.getMealBreakPolicy(visit.getOrganizer().getId(), visit.getId());
+        List<?> breaks = (List<?>) policy.get("breaks");
+        assertEquals(1, breaks.size());
+        assertEquals(2, ((List<?>) ((Map<?, ?>) breaks.get(0)).get("participantVisitMemberIds")).size());
+    }
+
+    @Test
+    void togetherChoicesAndExclusionsAreSharedAndMembersCannotOverrideThem() {
+        Visit visit = createVisit("FRIENDS");
+        visit.setTogetherMode("TOGETHER");
+        VisitorProfile profile = createProfile(createAccount());
+        VisitMember friend = new VisitMember();
+        friend.setVisit(visit);
+        friend.setVisitorProfile(profile);
+        friend.setRsvpStatus("GOING");
+        entityManager.persist(friend);
+        Ride ride = new Ride();
+        ride.setName("Selection regression");
+        ride.setStatus("OPEN");
+        entityManager.persist(ride);
+        VisitMember organizer = visitMemberRepository.findVisitMemberByVisit_IdAndVisitorProfile_Account_Id(visit.getId(), visit.getOrganizer().getId());
+        MemberPreferencesDtoIn dto = new MemberPreferencesDtoIn(List.of(), List.of());
+        dto.setExcludedRideIds(List.of(ride.getId()));
+        dto.setExcludedRideTypes(List.of("KIDS"));
+        visitMemberService.saveMemberPreferences(visit.getOrganizer().getId(), organizer.getId(), dto, 1);
+        assertEquals(organizer.getSelectedRides(), friend.getSelectedRides());
+        assertEquals(organizer.getPreferences(), friend.getPreferences());
+        assertEquals("ANSWERED", friend.getAnswerStatus());
+        assertTrue(visitMemberService.getMemberPreferences(visit.getOrganizer().getId(), organizer.getId()).get("excludedRideIds").toString().contains(ride.getId().toString()));
+        assertThrows(ApiException.class, () -> visitMemberService.saveMemberPreferences(profile.getAccount().getId(), friend.getId(), dto, 1));
+    }
+
     private Visit createVisit(String type) {
         Account account = createAccount();
         createProfile(account);
