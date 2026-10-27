@@ -356,14 +356,9 @@ public class RideService {
     }
 
     public List<Ride> getOpenRides(){
-        java.time.LocalDateTime now = java.time.LocalDateTime.now();
-        List<Ride> rides = new ArrayList<>();
-        for (Ride ride : rideRepository.findRidesByStatus("OPEN")) {
-            if (ride.getWaitMinutes() != null && ride.getWaitObservedAt() != null && !ride.getWaitObservedAt().isAfter(now) && !ride.getWaitObservedAt().isBefore(now.minusMinutes(waitFreshnessMinutes)) && ride.getWaitSource() != null && !ride.getWaitSource().isBlank()) {
-                rides.add(ride);
-            }
-        }
-        return rides;
+        // Operational status is independent from live queue observation freshness.
+        // The catalog endpoint includes all rides; this endpoint includes confirmed OPEN rides only.
+        return rideRepository.findRidesByStatus("OPEN");
     }
 
     public boolean validateRideIds(List<Integer> rideIds){
