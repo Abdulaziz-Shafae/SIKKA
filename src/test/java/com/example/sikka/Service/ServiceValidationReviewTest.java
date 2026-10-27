@@ -23,7 +23,7 @@ class ServiceValidationReviewTest {
             assertThrows(ApiException.class, () -> new RideService(rides, mock(com.example.sikka.Repository.VisitMemberRepository.class), profiles, accounts, mock(com.example.sikka.Service.PrivacyConsentService.class), tools.jackson.databind.json.JsonMapper.builder().build()).addRide(ride));
             RegisterDtoIn registration = new RegisterDtoIn();
             registration.setThrillPreference(value);
-            assertThrows(ApiException.class, () -> new AccountService(accounts, profiles, mock(org.springframework.security.crypto.password.PasswordEncoder.class), mock(VerificationService.class)).register(registration));
+            assertThrows(ApiException.class, () -> new AccountService(accounts, profiles, mock(org.springframework.security.crypto.password.PasswordEncoder.class), mock(VerificationService.class), mock(RegistrationWelcomeService.class)).register(registration));
         }
         verifyNoInteractions(rides, accounts, profiles);
     }

@@ -22,6 +22,7 @@ public class AccountService {
     private final VisitorProfileRepository visitorProfileRepository;
     private final org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
     private final VerificationService verificationService;
+    private final RegistrationWelcomeService registrationWelcomeService;
     public List<AccountDtoOut> get() {
         List<AccountDtoOut> list = new ArrayList<>();
         for (Account a : accountRepository.findAll())
@@ -108,7 +109,9 @@ public class AccountService {
         profile.setFoodPreferences(dto.getFoodPreferences());
         profile.setAccount(account);
         visitorProfileRepository.save(profile);
-        return verificationService.sendVerificationCode(account);
+        boolean emailSent = verificationService.sendVerificationCode(account);
+        registrationWelcomeService.scheduleFollowup(account);
+        return emailSent;
     }
 
     // contract method for the other flows
