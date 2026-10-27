@@ -47,6 +47,13 @@ public class RideController {
         return ResponseEntity.status(200).body(new ApiResponse("Ride deleted successfully"));
     }
 
+    // Selection catalog: includes all rides even when live wait or open status is unavailable.
+    // The client must display the stored status rather than treating catalog entries as open.
+    @GetMapping("/catalog")
+    public ResponseEntity<?> getRideCatalog(){
+        return ResponseEntity.status(200).body(rideService.getRides());
+    }
+
     @GetMapping("/available")
     public ResponseEntity<?> getOpenRides(){
         return ResponseEntity.status(200).body(rideService.getOpenRides());
