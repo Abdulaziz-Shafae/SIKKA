@@ -253,10 +253,6 @@ public class VisitRecordService {
 
         LocalDateTime recordedAt = LocalDateTime.now(ZoneId.of("Asia/Riyadh"));
 
-        if (planItem.getStartsAt().isAfter(recordedAt)) {
-            throw new ApiException("The activity has not reached its scheduled start time");
-        }
-
         List<VisitRecord> records = new ArrayList<>();
 
         for (VisitMember member : selectedMembers) {

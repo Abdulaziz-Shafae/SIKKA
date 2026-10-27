@@ -34,8 +34,19 @@ public class NotificationEventService {
     private final ActivitySessionRepository activitySessionRepository;
     private final VisitRecordRepository visitRecordRepository;
     private final N8nNotificationService n8nNotificationService;
+    private final WhatsAppService whatsAppService;
+    private final PrivacyConsentService privacyConsentService;
     private final PlatformTransactionManager transactionManager;
     private final JsonMapper jsonMapper = JsonMapper.builder().build();
+
+    public void notifyPlanningReminder(VisitMember member) {
+        boolean attendance = !"GOING".equals(member.getRsvpStatus());
+        String message = attendance ? "أكد حضورك في الزيارة عشان نرتب طلعتكم." : "كمل اختياراتك عشان نرتب خطة طلعتكم.";
+        long slot = java.time.Instant.now().getEpochSecond() / 600;
+        Notification notice = save(member.getVisitorProfile().getAccount(), member.getVisit(), "PLANNING_REMINDER", "تذكير من منظّم الزيارة", message, "PLANNING_REMINDER:" + member.getId() + ":" + slot, true, null);
+        Account recipient = member.getVisitorProfile().getAccount();
+        if (notice != null && Boolean.TRUE.equals(recipient.getPhoneVerified()) && recipient.getPhone() != null && privacyConsentService.hasConsent(member.getVisitorProfile().getId(), "WHATSAPP")) queueWhatsApp(notice);
+    }
 
     // 1 + 2: called only after a real RSVP change, while the visit is locked.
     public void notifyMemberRsvp(VisitMember member, boolean firstResponse) {
@@ -382,6 +393,45 @@ public class NotificationEventService {
                     });
                 } catch (RuntimeException exception) {
                     log.warn("Could not record delivery result for notification {}", emailId);
+                }
+            }
+        });
+    }
+
+    private void queueWhatsApp(Notification source) {
+        String key = source.getEventKey();
+        Account account = source.getAccount();
+        if (notificationRepository.findNotificationByAccount_IdAndChannelAndEventKey(account.getId(), "WHATSAPP", key) != null) return;
+        Notification delivery = new Notification();
+        delivery.setAccount(account);
+        delivery.setVisit(source.getVisit());
+        delivery.setChannel("WHATSAPP");
+        delivery.setType(source.getType());
+        delivery.setTitle(source.getTitle());
+        delivery.setMessage(source.getMessage());
+        delivery.setEventKey(key);
+        delivery.setStatus("PENDING");
+        notificationRepository.save(delivery);
+        Integer deliveryId = delivery.getId();
+        String phone = account.getPhone();
+        String message = source.getMessage();
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                boolean sent = whatsAppService.sendMessage(phone, message);
+                try {
+                    TransactionTemplate template = new TransactionTemplate(transactionManager);
+                    template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+                    template.executeWithoutResult(transaction -> {
+                        Notification saved = notificationRepository.findNotificationById(deliveryId);
+                        if (saved != null && "PENDING".equals(saved.getStatus())) {
+                            saved.setStatus(sent ? "SENT" : "FAILED");
+                            saved.setSentAt(sent ? now() : null);
+                            notificationRepository.save(saved);
+                        }
+                    });
+                } catch (RuntimeException exception) {
+                    log.warn("Could not record WhatsApp delivery result for notification {}", deliveryId);
                 }
             }
         });

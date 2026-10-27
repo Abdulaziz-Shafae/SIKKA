@@ -10,7 +10,7 @@ import java.util.List;
 @AllArgsConstructor
 public class MealPreferencesDtoIn {
     @NotBlank
-    @Pattern(regexp = "^(NONE|ONE_MEAL|TWO_MEALS|SNACK|MEAL_AND_SNACK|DEFERRED|SKIPPED)$")
+    @Pattern(regexp = "^(NONE|ONE_MEAL|TWO_MEALS|TWO_SNACKS|SNACK|MEAL_AND_SNACK|DEFERRED|SKIPPED)$")
     private String choice;
 
     private List<@Positive Integer> restaurantIds;

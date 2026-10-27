@@ -41,4 +41,15 @@ class FrontendBindingContractTest {
         assertEquals("existing-private-data", profile.getHealthData());
         verify(profiles).save(profile);
     }
+    @Test
+    void paymentResponseIdentifiesItsVisitWithoutExposingTheVisitGraph() {
+        Visit visit = new Visit();
+        visit.setId(17);
+        com.example.sikka.Model.PaymentOrder order = new com.example.sikka.Model.PaymentOrder();
+        order.setVisit(visit);
+        var data = JsonMapper.builder().build().readTree(JsonMapper.builder().build().writeValueAsString(order));
+        assertEquals(17, data.path("visitId").asInt());
+        assertFalse(data.has("visit"));
+    }
+
 }

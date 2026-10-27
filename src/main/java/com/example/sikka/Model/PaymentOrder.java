@@ -85,4 +85,10 @@ public class PaymentOrder {
     @JsonIgnore
     private PlanHistory consumedByPlanHistory;
 
+    @Transient
+    @com.fasterxml.jackson.annotation.JsonProperty("visitId")
+    public Integer getPaymentVisitId() {
+        return visit == null ? null : visit.getId();
+    }
+
 }

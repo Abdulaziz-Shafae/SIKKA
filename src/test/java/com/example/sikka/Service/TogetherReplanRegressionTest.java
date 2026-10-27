@@ -24,7 +24,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-@SpringBootTest(properties = {"spring.datasource.url=jdbc:h2:mem:sikka_together_qa;MODE=MySQL;DB_CLOSE_DELAY=-1", "spring.jpa.properties.hibernate.max_fetch_depth=0"})
+@SpringBootTest(properties = {"spring.datasource.url=jdbc:h2:mem:sikka_together_qa;MODE=MySQL;DB_CLOSE_DELAY=-1", "spring.jpa.properties.hibernate.max_fetch_depth=0", "sikka.park.latitude=24.7", "sikka.park.longitude=46.6"})
 class TogetherReplanRegressionTest {
     @Autowired private EntityManager entityManager;
     @Autowired private PlatformTransactionManager transactionManager;
@@ -37,6 +37,7 @@ class TogetherReplanRegressionTest {
     @Autowired private VisitRepository visitRepository;
     @MockitoSpyBean private RideService rideService;
     @MockitoBean private PlaceService placeService;
+    @MockitoBean private PrayerTimeService prayerTimeService;
     @MockitoBean private NotificationEventService notificationEventService;
     @MockitoSpyBean private AiPlanService aiPlanService;
     private final JsonMapper mapper = JsonMapper.builder().build();
@@ -219,6 +220,103 @@ class TogetherReplanRegressionTest {
         member.setSnapshotAt(LocalDateTime.now());
         entityManager.persist(member);
         return member;
+    }
+
+    private Fixture prepareApprovedVisit() {
+        Fixture prepared = prepareVisit("TOGETHER", false);
+        transaction(() -> {
+            entityManager.createQuery("delete from ActivitySession s where s.visitMember.visit.id = :visitId").setParameter("visitId", prepared.visitId()).executeUpdate();
+            Visit visit = visitRepository.findVisitById(prepared.visitId());
+            visit.setStatus("READY");
+            visit.setStartedAt(null);
+            visit.setExpectedArrivalTime(LocalTime.of(16, 0));
+            return null;
+        });
+        return prepared;
+    }
+
+    @Test
+    void approvedVisitCanMoveDateWithoutReplacingItsRides() {
+        Fixture prepared = prepareApprovedVisit();
+        LocalDate nextDate = LocalDate.now(ZoneId.of("Asia/Riyadh")).with(java.time.temporal.TemporalAdjusters.next(DayOfWeek.WEDNESDAY));
+        visitPlanService.updateVisitArrival(prepared.organizerId(), prepared.visitId(), new com.example.sikka.DtoIn.UpdateVisitArrivalDtoIn(LocalTime.of(16, 0), null, nextDate));
+        transaction(() -> {
+            assertEquals(nextDate, visitRepository.findVisitById(prepared.visitId()).getVisitDate());
+            assertEquals(prepared.itemIds(), itemRepository.findAllByVisitPlan_Id(prepared.planId()).stream().sorted(Comparator.comparing(PlanItem::getSortOrder)).map(PlanItem::getId).toList());
+            assertTrue(itemRepository.findAllByVisitPlan_Id(prepared.planId()).stream().allMatch(item -> item.getStartsAt().toLocalDate().equals(nextDate)));
+            assertTrue(planRepository.findVisitPlanById(prepared.planId()).getIsActive());
+            return null;
+        });
+    }
+
+    @Test
+    void changingApprovedDateRebuildsEveryVerifiedPrayerWithoutDroppingRides() {
+        Fixture prepared = prepareApprovedVisit();
+        LocalDate nextDate = LocalDate.now(ZoneId.of("Asia/Riyadh")).with(java.time.temporal.TemporalAdjusters.next(DayOfWeek.WEDNESDAY));
+        Integer roomId = transaction(() -> {
+            visitRepository.findVisitById(prepared.visitId()).setIncludePrayer(true);
+            Place room = new Place();
+            room.setName("QA prayer room");
+            room.setKind("PRAYER_ROOM");
+            room.setStatus("OPEN");
+            entityManager.persist(room);
+            return room.getId();
+        });
+        List<String> nodes = new ArrayList<>(List.of("ENTRANCE", "PLACE:" + roomId));
+        prepared.rideIds().forEach(id -> nodes.add("RIDE:" + id));
+        List<Map<String, Object>> routes = new ArrayList<>();
+        for (String from : nodes) for (String to : nodes) routes.add(Map.of("fromNodeKey", from, "toNodeKey", to, "minutes", from.equals(to) || from.equals("ENTRANCE") ? 0 : 1));
+        when(placeService.getWalkingContext(anyInt(), eq(prepared.visitId()))).thenReturn(Map.of("entranceNodeKey", "ENTRANCE", "revision", "PRAYER_QA", "places", List.of(Map.of("id", roomId, "name", "QA prayer room", "kind", "PRAYER_ROOM", "status", "OPEN", "rateable", false, "nodeKey", "PLACE:" + roomId)), "routes", routes));
+        when(prayerTimeService.getPrayerTimes(eq(nextDate), anyDouble(), anyDouble())).thenReturn(Map.of("Fajr", nextDate.atTime(5, 0), "Dhuhr", nextDate.atTime(12, 0), "Asr", nextDate.atTime(15, 0), "Maghrib", nextDate.atTime(17, 0), "Isha", nextDate.atTime(18, 0)));
+        visitPlanService.updateVisitArrival(prepared.organizerId(), prepared.visitId(), new com.example.sikka.DtoIn.UpdateVisitArrivalDtoIn(LocalTime.of(16, 0), null, nextDate));
+        transaction(() -> {
+            List<PlanItem> items = itemRepository.findAllByVisitPlan_Id(prepared.planId());
+            assertEquals(2, items.stream().filter(item -> "PRAYER".equals(item.getBreakType())).count());
+            assertEquals(prepared.rideIds(), items.stream().filter(item -> item.getRide() != null).sorted(Comparator.comparing(PlanItem::getSortOrder)).map(item -> item.getRide().getId()).toList());
+            assertTrue(items.stream().allMatch(item -> item.getEndsAt().toLocalDate().equals(nextDate)));
+            return null;
+        });
+        verify(aiPlanService, never()).generatePlanCandidate(anyString());
+    }
+
+    @Test
+    void approvedMealEditKeepsEveryRideAndIsAtomicWhenItDoesNotFit() {
+        Fixture prepared = prepareApprovedVisit();
+        LocalDate nextDate = LocalDate.now(ZoneId.of("Asia/Riyadh")).with(java.time.temporal.TemporalAdjusters.next(DayOfWeek.WEDNESDAY));
+        var meal = new com.example.sikka.DtoIn.MealPreferencesDtoIn("ONE_MEAL", List.of("END"));
+        visitPlanService.updateVisitArrival(prepared.organizerId(), prepared.visitId(), new com.example.sikka.DtoIn.UpdateVisitArrivalDtoIn(LocalTime.of(16, 0), meal, nextDate));
+        transaction(() -> {
+            assertEquals(prepared.rideIds(), itemRepository.findAllByVisitPlan_Id(prepared.planId()).stream().sorted(Comparator.comparing(PlanItem::getSortOrder)).filter(item -> item.getRide() != null).map(item -> item.getRide().getId()).toList());
+            assertEquals(1, itemRepository.findAllByVisitPlan_Id(prepared.planId()).stream().filter(item -> "MEAL".equals(item.getBreakType())).count());
+            return null;
+        });
+        var excessive = new com.example.sikka.DtoIn.MealPreferencesDtoIn("TWO_MEALS", List.of("START", "END"));
+        assertThrows(ApiException.class, () -> visitPlanService.updateVisitArrival(prepared.organizerId(), prepared.visitId(), new com.example.sikka.DtoIn.UpdateVisitArrivalDtoIn(LocalTime.of(16, 0), excessive, nextDate)));
+        transaction(() -> {
+            assertEquals(1, itemRepository.findAllByVisitPlan_Id(prepared.planId()).stream().filter(item -> "MEAL".equals(item.getBreakType())).count());
+            assertEquals(prepared.rideIds(), itemRepository.findAllByVisitPlan_Id(prepared.planId()).stream().sorted(Comparator.comparing(PlanItem::getSortOrder)).filter(item -> item.getRide() != null).map(item -> item.getRide().getId()).toList());
+            return null;
+        });
+    }
+
+    @Test
+    void regeneratedPlanWaitsForLeaderWithoutReplacingApprovedPlan() {
+        Fixture prepared = prepareApprovedVisit();
+        var generated = visitPlanService.regeneratePlan(prepared.organizerId(), prepared.visitId(), new com.example.sikka.DtoIn.GeneratePlanDtoIn(UUID.randomUUID().toString()));
+        assertEquals("SUCCEEDED", generated.getRequestStatus(), generated.getFailureReason());
+        transaction(() -> {
+            assertTrue(planRepository.findVisitPlanById(prepared.planId()).getIsActive());
+            VisitPlan replacement = planRepository.findVisitPlanById(generated.getGroupPlanId());
+            assertFalse(replacement.getIsActive());
+            assertEquals("PENDING", replacement.getPlanApproval().getStatus());
+            return null;
+        });
+        approvalService.respondToPlanApproval(prepared.organizerId(), new PlanApprovalDtoIn(generated.getGroupPlanId(), null), 1);
+        transaction(() -> {
+            assertFalse(planRepository.findVisitPlanById(prepared.planId()).getIsActive());
+            assertTrue(planRepository.findVisitPlanById(generated.getGroupPlanId()).getIsActive());
+            return null;
+        });
     }
 
     private void updateWait(Integer minutes) {

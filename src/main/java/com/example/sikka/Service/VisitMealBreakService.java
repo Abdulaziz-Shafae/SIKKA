@@ -615,7 +615,7 @@ public class VisitMealBreakService {
         if (!"DRAFT".equals(visit.getStatus()) || Boolean.TRUE.equals(visit.getMembersLocked())) {
             throw new ApiException("Meal preferences can only be saved before planning; deferred answers during the visit require schedule preparation");
         }
-        java.util.Map<String, List<String>> choices = java.util.Map.of("NONE", List.of(), "SKIPPED", List.of(), "DEFERRED", List.of(), "ONE_MEAL", List.of("MEAL"), "TWO_MEALS", List.of("MEAL", "MEAL"), "SNACK", List.of("SNACK"), "MEAL_AND_SNACK", List.of("MEAL", "SNACK"));
+        java.util.Map<String, List<String>> choices = java.util.Map.of("NONE", List.of(), "SKIPPED", List.of(), "DEFERRED", List.of(), "ONE_MEAL", List.of("MEAL"), "TWO_MEALS", List.of("MEAL", "MEAL"), "TWO_SNACKS", List.of("SNACK", "SNACK"), "SNACK", List.of("SNACK"), "MEAL_AND_SNACK", List.of("MEAL", "SNACK"));
         if (dto == null || !choices.containsKey(dto.getChoice())) {
             throw new ApiException("A valid meal preference is required");
         }
@@ -675,8 +675,8 @@ public class VisitMealBreakService {
             String memberChoice;
             if (own.size() == 1 && java.util.Set.of("NONE", "SKIPPED", "DEFERRED").contains(own.get(0).getMealChoice())) {
                 memberChoice = own.get(0).getMealChoice();
-            } else if (meals + snacks == own.size() && meals <= 2 && snacks <= 1 && own.size() <= 2 && !own.isEmpty()) {
-                memberChoice = meals == 2 ? "TWO_MEALS" : meals == 1 && snacks == 1 ? "MEAL_AND_SNACK" : meals == 1 ? "ONE_MEAL" : "SNACK";
+            } else if (meals + snacks == own.size() && meals <= 2 && snacks <= 2 && own.size() <= 2 && !own.isEmpty()) {
+                memberChoice = snacks == 2 ? "TWO_SNACKS" : meals == 2 ? "TWO_MEALS" : meals == 1 && snacks == 1 ? "MEAL_AND_SNACK" : meals == 1 ? "ONE_MEAL" : "SNACK";
             } else {
                 throw new ApiException("Save explicit consistent food preferences for every GOING participant");
             }

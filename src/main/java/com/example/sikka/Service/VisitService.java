@@ -205,6 +205,7 @@ public class VisitService {
         if (dto == null) {
             throw new ApiException("Visit details are required");
         }
+        ParkOperatingHours.validateVisitWindow(dto.getVisitDate(), dto.getPlannedStartTime(), dto.getDurationMinutes());
         int max = resolveMaxParticipants(dto);
         validateVisitDetails(dto.getVisitDate(), max);
         Account organizer = accountRepository.findAccountById(accountId);
@@ -286,6 +287,7 @@ public class VisitService {
         if (visit.getTripType() != null && !visit.getTripType().equals(dto.getTripType()))
             throw new ApiException("trip type cannot be changed, create a new visit");
 
+        ParkOperatingHours.validateVisitWindow(dto.getVisitDate(), dto.getPlannedStartTime(), dto.getDurationMinutes());
         int max = resolveMaxParticipants(dto);
         validateVisitDetails(dto.getVisitDate(), max);
 
@@ -383,6 +385,7 @@ public class VisitService {
         if (visit.getReusedFromVisitId() == null && !Boolean.TRUE.equals(visit.getFreeSlotReserved()) && !paymentOrderService.hasPaidVisit(accountId, visitId)) {
             throw new ApiException("Visit payment or free entitlement is required");
         }
+        ParkOperatingHours.validateVisitWindow(visit.getVisitDate(), java.time.LocalTime.now(ZoneId.of("Asia/Riyadh")), 1);
         changeStatus(visitId, "IN_PROGRESS");
 
         visit.setStartedAt(LocalDateTime.now(ZoneId.of("Asia/Riyadh")));
@@ -1114,8 +1117,9 @@ public class VisitService {
         visit.setDurationMinutes(dto.getDurationMinutes());
         visit.setName(dto.getName());
         visit.setVisitDate(dto.getVisitDate());
-        visit.setPlannedStartTime(dto.getPlannedStartTime());
-        visit.setPlannedEndTime(dto.getPlannedEndTime());
+        visit.setExpectedArrivalTime(dto.getPlannedStartTime());
+        visit.setPlannedStartTime(null);
+        visit.setPlannedEndTime(null);
         visit.setMaxParticipants(max);
         visit.setTripType(dto.getTripType());
         visit.setTogetherMode(dto.getTogetherMode());

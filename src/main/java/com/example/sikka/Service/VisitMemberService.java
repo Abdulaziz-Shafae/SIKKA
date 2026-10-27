@@ -33,6 +33,7 @@ public class VisitMemberService {
 
     private final VisitMemberRepository visitMemberRepository;
     private final VisitRepository visitRepository;
+    private final com.example.sikka.Repository.VisitMealBreakRepository visitMealBreakRepository;
     private final PaymentOrderService paymentOrderService;
     private final VisitorProfileRepository visitorProfileRepository;
     private final VisitGroupService visitGroupService;
@@ -134,6 +135,7 @@ public class VisitMemberService {
 
         member.setRsvpStatus(rsvp);
         visitMemberRepository.save(member);
+        if ("GOING".equals(rsvp)) copyOrganizerPlanningChoices(member);
 
         notificationEventService.notifyMemberRsvp(member, firstResponse);
     }
@@ -433,6 +435,7 @@ public class VisitMemberService {
                 copySnapshot(member, profile);
             }
             visitMemberRepository.save(member);
+            copyOrganizerPlanningChoices(member);
             current.add(member);
         }
     }
@@ -453,7 +456,7 @@ public class VisitMemberService {
             for (tools.jackson.databind.JsonNode choice : selected) {
                 if (!choice.isObject() || !choice.path("rideId").isIntegralNumber() || choice.path("rideId").asInt() <= 0 || !java.util.Set.of("MUST_RIDE", "PREFERRED", "OPTIONAL").contains(choice.path("priority").asString())) throw new ApiException("Saved planning answers are invalid");
             }
-            return java.util.Map.of("selectedRides", selected, "dislikedFeatures", disliked, "answerStatus", member.getAnswerStatus() == null ? "PENDING" : member.getAnswerStatus());
+            return java.util.Map.of("selectedRides", selected, "dislikedFeatures", disliked, "excludedRideIds", preferences.path("excludedRideIds").isArray() ? preferences.path("excludedRideIds") : mapper.readTree("[]"), "excludedRideTypes", preferences.path("excludedRideTypes").isArray() ? preferences.path("excludedRideTypes") : mapper.readTree("[]"), "answerStatus", member.getAnswerStatus() == null ? "PENDING" : member.getAnswerStatus());
         } catch (ApiException invalid) {
             throw invalid;
         } catch (Exception invalid) {
@@ -483,11 +486,20 @@ public class VisitMemberService {
         if (dto == null) {
             throw new ApiException("Planning answers are required");
         }
+        boolean shared = !"SOLO".equals(visit.getTripType()) && !"SPLIT".equals(visit.getTogetherMode());
+        if (shared && !visit.getOrganizer().getId().equals(accountId)) {
+            throw new ApiException("Only the organizer chooses rides for a together visit");
+        }
         tools.jackson.databind.json.JsonMapper mapper = tools.jackson.databind.json.JsonMapper.builder().build();
+        List<Integer> excluded = dto.getExcludedRideIds() == null ? List.of() : dto.getExcludedRideIds();
+        List<String> excludedTypes = dto.getExcludedRideTypes() == null ? List.of() : dto.getExcludedRideTypes();
+        if (excluded.stream().anyMatch(id -> id == null || id <= 0) || !rideService.validateRideIds(excluded) || excludedTypes.stream().anyMatch(type -> !java.util.Set.of("THRILL", "FAMILY", "KIDS", "WATER", "ARCADE").contains(type))) {
+            throw new ApiException("Invalid excluded ride or ride type");
+        }
         List<com.example.sikka.DtoIn.SelectedRideDtoIn> selections = statusInt == 2 || dto.getSelectedRides() == null ? List.of() : dto.getSelectedRides();
         List<Integer> rideIds = new ArrayList<>();
         for (com.example.sikka.DtoIn.SelectedRideDtoIn selection : selections) {
-            if (selection == null || selection.getRideId() == null || selection.getRideId() <= 0 || selection.getPriority() == null || !java.util.Set.of("MUST_RIDE", "PREFERRED", "OPTIONAL").contains(selection.getPriority()) || rideIds.contains(selection.getRideId())) {
+            if (selection == null || selection.getRideId() == null || selection.getRideId() <= 0 || selection.getPriority() == null || !java.util.Set.of("MUST_RIDE", "PREFERRED", "OPTIONAL").contains(selection.getPriority()) || rideIds.contains(selection.getRideId()) || excluded.contains(selection.getRideId())) {
                 throw new ApiException("Every selected ride needs a distinct ID and valid priority");
             }
             rideIds.add(selection.getRideId());
@@ -496,9 +508,52 @@ public class VisitMemberService {
             throw new ApiException("One or more selected rides do not exist");
         }
         member.setSelectedRides(mapper.writeValueAsString(selections));
-        member.setPreferences(mapper.writeValueAsString(java.util.Map.of("dislikedFeatures", statusInt == 2 || dto.getDislikedFeatures() == null ? List.of() : dto.getDislikedFeatures())));
+        member.setPreferences(mapper.writeValueAsString(java.util.Map.of("dislikedFeatures", statusInt == 2 || dto.getDislikedFeatures() == null ? List.of() : dto.getDislikedFeatures(), "excludedRideIds", excluded, "excludedRideTypes", excludedTypes)));
         member.setAnswerStatus(answerStatus);
         visitMemberRepository.save(member);
+        if (shared) {
+            for (VisitMember participant : visitMemberRepository.findAllByVisit_IdAndRsvpStatus(visit.getId(), "GOING")) {
+                participant.setSelectedRides(member.getSelectedRides());
+                participant.setPreferences(member.getPreferences());
+                participant.setAnswerStatus(answerStatus);
+                visitMemberRepository.save(participant);
+            }
+        }
+    }
+
+    private void copyOrganizerPlanningChoices(VisitMember member) {
+        Visit visit = member.getVisit();
+        VisitMember organizer = visitMemberRepository.findVisitMemberByVisit_IdAndVisitorProfile_Account_Id(visit.getId(), visit.getOrganizer().getId());
+        if (organizer == null || organizer.getId().equals(member.getId())) return;
+        if (!"SPLIT".equals(visit.getTogetherMode()) && !"PENDING".equals(organizer.getAnswerStatus())) {
+            member.setSelectedRides(organizer.getSelectedRides());
+            member.setPreferences(organizer.getPreferences());
+            member.setAnswerStatus(organizer.getAnswerStatus());
+            visitMemberRepository.save(member);
+        }
+        List<com.example.sikka.Model.VisitMealBreak> meals = visitMealBreakRepository.findVisitMealBreaksByVisitId(visit.getId());
+        if (meals.stream().anyMatch(meal -> meal.getVisitMember().getId().equals(member.getId()))) return;
+        for (com.example.sikka.Model.VisitMealBreak source : meals) {
+            if (!source.getVisitMember().getId().equals(organizer.getId())) continue;
+            com.example.sikka.Model.VisitMealBreak meal = new com.example.sikka.Model.VisitMealBreak();
+            meal.setVisit(visit);
+            meal.setVisitMember(member);
+            meal.setBreakKey(source.getBreakKey());
+            meal.setMealChoice(source.getMealChoice());
+            meal.setPreferredTiming(source.getPreferredTiming());
+            meal.setPlace(source.getPlace());
+            visitMealBreakRepository.save(meal);
+        }
+    }
+
+    @Transactional
+    public void remindVisitMember(Integer accountId, Integer memberId) {
+        VisitMember member = visitMemberRepository.findVisitMemberById(memberId);
+        if (member == null || !member.getVisit().getOrganizer().getId().equals(accountId)) throw new ApiException("Only the organizer can remind a visit member");
+        Visit visit = visitRepository.findVisitByIdForUpdate(member.getVisit().getId());
+        if (!"DRAFT".equals(visit.getStatus()) || member.getVisitorProfile() == null || isOrganizerMember(member, accountId) || "NOT_GOING".equals(member.getRsvpStatus())) throw new ApiException("This member does not need a reminder");
+        if ("GOING".equals(member.getRsvpStatus()) && !"PENDING".equals(member.getAnswerStatus())) throw new ApiException("This member has already answered");
+        notificationEventService.notifyPlanningReminder(member);
     }
 
 }

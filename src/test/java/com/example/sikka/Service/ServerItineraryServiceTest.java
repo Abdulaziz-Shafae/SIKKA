@@ -102,6 +102,33 @@ class ServerItineraryServiceTest {
     }
 
     @Test
+    void sharedRideIsOneActivityAndExclusionsRemainPersonal() {
+        ObjectNode input = input(120, true);
+        input.put("tripType", "FRIENDS");
+        input.set("members", mapper.valueToTree(List.of(Map.of("visitMemberId", 1, "ageKnown", true, "ageYears", 25, "selectedRideIds", List.of(1, 2), "selectedRides", List.of(Map.of("rideId", 1, "priority", "MUST_RIDE"), Map.of("rideId", 2, "priority", "MUST_RIDE"))), Map.of("visitMemberId", 2, "ageKnown", true, "ageYears", 26, "selectedRideIds", List.of(1), "selectedRides", List.of(Map.of("rideId", 1, "priority", "MUST_RIDE")), "excludedRideIds", List.of(2)))));
+        input.set("eligibilityByRideAndMember", mapper.valueToTree(Map.of("1", Map.of("1", "UNKNOWN", "2", "UNKNOWN"), "2", Map.of("1", "UNKNOWN", "2", "UNKNOWN"), "3", Map.of("1", "UNKNOWN", "2", "UNKNOWN"))));
+        input.set("mealPolicy", mapper.valueToTree(Map.of("breaks", List.of(Map.of("breakKey", "shared", "breakType", "MEAL", "timingPreference", "END", "durationMinutes", 60, "earliestStartMinutes", 0, "latestStartMinutes", 60, "restaurantId", mapper.nullNode(), "participantVisitMemberIds", List.of(1, 2))))));
+        AiPlanDtoOut plan = planner.selectInitialPlan(input);
+        assertTrue(plan.getFeasible());
+        assertEquals(1, plan.getActivities().stream().filter(activity -> Integer.valueOf(1).equals(activity.getRideId())).count());
+        assertEquals(List.of(1, 2), plan.getActivities().stream().filter(activity -> Integer.valueOf(1).equals(activity.getRideId())).findFirst().orElseThrow().getParticipantVisitMemberIds());
+        assertEquals(List.of(1), plan.getActivities().stream().filter(activity -> Integer.valueOf(2).equals(activity.getRideId())).findFirst().orElseThrow().getParticipantVisitMemberIds());
+        assertEquals(List.of(1, 2), plan.getActivities().stream().filter(activity -> "MEAL".equals(activity.getBreakType())).findFirst().orElseThrow().getParticipantVisitMemberIds());
+        assertEquals(plan.getActivities().stream().filter(activity -> activity.getRideId() != null).count(), plan.getActivities().stream().map(AiPlanItemDtoOut::getRideId).filter(Objects::nonNull).distinct().count());
+    }
+
+    @Test
+    void excludedRideTypeIsEnforcedDuringSelection() {
+        ObjectNode input = input(60, false);
+        ((ObjectNode) input.path("members").get(0)).set("excludedRideTypes", mapper.valueToTree(List.of("FAMILY")));
+        ((ObjectNode) input.path("rides").get(0)).put("category", "FAMILY");
+        AiPlanDtoOut plan = planner.selectInitialPlan(input);
+        assertTrue(plan.getFeasible());
+        assertTrue(plan.getActivities().stream().noneMatch(activity -> Integer.valueOf(1).equals(activity.getRideId())));
+        assertTrue(plan.getExcludedRides().stream().anyMatch(excluded -> excluded.getRideId() == 1));
+    }
+
+    @Test
     void reserveActualMealAndSnackDurationsAndHonorTheirPlacement() {
         ObjectNode input = input(130, false);
         Map<String, Object> meal = new LinkedHashMap<>(Map.of("breakKey", "meal", "breakType", "MEAL", "timingPreference", "START", "durationMinutes", 60, "earliestStartMinutes", 0, "latestStartMinutes", 129, "participantVisitMemberIds", List.of(1)));

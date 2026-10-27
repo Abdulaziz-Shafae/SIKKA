@@ -73,7 +73,9 @@ public class VisitorProfileService {
         VisitorProfile profile = visitorProfileRepository.findVisitorProfileByAccount_Id(accountId);
         if (profile == null)
             throw new ApiException("profile not found");
-        return toDtoOut(profile);
+        VisitorProfileDtoOut result = toDtoOut(profile);
+        result.setHealthData(profile.getHealthData());
+        return result;
     }
 
     // the user updates his own profile, the account comes from the path (not from the body)

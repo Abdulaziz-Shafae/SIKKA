@@ -728,7 +728,7 @@ public class RideService {
 
                     boolean validHealthData = healthNode != null
                             && healthNode.isObject()
-                            && healthNode.size() == 1
+                            && (healthNode.size() == 1 || healthNode.size() == 2 && healthNode.has("note") && healthNode.path("note").isTextual())
                             && healthNode.has("conditions")
                             && healthNode.get("conditions").isArray();
 
@@ -755,6 +755,7 @@ public class RideService {
                     if (!validHealthData){
                         missing.add("healthData");
                     } else {
+                        if (!healthNode.path("note").asString("").isBlank()) missing.add("healthNotesRequireReview");
                         for (String condition : visitorConditions){
                             if (ride.getHealthRestrictions().contains(condition)){
                                 // Avoid exposing the visitor's medical condition.
