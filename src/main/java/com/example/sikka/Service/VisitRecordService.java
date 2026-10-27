@@ -80,9 +80,6 @@ public class VisitRecordService {
             throw new ApiException("You are not a member of this visit");
         }
 
-        if (records.isEmpty()) {
-            throw new ApiException("No ride records found for this visit");
-        }
 
         records.sort(Comparator.comparing(VisitRecord::getCreatedAt).thenComparing(VisitRecord::getId).reversed());
 
