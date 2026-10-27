@@ -275,6 +275,56 @@ class TogetherReplanRegressionTest {
     }
 
     @Test
+    void initialPlanningSnapshotIncludesUnknownRidesWithoutRewritingTheirStatuses() {
+        fixture = prepareVisit("TOGETHER", false);
+        transaction(() -> {
+            for (Integer id : fixture.rideIds()) {
+                Ride ride = rideRepository.findRideById(id);
+                ride.setStatus("UNAVAILABLE");
+                ride.setAvailabilitySource(null);
+                ride.setWaitMinutes(null);
+                ride.setWaitObservedAt(null);
+            }
+            return null;
+        });
+        String inputJson = transaction(() -> {
+            Object snapshot = org.springframework.test.util.ReflectionTestUtils.invokeMethod(visitPlanService, "collectInitialGenerationSnapshot", fixture.organizerId(), visitRepository.findVisitById(fixture.visitId()));
+            return org.springframework.test.util.ReflectionTestUtils.invokeMethod(snapshot, "inputJson");
+        });
+        JsonNode input = mapper.readTree(inputJson);
+        for (JsonNode ride : input.path("rides")) {
+            assertEquals("UNKNOWN", ride.path("operationalStatus").asString());
+            assertTrue(ride.path("availabilityIsEstimate").asBoolean());
+            assertEquals(15, ride.path("planningWaitMinutes").asInt());
+        }
+        com.example.sikka.DtoOut.AiPlanDtoOut plan = new ServerItineraryService().selectInitialPlan(input);
+        assertTrue(plan.getFeasible());
+        assertFalse(plan.getActivities().isEmpty());
+        org.springframework.test.util.ReflectionTestUtils.invokeMethod(visitPlanService, "mergeGenerationWarnings", plan, input);
+        assertTrue(plan.getWarnings().stream().anyMatch(warning -> warning.contains("افتراضية")));
+        assertTrue(transaction(() -> fixture.rideIds().stream().allMatch(id -> "UNAVAILABLE".equals(rideRepository.findRideById(id).getStatus()))));
+    }
+
+    @Test
+    void unknownRideCanUseAProvisionalProposalWithoutChangingItsOperationalStatus() {
+        fixture = prepareVisit("TOGETHER", false);
+        transaction(() -> {
+            Ride ride = rideRepository.findRideById(fixture.rideIds().get(1));
+            ride.setStatus("UNAVAILABLE");
+            ride.setAvailabilitySource(null);
+            ride.setWaitMinutes(null);
+            ride.setWaitObservedAt(null);
+            return null;
+        });
+        ReplanProposalDtoOut proposal = request(fixture.memberAccountId());
+        assertEquals("GROUP", proposal.getApprovalScope());
+        assertEquals(List.of(15, 10, 20), storedWaits());
+        respond(fixture.organizerId(), proposal, 1);
+        assertEquals(List.of(15, 15, 20), storedWaits());
+        assertEquals("UNAVAILABLE", transaction(() -> rideRepository.findRideById(fixture.rideIds().get(1)).getStatus()));
+    }
+
+    @Test
     void leaderCanRequestSharedChangeWithoutChangingCompletedActivity() {
         fixture = prepareVisit("TOGETHER", true);
         updateWait(25);

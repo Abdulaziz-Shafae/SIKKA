@@ -77,6 +77,16 @@ public class Ride {
     @Column(length = 60)
     private String availabilitySource;
 
+    @Positive
+    @Column(unique = true)
+    private Long queueAnalyticsRideId;
+
+    @JsonIgnore
+    @Column(columnDefinition = "json")
+    private String analyticsPatternsJson;
+
+    private LocalDateTime analyticsPatternsFetchedAt;
+
     @PositiveOrZero(message = "Minimum height cannot be negative")
     @Digits(integer = 3, fraction = 2, message = "Invalid minimum height")
     @Column(precision = 5, scale = 2)

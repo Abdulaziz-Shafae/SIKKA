@@ -47,6 +47,11 @@ public class RideController {
         return ResponseEntity.status(200).body(new ApiResponse("Ride deleted successfully"));
     }
 
+    @GetMapping("/catalog")
+    public ResponseEntity<?> getRideCatalog(){
+        return ResponseEntity.status(200).body(rideService.getRides());
+    }
+
     @GetMapping("/available")
     public ResponseEntity<?> getOpenRides(){
         return ResponseEntity.status(200).body(rideService.getOpenRides());
