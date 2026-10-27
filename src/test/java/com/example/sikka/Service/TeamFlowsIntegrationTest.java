@@ -147,6 +147,33 @@ class TeamFlowsIntegrationTest {
     }
 
     @Test
+    void largePlanningSnapshotsKeepAccountHistoryOrderWithoutSortingJsonRows() {
+        Visit visit = createVisit("SOLO");
+        Account account = visit.getOrganizer();
+        String snapshot = "{\"payload\":\"" + "x".repeat(150000) + "\"}";
+        List<Integer> ids = new java.util.ArrayList<>();
+        for (int index = 0; index < 3; index++) {
+            PlanHistory history = new PlanHistory();
+            history.setAccount(account);
+            history.setVisit(visit);
+            history.setRequestKey("large-snapshot-" + index);
+            history.setOperationType("INITIAL");
+            history.setStatus("FAILED");
+            history.setBillingMode("FREE");
+            history.setPlanningInputSnapshot(snapshot);
+            history.setGenerationResultSnapshot(snapshot);
+            entityManager.persist(history);
+            ids.add(history.getId());
+        }
+        entityManager.flush();
+        entityManager.clear();
+        List<PlanHistory> histories = historyRepository.findAllByAccount_IdOrderByStartedAtDescIdDesc(account.getId());
+        assertEquals(List.of(ids.get(2), ids.get(1), ids.get(0)), histories.stream().map(PlanHistory::getId).toList());
+        assertTrue(histories.get(0).getPlanningInputSnapshot().contains("x".repeat(150000)));
+        assertTrue(historyRepository.findAllByAccount_IdOrderByStartedAtDescIdDesc(-1).isEmpty());
+    }
+
+    @Test
     void freeReservationsCannotExceedTwoAndFailureReleasesQuota() {
         Visit firstVisit = createVisit("SOLO");
         Integer accountId = firstVisit.getOrganizer().getId();
