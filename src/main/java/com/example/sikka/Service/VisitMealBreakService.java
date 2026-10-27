@@ -660,7 +660,7 @@ public class VisitMealBreakService {
         }
     }
 
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, noRollbackFor = ApiException.class)
     public java.util.Map<String, Object> getMealBreakPolicy(Integer accountId, Integer visitId) {
         getVisitMealBreaks(accountId, visitId);
         Visit visit = visitRepository.findVisitById(visitId);

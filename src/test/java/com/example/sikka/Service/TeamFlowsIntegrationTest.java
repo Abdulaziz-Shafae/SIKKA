@@ -418,6 +418,23 @@ class TeamFlowsIntegrationTest {
         assertTrue(conflicting.getMissingFields().stream().anyMatch(field -> field.contains("120") && field.contains("60")));
     }
 
+    @Test
+    @org.springframework.transaction.annotation.Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
+    void missingMealsPreviewCommitsWithoutMarkingTheOuterTransactionRollbackOnly() {
+        var manager = entityManager.getEntityManagerFactory();
+        var transactionManager = new org.springframework.orm.jpa.JpaTransactionManager(manager);
+        var template = new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        Integer[] ids = template.execute(status -> {
+            Visit visit = createVisit("SOLO");
+            mealBreakRepository.deleteAll(mealBreakRepository.findVisitMealBreaksByVisitId(visit.getId()));
+            entityManager.flush();
+            return new Integer[]{visit.getOrganizer().getId(), visit.getId()};
+        });
+        var preview = assertDoesNotThrow(() -> visitService.getVisitPreview(ids[0], ids[1]));
+        assertFalse(preview.getReadyToGenerate());
+        assertTrue(preview.getMissingFields().stream().anyMatch(field -> field.startsWith("meal:")));
+    }
+
     private Visit createVisit(String type) {
         Account account = createAccount();
         createProfile(account);
