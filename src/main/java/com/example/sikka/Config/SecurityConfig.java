@@ -42,6 +42,8 @@ public class SecurityConfig {
                                 "/api/v1/ride/filter"
                         ).permitAll()
 
+                        .requestMatchers(HttpMethod.GET, "/api/v1/place/by-kind").permitAll()
+
                         .requestMatchers(HttpMethod.GET,
                                 "/api/v1/map/get/rides",
                                 "/api/v1/map/get/places",
