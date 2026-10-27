@@ -533,6 +533,28 @@ flowchart LR
 
 Email and WhatsApp failures never break the request; they are only logged.
 
+### 6. Automated Tests (Flow 1)
+
+| Layer | Test class | What it checks |
+|---|---|---|
+| Repository (`@DataJpaTest`, H2) | `AccountRepositoryTest` | Find an account by email (found and unknown) |
+| Repository | `RideRepositoryTest` | Find by status, by source ride id, name exists (ignore case), filter rides |
+| Repository | `VisitGroupRepositoryTest` | Visit group queries |
+| Repository | `FamilyMemberRepositoryTest` | Family member queries |
+| Repository | `PaymentOrderRepositoryTest` | Payment order queries |
+| Service (Mockito) | `AccountServiceTest` | Duplicate email is rejected and nothing is saved; a new account is saved as USER, unverified, with an encoded password |
+| Service | `VerificationServiceTest` | A wrong code is rejected; the correct code verifies the email, clears the hash, and sends the confirmation |
+| Service | `VisitMemberServiceTest` | Joining with an unverified account, or when invitations are disabled, is rejected |
+| Service | `VisitServiceTest` | Creating a visit fails for an unknown account, an unverified account, or a past date |
+| Service | `PaymentOrderServiceTest` | Unknown order, another user's order, a paid payment (marks PAID), and a wrong amount (stays PENDING) |
+| Controller (`@WebMvcTest`) | `AuthControllerTest` | Verify email: success, bad code format (400), wrong code (400) |
+| Controller | `AccountControllerTest` | Register: success, short password (400), duplicate email (400) |
+| Controller | `RideControllerTest` | Get rides, ride not found, add ride, blank name (400) |
+| Controller | `PlaceControllerTest` | Get places, place not found, blank name (400), delete |
+| Controller | `MapControllerTest` | Map rides, route, bad id type (400), route failure (400) |
+
+Repository tests run on H2 in MySQL mode (`spring.test.database.replace=none`). Controller tests mock the service layer and turn the security filters off, so only the HTTP contract and validation are tested.
+
 ---
 
 ## Flow 2: Planning & Live Visit (Abdulaziz)
@@ -695,6 +717,32 @@ flowchart LR
 | **Server itinerary rules** | Must-ride selection, feasible subset hint, excluded rides with reasons | `ServerItineraryService`, `MustRideSubsetService` |
 | **Map routing** | Walking routes between plan activities | `VisitPlanMapService`, `MapService` |
 
+### 6. Automated Tests (Flow 2)
+
+Written by Abdulaziz. They live in `src/test/java/com/example/sikka/` and cover planning, replanning, calendar sync, deletion rules, and the shared flows.
+
+| Test class | Tests | What it checks |
+|---|---|---|
+| `ServerItineraryServiceTest` | 11 | Must-ride selection and best feasible subset, no invented waits or routes, closed and avoided rides, early release re-planning, less walking on ties, meals, snacks, and prayer reserve |
+| `TogetherReplanRegressionTest` | 8 | Shared proposals, leader approve or reject, no unnecessary proposals, split members cannot escalate to group changes, approved plan is not changed on failure |
+| `ReplanAdditionValidationTest` | 2 | Only a new ride with a supplied wait and route is accepted; duplicates and out-of-scope additions are rejected |
+| `AiPlanSchemaServiceExcludedRideTest` | 1 | The AI plan schema includes structured excluded rides |
+| `VisitPlanMapServiceTest` | 2 | Previous location per split member, entrance segments, unavailable routes without invented geometry |
+| `CalendarSyncOnApprovalTest` | 3 | Calendar sync continues if one account fails, cancelled events are removed, each owner gets only their activities |
+| `PlanningAnswersReadTest` | 3 | Saved selections for their owner, managed family answers, corrupt answers rejected |
+| `MergedFlowValidationTest` | 4 | Duplicate rides, summary for a non-member, check-in outside the visit date, old wait observation |
+| `TeamFlowsIntegrationTest` | 13 | Reusing visits, family snapshots, shared meal breaks, free visit quota (max 2), payment required for generation, eligibility by visit date, walking minutes from the map |
+| `DeletionIntegrationTest` | 12 | Deleting accounts, profiles, groups, members, visits, and plans while keeping payment history and quota |
+| `ServiceValidationReviewTest` | 7 | Validation before saving or querying (thrill level, RSVP, place kind, consent, roster lock, inactive buyer) |
+| `TeamAgreementValidationTest` | 4 | Official thrill levels, shop filtering, stale wait readings, completed ride lookup |
+| `ParkCatalogueValidationTest` | 4 | Companion rules and dining details for rides and shops |
+| `FrontendBindingContractTest` | 2 | Organizer identity is exposed without serializing the account; health data is preserved on profile update |
+| `TeamFlowsHttpTest` | 2 | Anonymous park exploration, login required for plans, plan history by the logged-in account |
+| `FrontendSessionHttpTest` | 1 | Browser session is kept and invalidated on logout |
+| `SikkaApplicationTests` | 1 | The application context loads |
+
+`SIKKA_TEST_PLAN.md` lists the integration cases still to verify by hand.
+
 ---
 
 ## Flow 3: Rides, Map & Privacy (Nawaf)
@@ -834,7 +882,7 @@ Postman collections are in the `postman/` folder:
 - **Separate Verification:** email and WhatsApp verification with real codes.
 - **Payment Test:** a real Moyasar test payment.
 
-**Automated tests:** JUnit 5, Mockito, and an in-memory H2 database (unit, service, and integration tests). The GitHub Actions workflow `Verify Sikka` runs the park-catalogue check and the full test suite against MySQL on every push to `main` and every pull request. `SIKKA_TEST_PLAN.md` lists the integration cases still to verify by hand.
+**Automated tests:** JUnit 5, Mockito, and an in-memory H2 database. The suite has repository, service, controller, and integration tests (see section 6 of Flow 1 and Flow 2). The GitHub Actions workflow `Verify Sikka` runs the park-catalogue check and the full test suite against MySQL on every push to `main` and every pull request. `SIKKA_TEST_PLAN.md` lists the integration cases still to verify by hand.
 
 ---
 
