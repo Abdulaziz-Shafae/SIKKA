@@ -300,10 +300,12 @@ class TogetherReplanRegressionTest {
     }
 
     @Test
-    void missingWaitOrDeadlineOverflowDoesNotMutateApprovedPlan() {
+    void defaultWaitProposalAndDeadlineOverflowDoNotMutateApprovedPlan() {
         fixture = prepareVisit("TOGETHER", false);
         updateWait(null);
-        assertTrue(assertThrows(ApiException.class, () -> request(fixture.memberAccountId())).getMessage().contains("planningWaitMinutes"));
+        ReplanProposalDtoOut estimated = request(fixture.memberAccountId());
+        assertEquals(List.of(15, 10, 20), storedWaits());
+        respond(fixture.organizerId(), estimated, 2);
         updateWait(200);
         assertTrue(assertThrows(ApiException.class, () -> request(fixture.memberAccountId())).getMessage().contains("exceed"));
         assertEquals(List.of(15, 10, 20), storedWaits());
