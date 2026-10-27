@@ -678,7 +678,7 @@ public class VisitMealBreakService {
             } else if (meals + snacks == own.size() && meals <= 2 && snacks <= 2 && own.size() <= 2 && !own.isEmpty()) {
                 memberChoice = snacks == 2 ? "TWO_SNACKS" : meals == 2 ? "TWO_MEALS" : meals == 1 && snacks == 1 ? "MEAL_AND_SNACK" : meals == 1 ? "ONE_MEAL" : "SNACK";
             } else {
-                throw new ApiException("Save explicit consistent food preferences for every GOING participant");
+                throw new ApiException("احفظ تفضيلات الوجبات لكل المشاركين، حتى لو اخترت بدون أكل؛ تأكد أن الاختيارات محفوظة ومتسقة للجميع.");
             }
             if (choice != null && !choice.equals(memberChoice)) {
                 throw new ApiException("The shared visit must use the same food break choice for all participants");
@@ -693,6 +693,8 @@ public class VisitMealBreakService {
         if (choice == null || visit.getDurationMinutes() == null || visit.getDurationMinutes() <= 0) {
             throw new ApiException("Participants, meal preferences and visit duration are required");
         }
+        int foodMinutes = grouped.values().stream().mapToInt(group -> "MEAL".equals(group.get(0).getMealChoice()) ? 60 : 30).sum();
+        if (foodMinutes > 0 && foodMinutes >= visit.getDurationMinutes()) throw new ApiException("مدة زيارتك " + visit.getDurationMinutes() + " دقيقة، والوجبات والسناكات تحتاج " + foodMinutes + " دقيقة، قبل حساب الألعاب والمشي والصلاة. قلّل عدد الوجبات أو زِد مدة الزيارة.");
         List<java.util.Map<String, Object>> breaks = new ArrayList<>();
         for (java.util.Map.Entry<String, List<VisitMealBreak>> entry : grouped.entrySet()) {
             VisitMealBreak meal = entry.getValue().get(0);

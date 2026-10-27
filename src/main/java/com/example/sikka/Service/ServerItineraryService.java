@@ -31,7 +31,21 @@ public class ServerItineraryService {
                 failure.setActivities(List.of());
                 failure.setWarnings(List.of("لم تُقبل خطة فارغة أو متعارضة؛ لم تُفترض قيم انتظار أو مشي مفقودة."));
                 failure.setExcludedRides(explainRequiredExclusions(input, List.of()));
-                failure.setInfeasibilityReason("لم يجد البحث جدولًا صالحًا لكل المشاركين يحفظ بيانات المشي والانتظار والأكل والإشراف ضمن المدة؛ راجع البيانات والمدة والتفضيلات.");
+                String reason = "لم يجد البحث ترتيبًا يتسع للألعاب والوجبات والمشي والانتظار ضمن " + input.path("durationMinutes").asInt() + " دقيقة؛ قلّل الاختيارات أو عدّل الوجبات والمدة.";
+                for (JsonNode member : input.path("members")) {
+                    int memberId = member.path("visitMemberId").asInt();
+                    boolean alternative = false;
+                    boolean eligibleBeforeFilters = false;
+                    for (JsonNode ride : input.path("rides")) {
+                        eligibleBeforeFilters |= Set.of("ELIGIBLE", "UNKNOWN").contains(input.path("eligibilityByRideAndMember").path(String.valueOf(ride.path("id").asInt())).path(String.valueOf(memberId)).asString());
+                        alternative |= canRide(input, ride, List.of(memberId));
+                    }
+                    if (!alternative) {
+                        reason = "ما بقيت ألعاب مناسبة للمشارك " + member.path("name").asString(String.valueOf(memberId)) + (eligibleBeforeFilters ? " بعد تطبيق الأهلية وفلاتر الأنواع والتجنّب. راجع الاستبعادات؛ الألعاب غير المؤهل لها لن تدخل الخطة." : " بحسب نتائج الأهلية الحالية. راجع بياناته وشروط الألعاب؛ لا يمكن تجاوز تعارض أهلية مؤكد.");
+                        break;
+                    }
+                }
+                failure.setInfeasibilityReason(reason);
                 return failure;
             }
             activities.addAll(result.activities());

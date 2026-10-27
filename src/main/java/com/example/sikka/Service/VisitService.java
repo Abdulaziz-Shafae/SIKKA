@@ -48,6 +48,7 @@ public class VisitService {
     private jakarta.persistence.EntityManager entityManager;
 
     private final NotificationEventService notificationEventService;
+    private final VisitMealBreakService visitMealBreakService;
     private final VisitRepository visitRepository;
     private final AccountRepository accountRepository;
     private final VisitGroupRepository visitGroupRepository;
@@ -665,6 +666,12 @@ public class VisitService {
             for (String warning : member.getWarnings()) {
                 warnings.add("Member " + member.getVisitMemberId() + ": " + warning);
             }
+        }
+
+        try {
+            visitMealBreakService.getMealBreakPolicy(accountId, visitId);
+        } catch (ApiException failure) {
+            missingFields.add("meal:" + failure.getMessage());
         }
 
         PlanningAccessDtoOut access = paymentOrderService.getPlanningAccess(accountId, visitId);
