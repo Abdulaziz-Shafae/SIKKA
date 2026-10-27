@@ -76,7 +76,7 @@ public class AccountService {
 
     // creates the account and its visitor profile together (@Transactional: both or none)
     @Transactional
-    public boolean register(RegisterDtoIn dto) {
+    public void register(RegisterDtoIn dto) {
         if (dto == null) {
             throw new ApiException("Profile details are required");
         }
@@ -108,7 +108,7 @@ public class AccountService {
         profile.setFoodPreferences(dto.getFoodPreferences());
         profile.setAccount(account);
         visitorProfileRepository.save(profile);
-        return verificationService.sendVerificationCode(account);
+        verificationService.sendVerificationCode(account);
     }
 
     // contract method for the other flows
