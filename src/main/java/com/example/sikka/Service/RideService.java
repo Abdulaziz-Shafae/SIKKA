@@ -550,6 +550,7 @@ public class RideService {
         }
 
         ride.setStatus(dto.getStatus());
+        ride.setAvailabilitySource("ADMIN");
 
         rideRepository.save(ride);
 
@@ -895,6 +896,7 @@ public class RideService {
         java.util.Map<String, Object> snapshot = new java.util.LinkedHashMap<>();
         snapshot.put("id", ride.getId());
         snapshot.put("status", ride.getStatus());
+        snapshot.put("availabilitySource", ride.getAvailabilitySource() == null ? "UNKNOWN" : ride.getAvailabilitySource());
         snapshot.put("nodeKey", "RIDE:" + ride.getId());
         snapshot.put("rideDurationMinutes", ride.getRideDurationMinutes() == null ? 5 : ride.getRideDurationMinutes());
         snapshot.put("timingSource", ride.getRideDurationMinutes() == null || ride.getEntryExitBufferMinutes() == null ? "SIKKA_DEFAULT_ESTIMATE" : (ride.getTimingSource() == null ? "UNKNOWN" : ride.getTimingSource()));

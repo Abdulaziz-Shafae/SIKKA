@@ -50,6 +50,7 @@ public class PlaceService {
 
         validatePlace(place);
         copyPlaceFields(oldPlace, place);
+        oldPlace.setAvailabilitySource("ADMIN");
 
         placeRepository.save(oldPlace);
     }

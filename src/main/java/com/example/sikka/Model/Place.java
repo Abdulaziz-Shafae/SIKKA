@@ -63,6 +63,9 @@ public class Place {
     @Column(length = 20)
     private String status;
 
+    @Column(length = 60)
+    private String availabilitySource;
+
     @Size(max = 500, message = "Source URL must not exceed 500 characters")
     @Column(length = 500)
     private String sourceUrl;

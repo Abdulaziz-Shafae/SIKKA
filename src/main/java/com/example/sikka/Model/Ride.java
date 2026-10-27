@@ -74,6 +74,9 @@ public class Ride {
     @Column(nullable = false, length = 20)
     private String status = "UNAVAILABLE";
 
+    @Column(length = 60)
+    private String availabilitySource;
+
     @PositiveOrZero(message = "Minimum height cannot be negative")
     @Digits(integer = 3, fraction = 2, message = "Invalid minimum height")
     @Column(precision = 5, scale = 2)

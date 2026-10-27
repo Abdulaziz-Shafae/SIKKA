@@ -2240,6 +2240,7 @@ public class VisitPlanService {
             row.put("id", ride.getId());
             row.put("name", ride.getName());
             row.put("status", "OPEN");
+            row.put("availabilitySource", snapshot.path("availabilitySource").asString("UNKNOWN"));
             row.put("nodeKey", requireText(snapshot, "nodeKey"));
             row.put("rideDurationMinutes", requirePositiveInteger(snapshot, "rideDurationMinutes"));
             row.put("timingSource", snapshot.path("timingSource").asString("UNKNOWN"));
@@ -2327,6 +2328,7 @@ public class VisitPlanService {
             row.put("name", requireText(placeNode, "name"));
             row.put("kind", requireText(placeNode, "kind"));
             row.put("status", "OPEN");
+            row.put("availabilitySource", placeNode.path("availabilitySource").asString("UNKNOWN"));
             row.put("nodeKey", requireText(placeNode, "nodeKey"));
             row.put("rateable", placeNode.path("rateable").asBoolean());
 
@@ -3061,6 +3063,7 @@ public class VisitPlanService {
                 continue;
             }
 
+            if ("SIKKA_DEFAULT_AVAILABILITY".equals(ride.path("availabilitySource").asString())) warnings.add("إتاحة اللعبة " + rideId + " افتراضية للتخطيط، وليست تأكيد تشغيل مباشرًا من المشغّل.");
             if ("SIKKA_DEFAULT_ESTIMATE".equals(ride.path("timingSource").asString())) warnings.add("مدة اللعبة " + rideId + " ووقت الدخول والخروج يتضمنان قيمًا افتراضية تقديرية تحتاج مراجعة ميدانية.");
 
             if (!ride.path("planningWaitMinutes").isIntegralNumber()) {
