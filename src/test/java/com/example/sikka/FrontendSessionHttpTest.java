@@ -18,11 +18,13 @@ import static org.junit.jupiter.api.Assertions.*;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {"spring.datasource.url=jdbc:h2:mem:sikka_front_session;MODE=MySQL;DB_CLOSE_DELAY=-1"})
 class FrontendSessionHttpTest {
     @LocalServerPort private int port;
+    @Autowired private jakarta.servlet.ServletContext servletContext;
     @Autowired private AccountRepository accountRepository;
     @Autowired private PasswordEncoder passwordEncoder;
 
     @Test
     void keepBrowserSessionAndInvalidateItOnLogout() throws Exception {
+        assertEquals(120, servletContext.getSessionTimeout());
         Account account = new Account();
         account.setName("Session QA");
         account.setEmail("session.qa@example.test");
