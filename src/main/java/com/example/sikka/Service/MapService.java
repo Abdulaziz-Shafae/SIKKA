@@ -640,19 +640,19 @@ public class MapService {
         }
         Map<String, Integer> destinations = new java.util.LinkedHashMap<>();
         destinations.put("ENTRANCE", entranceNodeId);
-        for (Ride ride : rideRepository.findRidesByStatus("OPEN")) {
+        for (Ride ride : rideRepository.findAll()) {
             if (ride.getSourceRideId() != null) {
                 destinations.put("RIDE:" + ride.getId(), getDestinationNodeId("RIDE", ride.getId()));
             }
         }
         List<Map<String, Object>> places = new ArrayList<>();
         for (Place place : placeRepository.findAll()) {
-            if (!"OPEN".equals(place.getStatus()) || place.getSourcePlaceId() == null) {
+            if (!PlanningAvailability.canPlanPlace(place) || place.getSourcePlaceId() == null) {
                 continue;
             }
             String key = "PLACE:" + place.getId();
             destinations.put(key, getDestinationNodeId("PLACE", place.getId()));
-            places.add(Map.of("id", place.getId(), "name", place.getName(), "kind", place.getKind(), "status", place.getStatus(), "nodeKey", key, "rateable", "RESTAURANT".equals(place.getKind())));
+            places.add(Map.of("id", place.getId(), "name", place.getName(), "kind", place.getKind(), "status", "OPEN", "operationalStatus", place.getStatus(), "availabilityIsEstimate", !"OPEN".equals(place.getStatus()), "nodeKey", key, "rateable", "RESTAURANT".equals(place.getKind())));
         }
         List<Map<String, Object>> routes = new ArrayList<>();
         for (Map.Entry<String, Integer> from : destinations.entrySet()) {

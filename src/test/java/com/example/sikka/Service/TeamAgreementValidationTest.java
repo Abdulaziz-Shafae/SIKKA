@@ -42,7 +42,7 @@ class TeamAgreementValidationTest {
     }
 
     @Test
-    void excludeStaleAndUnknownWaitReadings() {
+    void openCatalogueDoesNotDependOnQueueReadingFreshness() {
         RideRepository repository = mock(RideRepository.class);
         Ride fresh = new Ride();
         fresh.setWaitMinutes(0);
@@ -52,8 +52,12 @@ class TeamAgreementValidationTest {
         stale.setWaitMinutes(5);
         stale.setWaitObservedAt(LocalDateTime.now().minusHours(1));
         stale.setWaitSource("ADMIN");
-        when(repository.findRidesByStatus("OPEN")).thenReturn(List.of(fresh, stale, new Ride()));
-        assertEquals(List.of(fresh), new RideService(repository, mock(com.example.sikka.Repository.VisitMemberRepository.class), mock(VisitorProfileRepository.class), mock(AccountRepository.class), mock(com.example.sikka.Service.PrivacyConsentService.class), tools.jackson.databind.json.JsonMapper.builder().build()).getOpenRides());
+        Ride missing = new Ride();
+        fresh.setStatus("OPEN");
+        stale.setStatus("OPEN");
+        missing.setStatus("OPEN");
+        when(repository.findRidesByStatus("OPEN")).thenReturn(List.of(fresh, stale, missing));
+        assertEquals(List.of(fresh, stale, missing), new RideService(repository, mock(com.example.sikka.Repository.VisitMemberRepository.class), mock(VisitorProfileRepository.class), mock(AccountRepository.class), mock(com.example.sikka.Service.PrivacyConsentService.class), tools.jackson.databind.json.JsonMapper.builder().build()).getOpenRides());
     }
 
     @Test

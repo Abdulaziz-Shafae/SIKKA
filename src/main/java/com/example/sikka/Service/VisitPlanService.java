@@ -1690,7 +1690,7 @@ public class VisitPlanService {
         }
     }
 
-    private void validateCandidateResources(AiPlanDtoOut plan) {
+    private void validateCandidateResources(AiPlanDtoOut plan, java.time.LocalDate visitDate) {
 
         if (plan == null || !Boolean.TRUE.equals(plan.getFeasible()) || plan.getActivities() == null || plan.getActivities().isEmpty()) {
             throw new ApiException("A feasible plan with activities is required");
@@ -1719,7 +1719,7 @@ public class VisitPlanService {
                     rides.put(ride.getId(), ride);
                 }
 
-                if (!"OPEN".equals(ride.getStatus())) {
+                if (!PlanningAvailability.canPlanRide(ride, visitDate)) {
                     throw new ApiException("The generated plan contains a ride that is not open");
                 }
 
@@ -1754,7 +1754,7 @@ public class VisitPlanService {
                 places.put(place.getId(), place);
             }
 
-            if (!"OPEN".equals(place.getStatus())) {
+            if (!PlanningAvailability.canPlanPlace(place)) {
                 throw new ApiException("The generated plan contains a place that is not open");
             }
 
@@ -2223,13 +2223,13 @@ public class VisitPlanService {
         List<Map<String, Object>> rideRows = new ArrayList<>();
         Map<Integer, Map<Integer, String>> eligibility = new LinkedHashMap<>();
         Map<Integer, Map<Integer, String>> ridePreferences = new LinkedHashMap<>();
-        List<Ride> openRides = rideRepository.findRidesByStatus("OPEN");
+        List<Ride> openRides = new ArrayList<>(rideRepository.findAll().stream().filter(ride -> PlanningAvailability.canPlanRide(ride, visit.getVisitDate())).toList());
 
         openRides.sort(Comparator.comparing(Ride::getId));
 
         for (Ride ride : openRides) {
             // These provider calls must read stored planning data, not call an external API inside this transaction.
-            JsonNode snapshot = participantJsonMapper.valueToTree(rideService.getRideSnapshot(ride.getId()));
+            JsonNode snapshot = participantJsonMapper.valueToTree(rideService.getRideSnapshotForVisit(ride.getId(), visit.getVisitDate(), visit.getExpectedArrivalTime() == null ? visit.getPlannedStartTime() : visit.getExpectedArrivalTime(), visit.getDurationMinutes()));
 
             if (!snapshot.isObject() || requirePositiveInteger(snapshot, "id") != ride.getId().intValue() || !"OPEN".equals(requireText(snapshot, "status"))) {
                 throw new ApiException("Ride snapshot identity or status is invalid");
@@ -2240,6 +2240,8 @@ public class VisitPlanService {
             row.put("id", ride.getId());
             row.put("name", ride.getName());
             row.put("status", "OPEN");
+            row.put("operationalStatus", snapshot.path("operationalStatus").asString("UNKNOWN"));
+            row.put("availabilityIsEstimate", snapshot.path("availabilityIsEstimate").asBoolean());
             row.put("availabilitySource", snapshot.path("availabilitySource").asString("UNKNOWN"));
             row.put("nodeKey", requireText(snapshot, "nodeKey"));
             row.put("rideDurationMinutes", requirePositiveInteger(snapshot, "rideDurationMinutes"));
@@ -2471,7 +2473,7 @@ public class VisitPlanService {
         aiPlanService.validatePlanCandidateActivityKinds(candidate);
         aiPlanService.validatePlanCandidateEligibility(candidate, current.eligibility());
         validateInitialCandidateAgainstSnapshot(candidate, current);
-        validateCandidateResources(candidate);
+        validateCandidateResources(candidate, visit.getVisitDate());
 
         List<VisitMember> members = visitMemberRepository.findAllByVisit_IdAndRsvpStatus(visitId, "GOING");
 
@@ -3063,13 +3065,13 @@ public class VisitPlanService {
                 continue;
             }
 
-            if ("SIKKA_DEFAULT_AVAILABILITY".equals(ride.path("availabilitySource").asString())) warnings.add("إتاحة اللعبة " + rideId + " افتراضية للتخطيط، وليست تأكيد تشغيل مباشرًا من المشغّل.");
+            if (ride.path("availabilityIsEstimate").asBoolean() || "SIKKA_DEFAULT_AVAILABILITY".equals(ride.path("availabilitySource").asString())) warnings.add("إتاحة اللعبة " + rideId + " افتراضية للتخطيط، وليست تأكيد تشغيل مباشرًا من المشغّل.");
             if ("SIKKA_DEFAULT_ESTIMATE".equals(ride.path("timingSource").asString())) warnings.add("مدة اللعبة " + rideId + " ووقت الدخول والخروج يتضمنان قيمًا افتراضية تقديرية تحتاج مراجعة ميدانية.");
 
             if (!ride.path("planningWaitMinutes").isIntegralNumber()) {
                 warnings.add("وقت انتظار اللعبة " + rideId + " غير متاح؛ لا يُفترض أنه صفر.");
             } else if (ride.path("waitIsEstimate").isBoolean() && ride.path("waitIsEstimate").asBoolean()) {
-                warnings.add("SIKKA_DEFAULT_ESTIMATE".equals(ride.path("waitSource").asString()) ? "انتظار اللعبة " + rideId + " قيمة افتراضية للتخطيط (" + ride.path("planningWaitMinutes").asInt() + " دقيقة)، وليست قراءة انتظار فعلية." : "انتظار اللعبة " + rideId + " تقدير تخطيطي من المصدر وليس قراءة مباشرة مضمونة ليوم الزيارة.");
+                warnings.add("SIKKA_DEFAULT_ESTIMATE".equals(ride.path("waitSource").asString()) ? "انتظار اللعبة " + rideId + " قيمة افتراضية للتخطيط (" + ride.path("planningWaitMinutes").asInt() + " دقيقة)، وليست قراءة انتظار فعلية." : "QUEUE_ANALYTICS_HISTORICAL_ESTIMATE".equals(ride.path("waitSource").asString()) ? "انتظار اللعبة " + rideId + " تقدير من بيانات التحليل السابقة حسب يوم الزيارة وساعاتها، وليس قراءة مباشرة مضمونة." : "انتظار اللعبة " + rideId + " تقدير تخطيطي من المصدر وليس قراءة مباشرة مضمونة ليوم الزيارة.");
             }
         }
 
@@ -3387,7 +3389,7 @@ public class VisitPlanService {
         aiPlanService.validatePlanCandidateActivityKinds(candidate);
         aiPlanService.validatePlanCandidateEligibility(candidate, current.eligibility());
         validateInitialCandidateAgainstSnapshot(candidate, current);
-        validateCandidateResources(candidate);
+        validateCandidateResources(candidate, visit.getVisitDate());
 
         return current;
     }
@@ -3723,7 +3725,7 @@ public class VisitPlanService {
 
                     Ride unavailable = rideRepository.findRideById(item.getRideId());
 
-                    if (unavailable == null || (!"CLOSED".equals(unavailable.getStatus()) && !"UNAVAILABLE".equals(unavailable.getStatus()))) {
+                    if (unavailable == null || PlanningAvailability.canPlanRide(unavailable, visit.getVisitDate())) {
                         throw new ApiException("Only a confirmed closed or unavailable unstarted ride can be replaced");
                     }
 
@@ -4010,7 +4012,7 @@ public class VisitPlanService {
                 throw new ApiException("Activity execution changed while preparing the proposal; request a new proposal");
             }
 
-            validateCandidateResources(editableCandidate);
+            validateCandidateResources(editableCandidate, visit.getVisitDate());
             LocalDateTime proposedAt = LocalDateTime.now(ZoneId.of("Asia/Riyadh"));
             long elapsedSeconds = java.time.Duration.between(prepared.startsAt(), proposedAt).getSeconds();
 
@@ -4037,7 +4039,7 @@ public class VisitPlanService {
                 if (replacementIndexes.contains(index)) {
                     Ride replacement = rideRepository.findRideById(proposed.getRideId());
 
-                    if (replacement == null || !"OPEN".equals(replacement.getStatus())) {
+                    if (replacement == null || !PlanningAvailability.canPlanRide(replacement, visit.getVisitDate())) {
                         throw new ApiException("The replacement ride is no longer open");
                     }
 
@@ -4448,13 +4450,13 @@ public class VisitPlanService {
                         Ride unavailable = item.getRide();
                         JsonNode replacement = rides.get(proposed.getRideId());
 
-                        if (!"RIDE".equals(item.getActivityKind()) || unavailable == null || (!"CLOSED".equals(unavailable.getStatus()) && !"UNAVAILABLE".equals(unavailable.getStatus())) || Objects.equals(before.getRideId(), proposed.getRideId()) || replacement == null || proposed.getActivityMinutes() == null || proposed.getActivityMinutes() != requirePositiveInteger(replacement, "planningActivityMinutes")) {
+                        if (!"RIDE".equals(item.getActivityKind()) || unavailable == null || PlanningAvailability.canPlanRide(unavailable, visit.getVisitDate()) || Objects.equals(before.getRideId(), proposed.getRideId()) || replacement == null || proposed.getActivityMinutes() == null || proposed.getActivityMinutes() != requirePositiveInteger(replacement, "planningActivityMinutes")) {
                             throw new ApiException("The original or replacement ride is no longer valid");
                         }
 
                         Ride replacementEntity = rideRepository.findRideById(proposed.getRideId());
 
-                        if (replacementEntity == null || !"OPEN".equals(replacementEntity.getStatus()) || !Objects.equals(proposed.getRideName(), replacementEntity.getName()) || !Objects.equals(proposed.getTitle(), replacementEntity.getName())) {
+                        if (replacementEntity == null || !PlanningAvailability.canPlanRide(replacementEntity, visit.getVisitDate()) || !Objects.equals(proposed.getRideName(), replacementEntity.getName()) || !Objects.equals(proposed.getTitle(), replacementEntity.getName())) {
                             throw new ApiException("Replacement ride identity or display data changed");
                         }
 
@@ -4547,7 +4549,7 @@ public class VisitPlanService {
             editableCandidate.setActivities(editableActivities);
             editableCandidate.setWarnings(new ArrayList<>());
             aiPlanService.validatePlanCandidateEligibility(editableCandidate, current.eligibility());
-            validateCandidateResources(editableCandidate);
+            validateCandidateResources(editableCandidate, visit.getVisitDate());
 
             for (int index = 0; index < items.size(); index++) {
 
@@ -5341,7 +5343,7 @@ public class VisitPlanService {
             }
 
             Map<AiPlanItemDtoOut, String> foodKeys = validateSnapshotMeals(arrivalCandidate, currentInput.path("mealPolicy"), foodActivitiesByMember);
-            validateCandidateResources(arrivalCandidate);
+            validateCandidateResources(arrivalCandidate, visit.getVisitDate());
 
             Map<String, String> prayerTitles = Map.of("Fajr", "صلاة الفجر", "Dhuhr", "صلاة الظهر", "Asr", "صلاة العصر", "Maghrib", "صلاة المغرب", "Isha", "صلاة العشاء");
             List<PlanItem> scheduled = new ArrayList<>();
@@ -5508,7 +5510,7 @@ public class VisitPlanService {
         }
 
         Place restaurant = placeRepository.findPlaceById(dto.getPlaceId());
-        if (restaurant == null || !"RESTAURANT".equals(restaurant.getKind()) || !"OPEN".equals(restaurant.getStatus())) {
+        if (restaurant == null || !"RESTAURANT".equals(restaurant.getKind()) || !PlanningAvailability.canPlanPlace(restaurant)) {
             throw new ApiException("Choose an open restaurant");
         }
 

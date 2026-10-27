@@ -356,14 +356,7 @@ public class RideService {
     }
 
     public List<Ride> getOpenRides(){
-        java.time.LocalDateTime now = java.time.LocalDateTime.now();
-        List<Ride> rides = new ArrayList<>();
-        for (Ride ride : rideRepository.findRidesByStatus("OPEN")) {
-            if (ride.getWaitMinutes() != null && ride.getWaitObservedAt() != null && !ride.getWaitObservedAt().isAfter(now) && !ride.getWaitObservedAt().isBefore(now.minusMinutes(waitFreshnessMinutes)) && ride.getWaitSource() != null && !ride.getWaitSource().isBlank()) {
-                rides.add(ride);
-            }
-        }
-        return rides;
+        return rideRepository.findRidesByStatus("OPEN").stream().filter(ride -> "OPEN".equals(PlanningAvailability.rideStatus(ride, LocalDate.now()))).toList();
     }
 
     public boolean validateRideIds(List<Integer> rideIds){
@@ -452,7 +445,7 @@ public class RideService {
 
             if (ride.getWaitMinutes() != null && ride.getWaitMinutes() >= 0 && ride.getWaitObservedAt() != null && !ride.getWaitObservedAt().isAfter(now) && ride.getWaitSource() != null && !ride.getWaitSource().isBlank()){
 
-                if (ride.getWaitObservedAt().isBefore(now.minusMinutes(waitFreshnessMinutes))){
+                if (ride.getWaitObservedAt().isBefore(now.minusMinutes("QUEUE_ANALYTICS_LIVE".equals(ride.getWaitSource()) ? Math.min(10, waitFreshnessMinutes) : waitFreshnessMinutes))){
                     freshness = "STALE";
                 } else {
                     freshness = "RECENT";
@@ -891,11 +884,56 @@ public class RideService {
         );
     }
 
+    public java.util.Map<String, Object> getRideSnapshotForVisit(Integer rideId, LocalDate visitDate, java.time.LocalTime arrivalTime, int durationMinutes) {
+        Ride ride = getRideById(rideId);
+        java.util.Map<String, Object> snapshot = new java.util.LinkedHashMap<>(getRideSnapshot(rideId));
+        String operationalStatus = PlanningAvailability.rideStatus(ride, visitDate);
+        snapshot.put("status", PlanningAvailability.canPlanRide(ride, visitDate) ? "OPEN" : "CLOSED");
+        snapshot.put("operationalStatus", operationalStatus);
+        snapshot.put("availabilityIsEstimate", "UNKNOWN".equals(operationalStatus));
+        boolean future = visitDate != null && !visitDate.equals(LocalDate.now());
+        if (future || "SIKKA_DEFAULT_ESTIMATE".equals(snapshot.get("waitSource"))) {
+            Integer estimate = historicalEstimate(ride, visitDate == null ? LocalDate.now() : visitDate, arrivalTime, durationMinutes);
+            snapshot.put("planningWaitMinutes", estimate == null ? Math.max(0, defaultPlanningWaitMinutes) : estimate);
+            snapshot.put("waitSource", estimate == null ? "SIKKA_DEFAULT_ESTIMATE" : "QUEUE_ANALYTICS_HISTORICAL_ESTIMATE");
+            snapshot.put("waitIsEstimate", true);
+            snapshot.put("waitObservedAt", java.time.ZonedDateTime.now(java.time.ZoneId.of("Asia/Riyadh")).toOffsetDateTime().toString());
+        }
+        return snapshot;
+    }
+
+    private Integer historicalEstimate(Ride ride, LocalDate date, java.time.LocalTime arrivalTime, int durationMinutes) {
+        if (ride.getAnalyticsPatternsJson() == null) return null;
+        try {
+            JsonNode patterns = jsonMapper.readTree(ride.getAnalyticsPatternsJson());
+            JsonNode matching = patterns.path("weekdays").path(date.getDayOfWeek().name());
+            JsonNode all = patterns.path("allDays");
+            int start = arrivalTime == null ? 16 : arrivalTime.getHour();
+            int end = Math.min(24, start + Math.max(1, (int) Math.ceil(durationMinutes / 60.0)));
+            double total = 0;
+            int count = 0;
+            for (int hour = start; hour < end; hour++) {
+                JsonNode sameDay = matching.isArray() && matching.size() > hour ? matching.get(hour) : null;
+                JsonNode selected = sameDay != null && sameDay.path("daysCount").asInt() >= 2 ? sameDay : all.isArray() && all.size() > hour ? all.get(hour) : null;
+                if (selected != null && selected.path("daysCount").asInt() >= 1 && selected.path("sampleCount").asInt() >= 1 && selected.path("averageWait").isNumber() && selected.path("averageWait").asDouble() >= 0 && selected.path("averageWait").asDouble() <= 1440) {
+                    total += selected.path("averageWait").asDouble();
+                    count++;
+                }
+            }
+            return count == 0 ? null : (int) Math.ceil(total / count);
+        } catch (Exception exception) {
+            return null;
+        }
+    }
+
     public java.util.Map<String, Object> getRideSnapshot(Integer rideId) {
         Ride ride = getRideById(rideId);
         java.util.Map<String, Object> snapshot = new java.util.LinkedHashMap<>();
         snapshot.put("id", ride.getId());
-        snapshot.put("status", ride.getStatus());
+        String operationalStatus = PlanningAvailability.rideStatus(ride, LocalDate.now());
+        snapshot.put("status", PlanningAvailability.canPlanRide(ride, LocalDate.now()) ? "OPEN" : "CLOSED");
+        snapshot.put("operationalStatus", operationalStatus);
+        snapshot.put("availabilityIsEstimate", "UNKNOWN".equals(operationalStatus));
         snapshot.put("availabilitySource", ride.getAvailabilitySource() == null ? "UNKNOWN" : ride.getAvailabilitySource());
         snapshot.put("nodeKey", "RIDE:" + ride.getId());
         snapshot.put("rideDurationMinutes", ride.getRideDurationMinutes() == null ? 5 : ride.getRideDurationMinutes());
@@ -903,8 +941,9 @@ public class RideService {
         snapshot.put("entryExitBufferMinutes", ride.getEntryExitBufferMinutes() == null ? 3 : ride.getEntryExitBufferMinutes());
         snapshot.put("features", ride.getRideFeatures());
         boolean recent = ride.getWaitMinutes() != null && ride.getWaitObservedAt() != null && !ride.getWaitObservedAt().isAfter(LocalDateTime.now()) && !ride.getWaitObservedAt().isBefore(LocalDateTime.now().minusMinutes(waitFreshnessMinutes));
+        recent = recent && (!"QUEUE_ANALYTICS_LIVE".equals(ride.getWaitSource()) || !ride.getWaitObservedAt().isBefore(LocalDateTime.now().minusMinutes(10)));
         snapshot.put("planningWaitMinutes", recent ? ride.getWaitMinutes() : Math.max(0, defaultPlanningWaitMinutes));
-        snapshot.put("waitIsEstimate", true);
+        snapshot.put("waitIsEstimate", !recent || !"QUEUE_ANALYTICS_LIVE".equals(ride.getWaitSource()));
         snapshot.put("waitSource", recent ? (ride.getWaitSource() == null ? "UNKNOWN" : ride.getWaitSource()) : "SIKKA_DEFAULT_ESTIMATE");
         // For a default estimate this timestamp identifies estimate creation, not a source observation.
         snapshot.put("waitObservedAt", (recent ? ride.getWaitObservedAt().atZone(java.time.ZoneId.of("Asia/Riyadh")) : java.time.ZonedDateTime.now(java.time.ZoneId.of("Asia/Riyadh"))).toOffsetDateTime().toString());

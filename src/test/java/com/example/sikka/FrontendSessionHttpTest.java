@@ -52,6 +52,7 @@ class FrontendSessionHttpTest {
     @Test
     void publicMapPlaceFiltersDoNotExposeAdministrativeOperations() throws Exception {
         HttpClient guest = HttpClient.newHttpClient();
+        assertEquals(200, guest.send(HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/v1/ride/catalog")).GET().build(), HttpResponse.BodyHandlers.ofString()).statusCode());
         URI places = URI.create("http://localhost:" + port + "/api/v1/place/by-kind?kind=RESTAURANT");
         assertEquals(200, guest.send(HttpRequest.newBuilder(places).GET().build(), HttpResponse.BodyHandlers.ofString()).statusCode());
         URI admin = URI.create("http://localhost:" + port + "/api/v1/place/get");
