@@ -14,7 +14,27 @@ import java.util.List;
 @Repository
 public interface PlanHistoryRepository extends JpaRepository<PlanHistory, Integer> {
 
-    List<PlanHistory> findAllByAccount_IdOrderByStartedAtDescIdDesc(Integer accountId);
+    @Query("select h.id from PlanHistory h where h.account.id = :accountId order by h.startedAt desc, h.id desc")
+    List<Integer> findOrderedHistoryIdsByAccountId(@Param("accountId") Integer accountId);
+
+    default List<PlanHistory> findAllByAccount_IdOrderByStartedAtDescIdDesc(Integer accountId) {
+        List<Integer> ids = findOrderedHistoryIdsByAccountId(accountId);
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        java.util.Map<Integer, PlanHistory> rows = new java.util.HashMap<>();
+        for (PlanHistory history : findAllById(ids)) {
+            rows.put(history.getId(), history);
+        }
+        List<PlanHistory> ordered = new java.util.ArrayList<>();
+        for (Integer id : ids) {
+            PlanHistory history = rows.get(id);
+            if (history != null) {
+                ordered.add(history);
+            }
+        }
+        return ordered;
+    }
 
     PlanHistory findPlanHistoryByIdAndAccount_Id(Integer planHistoryId, Integer accountId);
 
