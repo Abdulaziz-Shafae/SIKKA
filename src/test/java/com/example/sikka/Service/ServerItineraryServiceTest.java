@@ -89,6 +89,28 @@ class ServerItineraryServiceTest {
         assertEquals(2, plan.getActivities().get(0).getRideId());
     }
     @Test
+    void splitFriendsWithOptionalPreferencesStillIncludeEveryParticipant() {
+        ObjectNode input = input(40, true);
+        input.put("tripType", "FRIENDS");
+        ((tools.jackson.databind.node.ArrayNode) input.path("members")).add(mapper.valueToTree(Map.of("visitMemberId", 2, "ageKnown", true, "ageYears", 26, "selectedRides", List.of())));
+        input.set("eligibilityByRideAndMember", mapper.valueToTree(Map.of("1", Map.of("1", "UNKNOWN", "2", "UNKNOWN"), "2", Map.of("1", "UNKNOWN", "2", "UNKNOWN"), "3", Map.of("1", "UNKNOWN", "2", "UNKNOWN"))));
+        ((tools.jackson.databind.node.ArrayNode) input.path("rides")).remove(2);
+        AiPlanDtoOut plan = planner.selectInitialPlan(input);
+        assertTrue(plan.getFeasible());
+        assertEquals(Set.of(1, 2), plan.getActivities().stream().flatMap(activity -> activity.getParticipantVisitMemberIds().stream()).collect(java.util.stream.Collectors.toSet()));
+        assertEquals(plan.getActivities().size(), plan.getActivities().stream().map(AiPlanItemDtoOut::getRideId).distinct().count());
+    }
+
+    @Test
+    void splitFriendsNeverForceAnExcludedParticipantIntoARide() {
+        ObjectNode input = input(40, true);
+        input.put("tripType", "FRIENDS");
+        ((tools.jackson.databind.node.ArrayNode) input.path("members")).add(mapper.valueToTree(Map.of("visitMemberId", 2, "ageKnown", true, "ageYears", 26, "selectedRides", List.of(), "excludedRideIds", List.of(1, 2, 3))));
+        input.set("eligibilityByRideAndMember", mapper.valueToTree(Map.of("1", Map.of("1", "UNKNOWN", "2", "UNKNOWN"), "2", Map.of("1", "UNKNOWN", "2", "UNKNOWN"), "3", Map.of("1", "UNKNOWN", "2", "UNKNOWN"))));
+        assertFalse(planner.selectInitialPlan(input).getFeasible());
+    }
+
+    @Test
     void planIndependentAdultGroupsConcurrently() {
         ObjectNode input = input(12, true);
         input.put("tripType", "FRIENDS");

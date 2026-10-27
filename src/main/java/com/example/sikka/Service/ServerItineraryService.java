@@ -22,7 +22,7 @@ public class ServerItineraryService {
         members.sort(Integer::compareTo);
         List<List<Integer>> groups = planningGroups(input, members, supervised);
         List<AiPlanItemDtoOut> activities = new ArrayList<>();
-        int deadline = input.path("durationMinutes").asInt() - (input.path("includePrayer").asBoolean() ? 15 : 0);
+        int deadline = input.path("durationMinutes").asInt() - (input.path("includePrayer").asBoolean() ? input.path("prayerReserveMinutes").asInt(15) : 0);
         for (List<Integer> group : input.path("allowSplit").asBoolean() && !supervised ? List.of(members) : groups) {
             State result = input.path("allowSplit").asBoolean() && !supervised ? searchSplitPlan(input, members, deadline) : searchGroup(input, group, deadline, supervised);
             if (result == null) {
@@ -61,7 +61,7 @@ public class ServerItineraryService {
             Map<String, SplitPath> next = new LinkedHashMap<>();
             for (SplitPath path : frontier) {
                 State state = path.state();
-                if (!state.activities().isEmpty() && state.meals().size() == meals.size() && splitMealsMatchMemberOrder(state, meals) && (best == null || order.compare(state, best) < 0)) best = state;
+                if (!state.activities().isEmpty() && state.meals().size() == meals.size() && state.activities().stream().flatMap(activity -> activity.getParticipantVisitMemberIds().stream()).collect(java.util.stream.Collectors.toSet()).containsAll(members) && splitMealsMatchMemberOrder(state, meals) && (best == null || order.compare(state, best) < 0)) best = state;
                 for (int index = 0; index < rides.size() + meals.size(); index++) {
                     boolean food = index >= rides.size();
                     int mealIndex = index - rides.size();
@@ -70,47 +70,47 @@ public class ServerItineraryService {
                     if (food ? state.meals().contains(mealIndex) : state.ended() || state.rides().contains(rideId) || hasPendingStartMeal(state, meals)) continue;
                     String timing = food ? resource.path("timingPreference").asString() : "";
                     if (food && ("START".equals(timing) && state.activities().stream().anyMatch(activity -> "RIDE".equals(activity.getActivityKind())) || "MIDDLE".equals(timing) && state.rides().isEmpty())) continue;
-                    List<Integer> participants = food ? new ArrayList<>(ids(resource.path("participantVisitMemberIds"))) : members.stream().filter(member -> canRide(input, resource, List.of(member))).toList();
-                    if (!food) {
-                        List<Integer> requested = participants.stream().filter(member -> !"OPTIONAL".equals(priority(input, member, rideId))).toList();
-                        if (!requested.isEmpty()) participants = requested;
+                    List<Integer> eligible = food ? new ArrayList<>(ids(resource.path("participantVisitMemberIds"))) : members.stream().filter(member -> canRide(input, resource, List.of(member))).toList();
+                    List<Integer> requested = food ? eligible : eligible.stream().filter(member -> !"OPTIONAL".equals(priority(input, member, rideId))).toList();
+                    List<List<Integer>> participantOptions = requested.isEmpty() || requested.equals(eligible) ? List.of(eligible) : List.of(requested, eligible);
+                    for (List<Integer> participants : participantOptions) {
+                        if (participants.isEmpty() || food && !new TreeSet<>(participants).equals(new TreeSet<>(members))) continue;
+                        Integer placeId = food && !resource.path("restaurantId").isNull() ? resource.path("restaurantId").asInt() : null;
+                        String node = food ? placeId == null ? null : placeNode(input, placeId) : resource.path("nodeKey").asString();
+                        if (food && placeId != null && node == null) continue;
+                        int walk = 0;
+                        boolean connected = true;
+                        for (Integer member : participants) {
+                            Integer distance = node == null ? 0 : walking(input, path.nodes().get(member), node);
+                            if (distance == null) { connected = false; break; }
+                            walk = Math.max(walk, distance);
+                        }
+                        if (!connected) continue;
+                        int waiting = food ? 0 : resource.path("planningWaitMinutes").asInt();
+                        int duration = food ? resource.path("durationMinutes").asInt() : resource.path("planningActivityMinutes").asInt();
+                        int ready = participants.stream().mapToInt(member -> path.available().getOrDefault(member, 0)).max().orElse(0);
+                        int start = food ? Math.max(ready, resource.path("earliestStartMinutes").asInt()) : ready;
+                        long end = (long) start + walk + waiting + duration;
+                        int reserve = 0;
+                        for (int meal = 0; meal < meals.size(); meal++) if (!state.meals().contains(meal) && (!food || meal != mealIndex)) reserve += meals.get(meal).path("durationMinutes").asInt();
+                        if (Math.max(state.minute(), end) + reserve > deadline || food && start > resource.path("latestStartMinutes").asInt()) continue;
+                        AiPlanItemDtoOut activity = activity(food ? "BREAK" : "RIDE", food ? null : rideId, placeId, food ? resource.path("breakType").asString() : null, participants, start, (int) end, walk, waiting, duration);
+                        int must = state.must();
+                        int preferred = state.preferred();
+                        if (!food) for (Integer member : participants) {
+                            if ("MUST_RIDE".equals(priority(input, member, rideId))) must++;
+                            if ("PREFERRED".equals(priority(input, member, rideId))) preferred++;
+                        }
+                        State candidate = append(state, activity, "", food ? null : rideId, food ? mealIndex : null, must, preferred, state.ended() || food && "END".equals(timing));
+                        candidate = new State(candidate.node(), Math.max(state.minute(), candidate.minute()), candidate.rides(), candidate.meals(), candidate.mealPositions(), candidate.activities(), candidate.must(), candidate.preferred(), candidate.walk(), candidate.waitMinutes(), candidate.ended());
+                        Map<Integer, Integer> available = new TreeMap<>(path.available());
+                        for (Integer member : participants) available.put(member, (int) end);
+                        Map<Integer, String> nodes = new TreeMap<>(path.nodes());
+                        if (node != null) for (Integer member : participants) nodes.put(member, node);
+                        String key = candidate.rides() + ":" + candidate.meals() + ":" + candidate.mealPositions() + ":" + nodes + ":" + available + ":" + candidate.minute() + ":" + candidate.ended();
+                        SplitPath existing = next.get(key);
+                        if (existing == null || order.compare(candidate, existing.state()) < 0) next.put(key, new SplitPath(candidate, nodes, available));
                     }
-                    if (participants.isEmpty() || food && !new TreeSet<>(participants).equals(new TreeSet<>(members))) continue;
-                    Integer placeId = food && !resource.path("restaurantId").isNull() ? resource.path("restaurantId").asInt() : null;
-                    String node = food ? placeId == null ? null : placeNode(input, placeId) : resource.path("nodeKey").asString();
-                    if (food && placeId != null && node == null) continue;
-                    int walk = 0;
-                    boolean connected = true;
-                    for (Integer member : participants) {
-                        Integer distance = node == null ? 0 : walking(input, path.nodes().get(member), node);
-                        if (distance == null) { connected = false; break; }
-                        walk = Math.max(walk, distance);
-                    }
-                    if (!connected) continue;
-                    int waiting = food ? 0 : resource.path("planningWaitMinutes").asInt();
-                    int duration = food ? resource.path("durationMinutes").asInt() : resource.path("planningActivityMinutes").asInt();
-                    int ready = participants.stream().mapToInt(member -> path.available().getOrDefault(member, 0)).max().orElse(0);
-                    int start = food ? Math.max(ready, resource.path("earliestStartMinutes").asInt()) : ready;
-                    long end = (long) start + walk + waiting + duration;
-                    int reserve = 0;
-                    for (int meal = 0; meal < meals.size(); meal++) if (!state.meals().contains(meal) && (!food || meal != mealIndex)) reserve += meals.get(meal).path("durationMinutes").asInt();
-                    if (Math.max(state.minute(), end) + reserve > deadline || food && start > resource.path("latestStartMinutes").asInt()) continue;
-                    AiPlanItemDtoOut activity = activity(food ? "BREAK" : "RIDE", food ? null : rideId, placeId, food ? resource.path("breakType").asString() : null, participants, start, (int) end, walk, waiting, duration);
-                    int must = state.must();
-                    int preferred = state.preferred();
-                    if (!food) for (Integer member : participants) {
-                        if ("MUST_RIDE".equals(priority(input, member, rideId))) must++;
-                        if ("PREFERRED".equals(priority(input, member, rideId))) preferred++;
-                    }
-                    State candidate = append(state, activity, "", food ? null : rideId, food ? mealIndex : null, must, preferred, state.ended() || food && "END".equals(timing));
-                    candidate = new State(candidate.node(), Math.max(state.minute(), candidate.minute()), candidate.rides(), candidate.meals(), candidate.mealPositions(), candidate.activities(), candidate.must(), candidate.preferred(), candidate.walk(), candidate.waitMinutes(), candidate.ended());
-                    Map<Integer, Integer> available = new TreeMap<>(path.available());
-                    for (Integer member : participants) available.put(member, (int) end);
-                    Map<Integer, String> nodes = new TreeMap<>(path.nodes());
-                    if (node != null) for (Integer member : participants) nodes.put(member, node);
-                    String key = candidate.rides() + ":" + candidate.meals() + ":" + candidate.mealPositions() + ":" + nodes + ":" + available + ":" + candidate.minute() + ":" + candidate.ended();
-                    SplitPath existing = next.get(key);
-                    if (existing == null || order.compare(candidate, existing.state()) < 0) next.put(key, new SplitPath(candidate, nodes, available));
                 }
             }
             frontier = next.values().stream().sorted((left, right) -> order.compare(left.state(), right.state())).limit(SEARCH_WIDTH).toList();

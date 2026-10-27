@@ -1665,6 +1665,7 @@ public class VisitPlanService {
         input.put("mealPolicy", mealPolicy);
         input.put("eligibilityByRideAndMember", eligibilityByRideAndMember);
         input.put("arrivalTimeKnown", visit.getPlannedStartTime() != null && ("READY".equals(visit.getStatus()) || "IN_PROGRESS".equals(visit.getStatus())));
+        input.put("expectedArrivalTime", visit.getExpectedArrivalTime() == null ? null : visit.getExpectedArrivalTime().toString());
         input.put("prayerTimesVerified", false);
         input.put("prayerReserveMinutes", Boolean.TRUE.equals(visit.getIncludePrayer()) ? 15 : 0);
 
@@ -2065,7 +2066,7 @@ public class VisitPlanService {
             }
 
             JsonNode generationInput = readGenerationJson(snapshot.inputJson());
-            AiPlanDtoOut candidate = serverItineraryService.selectInitialPlan(generationInput);
+            AiPlanDtoOut candidate = selectInitialPlanWithExpectedPrayer(generationInput);
             resolveExcludedRideNames(candidate);
             if (!Boolean.TRUE.equals(candidate.getFeasible())) return runGenerationTransaction(() -> failInitialGeneration(accountId, visitId, start.historyId(), candidate.getInfeasibilityReason(), candidate));
             aiPlanService.validatePlanCandidateTiming(candidate, snapshot.durationMinutes(), snapshot.memberIds(), snapshot.tripType());
@@ -2088,6 +2089,38 @@ public class VisitPlanService {
                 throw new ApiException("Generation outcome could not be confirmed. Check this request key before sending a new request");
             }
         }
+    }
+
+    private AiPlanDtoOut selectInitialPlanWithExpectedPrayer(JsonNode input) {
+        if (!input.path("includePrayer").asBoolean() || !input.path("expectedArrivalTime").isTextual()) return serverItineraryService.selectInitialPlan(input);
+        ObjectNode scheduleInput = (ObjectNode) input.deepCopy();
+        LocalDateTime arrival = LocalDate.parse(input.path("visitDate").asString()).atTime(java.time.LocalTime.parse(input.path("expectedArrivalTime").asString()));
+        int duration = input.path("durationMinutes").asInt();
+        LocalDateTime end = arrival.plusMinutes(duration);
+        List<Map<String, Object>> events = new ArrayList<>();
+        for (LocalDate date = arrival.toLocalDate(); !date.isAfter(end.toLocalDate()); date = date.plusDays(1)) {
+            Map<String, LocalDateTime> times = prayerTimeService.getPrayerTimes(date, parkLatitude, parkLongitude);
+            for (String name : List.of("Fajr", "Dhuhr", "Asr", "Maghrib", "Isha")) {
+                LocalDateTime at = times.get(name);
+                if (at == null || !at.toLocalDate().equals(date)) throw new ApiException("تعذر التحقق من مواقيت الصلاة قبل التوليد؛ حاول مرة ثانية.");
+                if (!at.isBefore(arrival) && at.isBefore(end)) {
+                    if (at.plusMinutes(15).isAfter(end)) throw new ApiException("الصلاة تقع عند نهاية الزيارة؛ زِد المدة قليلًا أو عدّل وقت الوصول المتوقع قبل التوليد.");
+                    events.add(Map.of("relativePrayerMinute", Math.toIntExact(java.time.Duration.between(arrival, at).toMinutes()), "activityMinutes", 15));
+                }
+            }
+        }
+        events.sort(Comparator.comparingInt(event -> (Integer) event.get("relativePrayerMinute")));
+        scheduleInput.set("prayerEvents", participantJsonMapper.valueToTree(events));
+        scheduleInput.put("prayerTimesVerified", true);
+        scheduleInput.put("prayerReserveMinutes", events.size() * 15);
+        ObjectNode selectionInput = scheduleInput.deepCopy();
+        for (int reserve = events.size() * 15; reserve < duration && reserve <= events.size() * 15 + 180; reserve += 15) {
+            selectionInput.put("prayerReserveMinutes", reserve);
+            AiPlanDtoOut candidate = serverItineraryService.selectInitialPlan(selectionInput);
+            if (!Boolean.TRUE.equals(candidate.getFeasible())) return candidate;
+            if (scheduleInput.path("allowSplit").asBoolean() || arrivalPrayerScheduleService.scheduleApprovedActivitiesWithPrayer(scheduleInput, candidate.getActivities()) != null) return candidate;
+        }
+        throw new ApiException("الألعاب والوجبات والصلاة لا تتسع ضمن المدة المحددة حسب وصولك المتوقع؛ زِد مدة الزيارة أو قلّل اختياراتك ثم ولّد الخطة.");
     }
 
     private <T> T runGenerationTransaction(Supplier<T> action) {
@@ -3059,7 +3092,12 @@ public class VisitPlanService {
                     String eligibility = input.path("eligibilityByRideAndMember").path(String.valueOf(rideId)).path(String.valueOf(memberId)).asString("");
 
                     if ("UNKNOWN".equals(eligibility)) {
-                        warnings.add("أهلية العضو " + memberId + " للعبة " + rideId + " غير مؤكدة؛ تحقق من المتطلبات قبل الركوب.");
+                        List<String> missing = new ArrayList<>();
+                        for (JsonNode ride : input.path("rides")) if (ride.path("id").asInt() == rideId) for (JsonNode field : ride.path("missingFieldsByMember").path(String.valueOf(memberId))) {
+                            String key = field.asString();
+                            missing.add(key.startsWith("ride.") ? "توثيق شروط اللعبة" : Map.of("heightCm", "الطول", "weightKg", "الوزن", "birthDate", "تاريخ الميلاد", "healthData", "المعلومات الصحية", "healthConsent", "موافقة حفظ المعلومات الصحية", "healthNotesRequireReview", "مراجعة الملاحظة الصحية", "companionAssignment", "تحديد المرافق").getOrDefault(key, "مراجعة متطلبات الأهلية"));
+                        }
+                        warnings.add("أهلية العضو " + memberId + " للعبة " + rideId + " غير مؤكدة" + (missing.isEmpty() ? "" : "؛ المطلوب: " + String.join("، ", new LinkedHashSet<>(missing))) + ". الخطة مبدئية؛ تحقق من الشروط قبل الركوب.");
                     }
                 }
             }
@@ -3425,7 +3463,7 @@ public class VisitPlanService {
                 throw new ApiException("The OpenAI call must run outside the database transaction");
             }
 
-            AiPlanDtoOut candidate = serverItineraryService.selectInitialPlan(readGenerationJson(prepared.inputJson()));
+            AiPlanDtoOut candidate = selectInitialPlanWithExpectedPrayer(readGenerationJson(prepared.inputJson()));
             resolveExcludedRideNames(candidate);
 
             mergeGenerationWarnings(candidate, readGenerationJson(prepared.inputJson()));
@@ -5185,6 +5223,10 @@ public class VisitPlanService {
             }
             if (candidate == null) {
                 candidate = aiPlanService.generatePlanCandidate(writeGenerationJson(input));
+                if (!Boolean.TRUE.equals(candidate.getFeasible()) && candidate.getInfeasibilityReason() != null && candidate.getInfeasibilityReason().contains("UNKNOWN")) {
+                    input.put("validationFeedback", "Review the rejection once. Explicit UNKNOWN eligibility is provisionally allowed for existing approved rides and is not a boarding approval. Do not reject solely for UNKNOWN. Keep all NOT_ELIGIBLE, missing-data, prayer, meal, walking and duration constraints. If a real constraint remains, return infeasible with that specific reason; never invent a feasible schedule.");
+                    candidate = aiPlanService.generatePlanCandidate(writeGenerationJson(input));
+                }
             }
         }
 
