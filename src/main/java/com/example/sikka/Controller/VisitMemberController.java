@@ -20,6 +20,12 @@ public class VisitMemberController {
 
     private final VisitMemberService visitMemberService;
 
+    @PostMapping("/remind/{memberId}")
+    public ResponseEntity<?> remindVisitMember(@AuthenticationPrincipal Account account, @PathVariable Integer memberId) {
+        visitMemberService.remindVisitMember(account.getId(), memberId);
+        return ResponseEntity.status(200).body(new ApiResponse("Reminder sent"));
+    }
+
     // ---------- CRUD ----------
 
     @GetMapping("/get")
