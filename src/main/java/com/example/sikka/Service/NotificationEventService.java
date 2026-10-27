@@ -43,7 +43,7 @@ public class NotificationEventService {
         boolean attendance = !"GOING".equals(member.getRsvpStatus());
         String message = attendance ? "أكد حضورك في الزيارة عشان نرتب طلعتكم." : "كمل اختياراتك عشان نرتب خطة طلعتكم.";
         long slot = java.time.Instant.now().getEpochSecond() / 600;
-        Notification notice = save(member.getVisitorProfile().getAccount(), member.getVisit(), "PLANNING_REMINDER", "تذكير من منظّم الزيارة", message, "PLANNING_REMINDER:" + member.getId() + ":" + slot, true, null);
+        Notification notice = save(member.getVisitorProfile().getAccount(), member.getVisit(), "PLANNING_REMINDER", attendance ? "تذكير بتأكيد حضورك" : "تذكير بإكمال اختياراتك", message, "PLANNING_REMINDER:" + member.getId() + ":" + attendance + ":" + slot, true, null);
         Account recipient = member.getVisitorProfile().getAccount();
         if (notice != null && Boolean.TRUE.equals(recipient.getPhoneVerified()) && recipient.getPhone() != null && privacyConsentService.hasConsent(member.getVisitorProfile().getId(), "WHATSAPP")) queueWhatsApp(notice);
     }

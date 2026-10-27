@@ -435,6 +435,20 @@ class TeamFlowsIntegrationTest {
         assertTrue(preview.getMissingFields().stream().anyMatch(field -> field.startsWith("meal:")));
     }
 
+    @Test
+    void togetherVisitDoesNotRemindGoingMembersToChooseRides() {
+        Visit visit = createVisit("FRIENDS");
+        visit.setTogetherMode("TOGETHER");
+        VisitMember member = new VisitMember();
+        member.setVisit(visit);
+        member.setVisitorProfile(createProfile(createAccount()));
+        member.setRsvpStatus("GOING");
+        member.setAnswerStatus("PENDING");
+        entityManager.persist(member);
+        var error = assertThrows(ApiException.class, () -> visitMemberService.remindVisitMember(visit.getOrganizer().getId(), member.getId()));
+        assertTrue(error.getMessage().contains("المنظّم"));
+    }
+
     private Visit createVisit(String type) {
         Account account = createAccount();
         createProfile(account);
