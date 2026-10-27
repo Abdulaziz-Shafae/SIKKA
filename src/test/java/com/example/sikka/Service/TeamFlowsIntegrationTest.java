@@ -347,6 +347,62 @@ class TeamFlowsIntegrationTest {
         assertThrows(ApiException.class, () -> visitMemberService.saveMemberPreferences(profile.getAccount().getId(), friend.getId(), dto, 1));
     }
 
+    @Test
+    void failedGenerationUnlocksDraftForEditing() {
+        Visit visit = createVisit("SOLO");
+        Integer historyId = paymentOrderService.reserveEntitlement(visit.getOrganizer().getId(), visit.getId(), UUID.randomUUID().toString(), "INITIAL");
+        visit.setStatus("PLANNING");
+        visit.setMembersLocked(true);
+        entityManager.flush();
+        org.springframework.test.util.ReflectionTestUtils.invokeMethod(visitPlanService, "failInitialGeneration", visit.getOrganizer().getId(), visit.getId(), historyId, "No feasible plan", null);
+        assertEquals("DRAFT", visit.getStatus());
+        assertFalse(visit.getMembersLocked());
+        assertEquals("FAILED", historyRepository.findById(historyId).orElseThrow().getStatus());
+    }
+
+    @Test
+    void existingFailedVisitCanSaveAmendedDetails() {
+        Visit visit = createVisit("FAMILY");
+        visit.setStatus("PLANNING");
+        visit.setMembersLocked(false);
+        CreateVisitDtoIn dto = new CreateVisitDtoIn();
+        dto.setName("Amended visit");
+        dto.setVisitDate(visit.getVisitDate());
+        dto.setDurationMinutes(420);
+        dto.setTripType("FAMILY");
+        dto.setFamilyCount(3);
+        dto.setGoals(visit.getGoals());
+        dto.setPrimaryGoal(visit.getPrimaryGoal());
+        dto.setIncludePrayer(false);
+        Integer id = visit.getId();
+        visitService.updateByOrganizer(visit.getOrganizer().getId(), id, dto);
+        entityManager.flush();
+        entityManager.clear();
+        Visit saved = entityManager.find(Visit.class, id);
+        assertEquals("DRAFT", saved.getStatus());
+        assertEquals("Amended visit", saved.getName());
+        assertEquals(420, saved.getDurationMinutes());
+        assertEquals(4, saved.getMaxParticipants());
+    }
+
+    @Test
+    void familyAdditionOnlyRaisesCapacityAfterExplicitConfirmationAndNeverDuplicates() {
+        Visit visit = createVisit("FAMILY");
+        visit.setMaxParticipants(2);
+        FamilyMember first = createFamily(visit.getOrganizer());
+        FamilyMember second = createFamily(visit.getOrganizer());
+        Integer owner = visit.getOrganizer().getId();
+        visitMemberService.addFamilyMembers(owner, visit.getId(), new AddFamilyMembersDtoIn(List.of(first.getId())));
+        visitMemberService.addFamilyMembers(owner, visit.getId(), new AddFamilyMembersDtoIn(List.of(first.getId())));
+        assertEquals(2, visitMemberRepository.findAllByVisit_Id(visit.getId()).size());
+        assertTrue(assertThrows(ApiException.class, () -> visitMemberService.addFamilyMembers(owner, visit.getId(), new AddFamilyMembersDtoIn(List.of(second.getId())))).getMessage().contains("2"));
+        assertEquals(2, visit.getMaxParticipants());
+        visitMemberService.addFamilyMembers(owner, visit.getId(), new AddFamilyMembersDtoIn(List.of(second.getId()), 3));
+        assertEquals(3, visit.getMaxParticipants());
+        assertEquals(3, visitMemberRepository.findAllByVisit_Id(visit.getId()).size());
+        assertTrue(visitMemberService.getSummary(owner, visit.getId()).getMembers().stream().anyMatch(member -> first.getId().equals(member.getFamilyMemberId())));
+    }
+
     private Visit createVisit(String type) {
         Account account = createAccount();
         createProfile(account);

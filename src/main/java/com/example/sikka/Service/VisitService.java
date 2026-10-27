@@ -277,8 +277,11 @@ public class VisitService {
 
         checkTimes(dto.getPlannedStartTime(), dto.getPlannedEndTime());
 
+        if ("PLANNING".equals(visit.getStatus()) && !Boolean.TRUE.equals(visit.getMembersLocked()) && visitPlanRepository.findAllByVisit_Id(visitId).isEmpty() && planHistoryRepository.findAllByAccount_IdOrderByStartedAtDescIdDesc(accountId).stream().noneMatch(history -> history.getVisit().getId().equals(visitId) && "PROCESSING".equals(history.getStatus()))) {
+            visit.setStatus("DRAFT");
+        }
         if (!"DRAFT".equals(visit.getStatus()) || Boolean.TRUE.equals(visit.getMembersLocked()))
-            throw new ApiException("Visit details can only be changed while the visit is in DRAFT");
+            throw new ApiException("تعديل التفاصيل متاح قبل توليد الخطة؛ بعد الاعتماد استخدم تعديل الموعد والوجبات من الخطة.");
 
         if (visit.getReusedFromVisitId() != null && !paymentOrderService.hasPaidVisit(accountId, visitId)) {
             if (!Objects.equals(visit.getName(), dto.getName()) || !Objects.equals(visit.getTripType(), dto.getTripType()) || !Objects.equals(visit.getMaxParticipants(), resolveMaxParticipants(dto)) || !Objects.equals(visit.getDurationMinutes(), dto.getDurationMinutes()) || !Objects.equals(visit.getGoals(), dto.getGoals()) || !Objects.equals(visit.getPrimaryGoal(), dto.getPrimaryGoal()) || !Objects.equals(visit.getTogetherMode(), dto.getTogetherMode()) || !Objects.equals(visit.getIncludePrayer(), dto.getIncludePrayer())) throw new ApiException("Payment is required before changing repeated visit preferences");

@@ -2534,6 +2534,7 @@ public class VisitPlanService {
         paymentOrderService.releaseEntitlement(accountId, historyId);
 
         if ("PLANNING".equals(visit.getStatus()) && visitPlanRepository.findAllByVisit_Id(visitId).isEmpty()) {
+            visit.setStatus("DRAFT");
             visit.setMembersLocked(false);
             visitRepository.save(visit);
         }
@@ -3655,11 +3656,11 @@ public class VisitPlanService {
             LocalDateTime startsAt = visit.getVisitDate().atTime(visit.getPlannedStartTime());
             long elapsedSeconds = java.time.Duration.between(startsAt, LocalDateTime.now(ZoneId.of("Asia/Riyadh"))).getSeconds();
 
-            if (elapsedSeconds < 0 || elapsedSeconds >= (long) planning.durationMinutes() * 60) {
+            if (elapsedSeconds >= (long) planning.durationMinutes() * 60) {
                 throw new ApiException("The remaining visit time is unavailable; review the visit duration");
             }
 
-            int currentMinute = Math.toIntExact((elapsedSeconds + 59) / 60);
+            int currentMinute = Math.toIntExact((Math.max(0, elapsedSeconds) + 59) / 60);
             List<PlanItemDtoOut> items = new ArrayList<>();
             Set<Integer> itemIds = new HashSet<>();
             Map<Integer, Integer> executionEnds = new LinkedHashMap<>();
@@ -4040,11 +4041,11 @@ public class VisitPlanService {
             LocalDateTime proposedAt = LocalDateTime.now(ZoneId.of("Asia/Riyadh"));
             long elapsedSeconds = java.time.Duration.between(prepared.startsAt(), proposedAt).getSeconds();
 
-            if (elapsedSeconds < 0 || elapsedSeconds >= (long) current.durationMinutes() * 60) {
+            if (elapsedSeconds >= (long) current.durationMinutes() * 60) {
                 throw new ApiException("The visit deadline was reached before the proposal could be saved");
             }
 
-            int currentMinute = Math.toIntExact((elapsedSeconds + 59) / 60);
+            int currentMinute = Math.toIntExact((Math.max(0, elapsedSeconds) + 59) / 60);
             List<PlanItemDtoOut> proposedItems = new ArrayList<>();
 
             for (int index = 0; index < prepared.items().size(); index++) {
@@ -4420,11 +4421,11 @@ public class VisitPlanService {
             LocalDateTime now = LocalDateTime.now(ZoneId.of("Asia/Riyadh"));
             long elapsedSeconds = java.time.Duration.between(startsAt, now).getSeconds();
 
-            if (elapsedSeconds < 0 || elapsedSeconds >= (long) current.durationMinutes() * 60) {
+            if (elapsedSeconds >= (long) current.durationMinutes() * 60) {
                 throw new ApiException("The remaining visit time is unavailable; reject the proposal and review the duration");
             }
 
-            int currentMinute = Math.toIntExact((elapsedSeconds + 59) / 60);
+            int currentMinute = Math.toIntExact((Math.max(0, elapsedSeconds) + 59) / 60);
             List<AiPlanItemDtoOut> candidateActivities = new ArrayList<>();
             List<AiPlanItemDtoOut> editableActivities = new ArrayList<>();
             Map<Integer, List<AiPlanItemDtoOut>> activitiesByMember = new HashMap<>();
@@ -4937,6 +4938,19 @@ public class VisitPlanService {
             input.set("mealPolicy", readGenerationJson(prepared.resolvedMealPolicy()));
         }
 
+        Map<Integer, JsonNode> arrivalResources = indexSnapshotResources(input.path("rides"));
+        for (AiPlanItemDtoOut activity : approvedActivities) {
+            if (activity.getRideId() == null) continue;
+            for (Integer memberId : activity.getParticipantVisitMemberIds()) {
+                if (!"NOT_ELIGIBLE".equals(input.path("eligibilityByRideAndMember").path(String.valueOf(activity.getRideId())).path(String.valueOf(memberId)).asString())) continue;
+                String memberName = "أحد المشاركين";
+                for (JsonNode member : input.path("members")) if (member.path("visitMemberId").asInt() == memberId) memberName = member.path("name").asString(memberName);
+                JsonNode ride = arrivalResources.get(activity.getRideId());
+                String rideName = ride == null ? "إحدى الألعاب المعتمدة" : ride.path("name").asString("إحدى الألعاب المعتمدة");
+                throw new ApiException("اللعبة «" + rideName + "» لا تناسب «" + memberName + "» حسب بياناته الحالية. راجع بيانات المشارك أو اطلب خطة بديلة مناسبة للجميع؛ خطتك السابقة محفوظة.");
+            }
+        }
+
         GenerationSnapshot arrivalPlanning = new GenerationSnapshot(writeGenerationJson(input), prepared.planning().durationMinutes(), prepared.planning().tripType(), prepared.planning().memberIds(), prepared.planning().ages(), prepared.planning().eligibility(), prepared.planning().priorities(), prepared.planning().pinnedRideIds(), prepared.planning().rateablePlaceIds());
 
         input.put("operationType", "ARRIVAL");
@@ -5066,7 +5080,7 @@ public class VisitPlanService {
             candidate.setActivities(arrivalActivities);
             candidate.setWarnings(new ArrayList<>());
         } else {
-            candidate = prepared.resolvedMealPolicy() == null ? arrivalPrayerScheduleService.scheduleApprovedActivitiesWithPrayer(input, approvedActivities) : null;
+            candidate = arrivalPrayerScheduleService.scheduleArrivalWithMealsAndPrayer(input, approvedActivities, prepared.resolvedMealPolicy() != null);
             boolean scheduleSimplePrayerVisit = candidate == null && prepared.includePrayer() && !prayerEvents.isEmpty() && fixedActivities.isEmpty() && input.path("allowSplit").isBoolean() && !input.path("allowSplit").asBoolean() && input.path("mealPolicy").path("breaks").isArray() && input.path("mealPolicy").path("breaks").isEmpty() && !approvedActivities.isEmpty();
             for (AiPlanItemDtoOut activity : approvedActivities) {
                 if (!"RIDE".equals(activity.getActivityKind()) || activity.getPlaceId() != null || activity.getBreakType() != null || !new HashSet<>(activity.getParticipantVisitMemberIds()).equals(prepared.planning().memberIds())) {

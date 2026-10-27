@@ -64,30 +64,34 @@ class TogetherReplanRegressionTest {
     }
 
     private Fixture prepareVisit(String mode, boolean completedFirst) {
+        return prepareVisit(mode, completedFirst, false, false);
+    }
+
+    private Fixture prepareVisit(String mode, boolean completedFirst, boolean solo, boolean earlyStart) {
         Fixture result = transaction(() -> {
             rideRepository.findRidesByStatus("OPEN").forEach(ride -> ride.setStatus("CLOSED"));
             Account organizer = account("Leader");
             Account participant = account("Member");
             Account outsider = account("Outsider");
-            LocalDateTime starts = LocalDateTime.now(ZoneId.of("Asia/Riyadh")).withSecond(0).withNano(0).minusMinutes(5);
+            LocalDateTime starts = LocalDateTime.now(ZoneId.of("Asia/Riyadh")).withSecond(0).withNano(0).plusMinutes(earlyStart ? 20 : -5);
             Visit visit = new Visit();
             visit.setName("Together regression");
             visit.setOrganizer(organizer);
             visit.setVisitDate(starts.toLocalDate());
-            visit.setTripType("FRIENDS");
+            visit.setTripType(solo ? "SOLO" : "FRIENDS");
             visit.setTogetherMode(mode);
-            visit.setMaxParticipants(2);
+            visit.setMaxParticipants(solo ? 1 : 2);
             visit.setDurationMinutes(180);
             visit.setGoals("[\"MAX_RIDES\"]");
             visit.setPrimaryGoal("MAX_RIDES");
             visit.setIncludePrayer(false);
             visit.setStatus("IN_PROGRESS");
-            visit.setStartedAt(starts);
+            visit.setStartedAt(earlyStart ? LocalDateTime.now(ZoneId.of("Asia/Riyadh")).minusMinutes(1) : starts);
             visit.setPlannedStartTime(starts.toLocalTime());
             visit.setPlannedEndTime(starts.plusMinutes(180).toLocalTime());
             visit.setMembersLocked(true);
             entityManager.persist(visit);
-            List<VisitMember> members = List.of(member(visit, organizer), member(visit, participant));
+            List<VisitMember> members = solo ? List.of(member(visit, organizer)) : List.of(member(visit, organizer), member(visit, participant));
             for (VisitMember member : members) {
                 VisitMealBreak meal = new VisitMealBreak();
                 meal.setVisit(visit);
@@ -430,6 +434,15 @@ class TogetherReplanRegressionTest {
         respond(fixture.organizerId(), proposal, 1);
         assertEquals(List.of(15, 25, 20), storedWaits());
         assertEquals(23, transaction(() -> itemRepository.findPlanItemById(fixture.itemIds().get(0)).getRelativeEndMinutes()));
+    }
+
+    @Test
+    void soloVisitorCanReplanAndApproveAfterStartingBeforeExpectedArrival() {
+        fixture = prepareVisit("TOGETHER", false, true, true);
+        updateWait(25);
+        ReplanProposalDtoOut proposal = request(fixture.organizerId());
+        respond(fixture.organizerId(), proposal, 1);
+        assertEquals(List.of(15, 25, 20), storedWaits());
     }
 
     @Test

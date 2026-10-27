@@ -10,6 +10,48 @@ import java.util.*;
 public class ArrivalPrayerScheduleService {
     private record PrayerRoom(int id, String node, int walk) {}
 
+    public AiPlanDtoOut scheduleArrivalWithMealsAndPrayer(JsonNode input, List<AiPlanItemDtoOut> approved, boolean replaceFood) {
+        if (!replaceFood) return scheduleApprovedActivitiesWithPrayer(input, approved);
+        List<JsonNode> meals = new ArrayList<>();
+        input.path("mealPolicy").path("breaks").forEach(meals::add);
+        return insertFoodBreaks(input, approved, meals, 0, new int[]{0});
+    }
+
+    private AiPlanDtoOut insertFoodBreaks(JsonNode input, List<AiPlanItemDtoOut> activities, List<JsonNode> meals, int index, int[] attempts) {
+        if (attempts[0] >= 4096) return null;
+        if (index == meals.size()) {
+            attempts[0]++;
+            List<AiPlanItemDtoOut> ordered = new ArrayList<>();
+            for (AiPlanItemDtoOut activity : activities) {
+                AiPlanItemDtoOut copy = copyActivity(activity);
+                copy.setRelativeStartMinutes(ordered.size());
+                copy.setRelativeEndMinutes(ordered.size() + 1);
+                ordered.add(copy);
+            }
+            return scheduleApprovedActivitiesWithPrayer(input, ordered);
+        }
+        JsonNode meal = meals.get(index);
+        String timing = meal.path("timingPreference").asString();
+        int first = "END".equals(timing) ? activities.size() : "START".equals(timing) ? 0 : 1;
+        int last = "START".equals(timing) ? 0 : "END".equals(timing) ? activities.size() : activities.size() - 1;
+        for (int position = first; position <= last; position++) {
+            AiPlanItemDtoOut food = new AiPlanItemDtoOut();
+            food.setActivityKind("BREAK");
+            food.setBreakType(meal.path("breakType").asString());
+            food.setPlaceId(meal.path("restaurantId").isNull() ? null : meal.path("restaurantId").asInt());
+            food.setActivityMinutes(meal.path("durationMinutes").asInt());
+            List<Integer> participants = new ArrayList<>();
+            meal.path("participantVisitMemberIds").forEach(member -> participants.add(member.asInt()));
+            food.setParticipantVisitMemberIds(participants);
+            food.setSubgroupKey(activities.isEmpty() ? "all" : activities.get(0).getSubgroupKey());
+            List<AiPlanItemDtoOut> order = new ArrayList<>(activities);
+            order.add(position, food);
+            AiPlanDtoOut candidate = insertFoodBreaks(input, order, meals, index + 1, attempts);
+            if (candidate != null) return candidate;
+        }
+        return null;
+    }
+
     public AiPlanDtoOut scheduleApprovedActivitiesWithPrayer(JsonNode input, List<AiPlanItemDtoOut> approved) {
         if (approved.isEmpty() || !input.path("fixedActivities").isEmpty() || input.path("allowSplit").asBoolean()) {
             return null;
@@ -90,10 +132,39 @@ public class ArrivalPrayerScheduleService {
             }
         }
         AiPlanDtoOut plan = new AiPlanDtoOut();
+        if (!foodPolicyMatches(input, result)) return null;
         plan.setFeasible(true);
         plan.setActivities(result);
         plan.setWarnings(new ArrayList<>());
         return plan;
+    }
+
+    private boolean foodPolicyMatches(JsonNode input, List<AiPlanItemDtoOut> activities) {
+        if (!input.path("mealPolicy").has("breaks")) return true;
+        Set<AiPlanItemDtoOut> matched = Collections.newSetFromMap(new IdentityHashMap<>());
+        for (JsonNode definition : input.path("mealPolicy").path("breaks")) {
+            Set<Integer> participants = new HashSet<>();
+            definition.path("participantVisitMemberIds").forEach(member -> participants.add(member.asInt()));
+            boolean found = false;
+            for (int index = 0; index < activities.size(); index++) {
+                AiPlanItemDtoOut activity = activities.get(index);
+                if (matched.contains(activity) || !definition.path("breakType").asString().equals(activity.getBreakType()) || activity.getActivityMinutes() != definition.path("durationMinutes").asInt() || !participants.equals(new HashSet<>(activity.getParticipantVisitMemberIds())) || !Objects.equals(activity.getPlaceId(), definition.path("restaurantId").isNull() ? null : definition.path("restaurantId").asInt())) continue;
+                if (activity.getRelativeStartMinutes() < definition.path("earliestStartMinutes").asInt() || activity.getRelativeStartMinutes() > definition.path("latestStartMinutes").asInt()) continue;
+                boolean before = activities.subList(0, index).stream().anyMatch(item -> !isFood(item));
+                boolean after = activities.subList(index + 1, activities.size()).stream().anyMatch(item -> !isFood(item));
+                String timing = definition.path("timingPreference").asString();
+                if ("START".equals(timing) && before || "END".equals(timing) && after || "MIDDLE".equals(timing) && (!before || !after)) continue;
+                matched.add(activity);
+                found = true;
+                break;
+            }
+            if (!found) return false;
+        }
+        return matched.size() == activities.stream().filter(this::isFood).count();
+    }
+
+    private boolean isFood(AiPlanItemDtoOut activity) {
+        return "MEAL".equals(activity.getBreakType()) || "SNACK".equals(activity.getBreakType());
     }
 
     private JsonNode findResource(JsonNode input, AiPlanItemDtoOut activity) {
@@ -134,6 +205,8 @@ public class ArrivalPrayerScheduleService {
         copy.setParticipantVisitMemberIds(new ArrayList<>(original.getParticipantVisitMemberIds()));
         copy.setSubgroupKey(original.getSubgroupKey());
         copy.setActivityMinutes(original.getActivityMinutes());
+        copy.setWaitingMinutes(original.getWaitingMinutes() == null ? 0 : original.getWaitingMinutes());
+        copy.setWalkingMinutes(original.getWalkingMinutes() == null ? 0 : original.getWalkingMinutes());
         return copy;
     }
 }

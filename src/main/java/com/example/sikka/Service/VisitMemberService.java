@@ -258,14 +258,20 @@ public class VisitMemberService {
     }
 
     public VisitMembersSummaryDtoOut getSummary(Integer accountId, Integer visitId) {
-        if (visitRepository.findVisitById(visitId) == null)
+        Visit summaryVisit = visitRepository.findVisitById(visitId);
+        if (summaryVisit == null)
             throw new ApiException("visit not found");
         getMember(accountId, visitId); // only members of the visit can see the list
 
         List<VisitMemberDtoOut> list = new ArrayList<>();
         int going = 0;
         for (VisitMember m : visitMemberRepository.findAllByVisit_Id(visitId)) {
-            list.add(new VisitMemberDtoOut(m.getId(), m.getVisitorProfile() == null ? null : m.getVisitorProfile().getId(), m.getName(), m.getRsvpStatus(), m.getCheckedInAt()));
+            Integer familyId = m.getFamilyMember() == null ? null : m.getFamilyMember().getId();
+            if (familyId == null && m.getVisitorProfile() != null) {
+                com.example.sikka.Model.FamilyMember linked = familyMemberRepository.findFamilyMemberByOwnerAccount_IdAndLinkedVisitorProfile_Id(summaryVisit.getOrganizer().getId(), m.getVisitorProfile().getId());
+                if (linked != null) familyId = linked.getId();
+            }
+            list.add(new VisitMemberDtoOut(m.getId(), m.getVisitorProfile() == null ? null : m.getVisitorProfile().getId(), m.getName(), m.getRsvpStatus(), m.getCheckedInAt(), familyId));
             if ("GOING".equals(m.getRsvpStatus()))
                 going++;
         }
@@ -407,14 +413,17 @@ public class VisitMemberService {
             throw new ApiException("Select distinct saved family members");
         }
         List<VisitMember> current = visitMemberRepository.findAllByVisit_Id(visitId);
-        if (current.size() + dto.getFamilyMemberIds().size() > visit.getMaxParticipants()) {
-            throw new ApiException("Family members exceed the configured visit capacity");
-        }
+        List<com.example.sikka.Model.FamilyMember> additions = new ArrayList<>();
         for (Integer familyId : dto.getFamilyMemberIds()) {
             com.example.sikka.Model.FamilyMember family = familyMemberRepository.findFamilyMemberById(familyId);
-            if (family == null || !family.getOwnerAccount().getId().equals(accountId)) {
-                throw new ApiException("Saved family member not found for this account");
-            }
+            if (family == null || !family.getOwnerAccount().getId().equals(accountId)) throw new ApiException("Saved family member not found for this account");
+            if (current.stream().noneMatch(member -> family.equals(member.getFamilyMember()) || family.getLinkedVisitorProfile() != null && family.getLinkedVisitorProfile().equals(member.getVisitorProfile()))) additions.add(family);
+        }
+        int required = current.size() + additions.size();
+        int capacity = dto.getMaxParticipants() == null ? visit.getMaxParticipants() : dto.getMaxParticipants();
+        if (capacity < visit.getMaxParticipants() || capacity < required) throw new ApiException("الحد الحالي للزيارة " + visit.getMaxParticipants() + " أشخاص والرقم يشملك أنت. لإضافة المحددين تحتاج إلى " + required + " أشخاص؛ هل تبي تعدّل العدد؟");
+        if (dto.getMaxParticipants() != null) visit.setMaxParticipants(capacity);
+        for (com.example.sikka.Model.FamilyMember family : additions) {
             VisitorProfile profile = family.getLinkedVisitorProfile();
             if (current.stream().anyMatch(member -> family.equals(member.getFamilyMember()) || profile != null && profile.equals(member.getVisitorProfile()))) {
                 throw new ApiException("This person already participates in the visit");

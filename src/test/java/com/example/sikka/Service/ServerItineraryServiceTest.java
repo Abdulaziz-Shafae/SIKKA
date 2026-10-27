@@ -164,4 +164,21 @@ class ServerItineraryServiceTest {
         assertEquals(1, fixed.getWalkingMinutes());
     }
 
+    @Test
+    void togetherFamilyExcludesAnIneligibleRequiredRideAndStillSchedulesSafeChoices() {
+        ObjectNode input = input(40, false);
+        input.put("tripType", "FAMILY");
+        ObjectNode child = ((ObjectNode) input.path("members").get(0)).deepCopy();
+        child.put("visitMemberId", 2);
+        child.put("ageYears", 10);
+        ((tools.jackson.databind.node.ArrayNode) input.path("members")).add(child);
+        input.set("sharedSelectedRides", mapper.valueToTree(List.of(Map.of("rideId", 1, "priority", "MUST_RIDE"), Map.of("rideId", 2, "priority", "MUST_RIDE"))));
+        input.set("eligibilityByRideAndMember", mapper.valueToTree(Map.of("1", Map.of("1", "ELIGIBLE", "2", "NOT_ELIGIBLE"), "2", Map.of("1", "ELIGIBLE", "2", "ELIGIBLE"), "3", Map.of("1", "ELIGIBLE", "2", "ELIGIBLE"))));
+        AiPlanDtoOut result = planner.selectInitialPlan(input);
+        assertTrue(result.getFeasible());
+        assertTrue(result.getActivities().stream().noneMatch(activity -> Integer.valueOf(1).equals(activity.getRideId())));
+        assertTrue(result.getActivities().stream().anyMatch(activity -> Integer.valueOf(2).equals(activity.getRideId()) && activity.getParticipantVisitMemberIds().equals(List.of(1, 2))));
+        assertTrue(result.getExcludedRides().stream().anyMatch(ride -> Integer.valueOf(1).equals(ride.getRideId())));
+    }
+
 }
