@@ -562,6 +562,7 @@ public class VisitMemberService {
         Visit visit = visitRepository.findVisitByIdForUpdate(member.getVisit().getId());
         if (!"DRAFT".equals(visit.getStatus()) || member.getVisitorProfile() == null || isOrganizerMember(member, accountId) || "NOT_GOING".equals(member.getRsvpStatus())) throw new ApiException("This member does not need a reminder");
         if ("GOING".equals(member.getRsvpStatus()) && !"PENDING".equals(member.getAnswerStatus())) throw new ApiException("This member has already answered");
+        if ("GOING".equals(member.getRsvpStatus()) && !"SPLIT".equals(visit.getTogetherMode())) throw new ApiException("العضو أكد حضوره، واختيارات هذه الزيارة عند المنظّم؛ ما يحتاج تذكير اختيارات.");
         notificationEventService.notifyPlanningReminder(member);
     }
 
