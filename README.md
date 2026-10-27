@@ -1,12 +1,10 @@
 <div align="center">
 
-<img src="./src/main/resources/static/images/logo.png"
-     alt="Sikka Logo"
-     width="280">
+<img width="155" height="73" alt="bc1d7fdd-6464-4006-accd-0695f447ed29" src="https://github.com/user-attachments/assets/0a0e42d2-21be-48d9-8f6a-8b9ea258ed64" />
 
 # Sikka | سكة
 
-### Plan Together, Ride Together 🎢
+### Your Qiddiya day, planned in minutes. 🎢
 
 **Sikka** is a group visit-planning platform for **Six Flags Qiddiya**. It helps a group of friends, a family, or a solo visitor plan one full park day: who is coming, which rides suit everyone, and a time-boxed plan that follows the group live during the visit.
 
@@ -89,51 +87,100 @@ flowchart LR
 
 ## Use Case Diagram
 
+Sikka has three visit types, so the actors are separated by the type of visit they run.
+
 ```mermaid
 flowchart LR
-    Visitor((Visitor))
-    Organizer((Organizer))
+    Solo((Solo Visitor))
+    Family((Family Organizer))
+    Friends((Friends Organizer))
     Member((Group Member))
     Admin((Admin))
     Ext[[External Services<br/>OpenAI, WhatsApp, Gmail, Moyasar,<br/>Prayer Times, Google Calendar, n8n]]
 
-    subgraph Sikka[Sikka System]
+    subgraph Common[All visitors]
         direction TB
-        UC1([Register & Verify Account])
-        UC2([Manage Profile & Family])
-        UC3([Create Visit])
-        UC4([Invite by Code / QR / Link])
-        UC5([Join Visit])
-        UC6([Select Rides & Preferences])
-        UC7([Pay for Visit])
-        UC8([Generate & Approve Plan])
-        UC9([Run Visit with GPS])
-        UC10([Receive Notifications])
-        UC11([Rate Rides & Visit])
-        UC12([Manage Rides & Places])
-        UC13([Sync Plan to Calendar])
+        C1([Register & Verify Account])
+        C2([Manage Profile & Preferences])
+        C3([Select Rides])
+        C4([Pay for Visit])
+        C5([Generate Plan])
+        C6([Run Visit with GPS])
+        C7([Receive Notifications])
+        C8([Sync Plan to Calendar])
+        C9([Rate Rides & Visit])
     end
 
-    Visitor --> UC1
-    Visitor --> UC2
-    Organizer --> UC3
-    Organizer --> UC4
-    Organizer --> UC7
-    Organizer --> UC8
-    Organizer --> UC13
-    Member --> UC5
-    Member --> UC6
-    Member --> UC9
-    Member --> UC10
-    Member --> UC11
-    Admin --> UC12
+    subgraph SoloUC[Solo visit]
+        direction TB
+        S1([Create SOLO Visit])
+    end
 
-    UC1 -.-> Ext
-    UC7 -.-> Ext
-    UC8 -.-> Ext
-    UC10 -.-> Ext
-    UC13 -.-> Ext
+    subgraph FamilyUC[Family visit]
+        direction TB
+        F1([Create FAMILY Visit])
+        F2([Save Family Members])
+        F3([Add Family Members to Visit])
+        F4([Approve Plan for the Family])
+    end
+
+    subgraph FriendsUC[Friends visit]
+        direction TB
+        G1([Create FRIENDS Visit])
+        G2([Invite by Code / QR / Link])
+        G3([Manage Members & Invitations])
+        G4([Choose Together or Split Mode])
+        G5([Request Group Plan Approval])
+    end
+
+    subgraph MemberUC[Joining a visit]
+        direction TB
+        M1([Join with Code / QR / Link])
+        M2([RSVP Going / Maybe / Not Going])
+        M3([Approve or Reject Group Plan])
+    end
+
+    subgraph AdminUC[Administration]
+        direction TB
+        A1([Manage Rides & Places])
+        A2([Update Waiting Times & Status])
+    end
+
+    Solo --> S1
+    Family --> F1
+    Family --> F2
+    Family --> F3
+    Family --> F4
+    Friends --> G1
+    Friends --> G2
+    Friends --> G3
+    Friends --> G4
+    Friends --> G5
+    Member --> M1
+    Member --> M2
+    Member --> M3
+    Admin --> A1
+    Admin --> A2
+
+    Solo --> Common
+    Family --> Common
+    Friends --> Common
+    Member --> Common
+
+    C1 -.-> Ext
+    C4 -.-> Ext
+    C5 -.-> Ext
+    C7 -.-> Ext
+    C8 -.-> Ext
 ```
+
+| Actor | Visit type | What is different |
+|---|---|---|
+| **Solo Visitor** | SOLO | No group and no invitations; one individual plan |
+| **Family Organizer** | FAMILY | Adds saved family members (children and adults) to the visit and approves the plan for them |
+| **Friends Organizer** | FRIENDS | Creates the group, invites by code / QR / link, chooses together or split mode, requests group approval |
+| **Group Member** | FRIENDS / FAMILY | Joins an existing visit, answers RSVP, selects rides, approves or rejects plans |
+| **Admin** | None | Manages the ride and place catalogue |
 
 ---
 
@@ -805,6 +852,6 @@ Postman collections are in the `postman/` folder:
 
 ### Sikka | سكة 🎢
 
-**Plan Together, Ride Together**
+**Your Qiddiya day, planned in minutes.**
 
 </div>
