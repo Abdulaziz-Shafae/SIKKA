@@ -23,18 +23,19 @@ public class VerificationService {
     private final WhatsAppService whatsAppService;
     private final SecureRandom random = new SecureRandom();
 
-    public void sendVerificationCode(Account account) {
-        sendEmailCode(account);
+    public boolean sendVerificationCode(Account account) {
+        boolean emailSent = sendEmailCode(account);
         if (account.getPhone() != null && !account.getPhone().isBlank())
             sendPhoneCode(account);
+        return emailSent;
     }
 
-    private void sendEmailCode(Account account) {
+    private boolean sendEmailCode(Account account) {
         String code = newCode();
         account.setVerificationTokenHash(hash(code));
         account.setVerificationExpiresAt(LocalDateTime.now().plusMinutes(CODE_MINUTES));
         accountRepository.save(account);
-        emailService.sendEmail(account.getEmail(), "Sikka verification code", "Your Sikka email verification code is " + code + ". It expires in " + CODE_MINUTES + " minutes.");
+        return emailService.sendEmail(account.getEmail(), "Sikka verification code", "Your Sikka email verification code is " + code + ". It expires in " + CODE_MINUTES + " minutes.");
     }
 
     private void sendPhoneCode(Account account) {

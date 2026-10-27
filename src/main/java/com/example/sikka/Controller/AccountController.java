@@ -46,8 +46,8 @@ public class AccountController {
 
     @PostMapping("/register")
     public ResponseEntity<?> register(@RequestBody @Valid RegisterDtoIn dto) {
-        accountService.register(dto);
-        return ResponseEntity.status(200).body(new ApiResponse("registered successfully"));
+        boolean emailSent = accountService.register(dto);
+        return ResponseEntity.status(200).body(new com.example.sikka.DtoOut.RegistrationDtoOut("registered successfully", emailSent));
     }
 
     @GetMapping("/me")
