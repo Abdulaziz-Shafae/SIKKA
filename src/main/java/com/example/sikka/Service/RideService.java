@@ -55,6 +55,9 @@ public class RideService {
     @org.springframework.beans.factory.annotation.Value("${sikka.park.wait-freshness-minutes:15}")
     private long waitFreshnessMinutes = 15;
 
+    @org.springframework.beans.factory.annotation.Value("${sikka.park.default-planning-wait-minutes:15}")
+    private int defaultPlanningWaitMinutes = 15;
+
     public List<Ride> getRides() {
         return rideRepository.findAll();
     }
@@ -893,14 +896,16 @@ public class RideService {
         snapshot.put("id", ride.getId());
         snapshot.put("status", ride.getStatus());
         snapshot.put("nodeKey", "RIDE:" + ride.getId());
-        snapshot.put("rideDurationMinutes", ride.getRideDurationMinutes());
-        snapshot.put("entryExitBufferMinutes", ride.getEntryExitBufferMinutes());
+        snapshot.put("rideDurationMinutes", ride.getRideDurationMinutes() == null ? 5 : ride.getRideDurationMinutes());
+        snapshot.put("timingSource", ride.getRideDurationMinutes() == null || ride.getEntryExitBufferMinutes() == null ? "SIKKA_DEFAULT_ESTIMATE" : (ride.getTimingSource() == null ? "UNKNOWN" : ride.getTimingSource()));
+        snapshot.put("entryExitBufferMinutes", ride.getEntryExitBufferMinutes() == null ? 3 : ride.getEntryExitBufferMinutes());
         snapshot.put("features", ride.getRideFeatures());
         boolean recent = ride.getWaitMinutes() != null && ride.getWaitObservedAt() != null && !ride.getWaitObservedAt().isAfter(LocalDateTime.now()) && !ride.getWaitObservedAt().isBefore(LocalDateTime.now().minusMinutes(waitFreshnessMinutes));
-        snapshot.put("planningWaitMinutes", recent ? ride.getWaitMinutes() : null);
+        snapshot.put("planningWaitMinutes", recent ? ride.getWaitMinutes() : Math.max(0, defaultPlanningWaitMinutes));
         snapshot.put("waitIsEstimate", true);
-        snapshot.put("waitSource", ride.getWaitSource() == null ? "UNKNOWN" : ride.getWaitSource());
-        snapshot.put("waitObservedAt", recent ? ride.getWaitObservedAt().atZone(java.time.ZoneId.of("Asia/Riyadh")).toOffsetDateTime().toString() : null);
+        snapshot.put("waitSource", recent ? (ride.getWaitSource() == null ? "UNKNOWN" : ride.getWaitSource()) : "SIKKA_DEFAULT_ESTIMATE");
+        // For a default estimate this timestamp identifies estimate creation, not a source observation.
+        snapshot.put("waitObservedAt", (recent ? ride.getWaitObservedAt().atZone(java.time.ZoneId.of("Asia/Riyadh")) : java.time.ZonedDateTime.now(java.time.ZoneId.of("Asia/Riyadh"))).toOffsetDateTime().toString());
         return snapshot;
     }
 

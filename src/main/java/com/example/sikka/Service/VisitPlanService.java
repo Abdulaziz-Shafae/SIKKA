@@ -2242,6 +2242,7 @@ public class VisitPlanService {
             row.put("status", "OPEN");
             row.put("nodeKey", requireText(snapshot, "nodeKey"));
             row.put("rideDurationMinutes", requirePositiveInteger(snapshot, "rideDurationMinutes"));
+            row.put("timingSource", snapshot.path("timingSource").asString("UNKNOWN"));
             row.put("entryExitBufferMinutes", requireNonNegativeInteger(snapshot, "entryExitBufferMinutes"));
 
             long planningActivityMinutes = (long) requirePositiveInteger(snapshot, "rideDurationMinutes") + requireNonNegativeInteger(snapshot, "entryExitBufferMinutes");
@@ -3060,10 +3061,12 @@ public class VisitPlanService {
                 continue;
             }
 
+            if ("SIKKA_DEFAULT_ESTIMATE".equals(ride.path("timingSource").asString())) warnings.add("مدة اللعبة " + rideId + " ووقت الدخول والخروج يتضمنان قيمًا افتراضية تقديرية تحتاج مراجعة ميدانية.");
+
             if (!ride.path("planningWaitMinutes").isIntegralNumber()) {
                 warnings.add("وقت انتظار اللعبة " + rideId + " غير متاح؛ لا يُفترض أنه صفر.");
             } else if (ride.path("waitIsEstimate").isBoolean() && ride.path("waitIsEstimate").asBoolean()) {
-                warnings.add("انتظار اللعبة " + rideId + " تقدير تخطيطي من المصدر وليس قراءة مباشرة مضمونة ليوم الزيارة.");
+                warnings.add("SIKKA_DEFAULT_ESTIMATE".equals(ride.path("waitSource").asString()) ? "انتظار اللعبة " + rideId + " قيمة افتراضية للتخطيط (" + ride.path("planningWaitMinutes").asInt() + " دقيقة)، وليست قراءة انتظار فعلية." : "انتظار اللعبة " + rideId + " تقدير تخطيطي من المصدر وليس قراءة مباشرة مضمونة ليوم الزيارة.");
             }
         }
 

@@ -179,6 +179,9 @@ public class Ride {
     @jakarta.validation.constraints.PositiveOrZero
     private Integer entryExitBufferMinutes;
 
+    @Column(length = 60)
+    private String timingSource;
+
     @Column(columnDefinition = "json")
     private String trackingArea;
 
