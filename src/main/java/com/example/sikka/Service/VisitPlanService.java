@@ -89,6 +89,7 @@ public class VisitPlanService {
     private final JsonMapper participantJsonMapper = JsonMapper.builder().enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS).build();
     private final AiPlanService aiPlanService;
     private final PrayerTimeService prayerTimeService;
+    private final ArrivalPrayerScheduleService arrivalPrayerScheduleService;
     private final RideRepository rideRepository;
     private final PlaceRepository placeRepository;
     private final PaymentOrderService paymentOrderService;
@@ -5026,8 +5027,8 @@ public class VisitPlanService {
             candidate.setActivities(arrivalActivities);
             candidate.setWarnings(new ArrayList<>());
         } else {
-            candidate = null;
-            boolean scheduleSimplePrayerVisit = prepared.includePrayer() && !prayerEvents.isEmpty() && fixedActivities.isEmpty() && input.path("allowSplit").isBoolean() && !input.path("allowSplit").asBoolean() && input.path("mealPolicy").path("breaks").isArray() && input.path("mealPolicy").path("breaks").isEmpty() && !approvedActivities.isEmpty();
+            candidate = prepared.includePrayer() && !prayerEvents.isEmpty() ? arrivalPrayerScheduleService.scheduleApprovedActivitiesWithPrayer(input, approvedActivities) : null;
+            boolean scheduleSimplePrayerVisit = candidate == null && prepared.includePrayer() && !prayerEvents.isEmpty() && fixedActivities.isEmpty() && input.path("allowSplit").isBoolean() && !input.path("allowSplit").asBoolean() && input.path("mealPolicy").path("breaks").isArray() && input.path("mealPolicy").path("breaks").isEmpty() && !approvedActivities.isEmpty();
             for (AiPlanItemDtoOut activity : approvedActivities) {
                 if (!"RIDE".equals(activity.getActivityKind()) || activity.getPlaceId() != null || activity.getBreakType() != null || !new HashSet<>(activity.getParticipantVisitMemberIds()).equals(prepared.planning().memberIds())) {
                     scheduleSimplePrayerVisit = false;
@@ -5102,7 +5103,7 @@ public class VisitPlanService {
                         int minute = (Integer) event.get("relativePrayerMinute");
                         int walk = prayerVisitActivities.size() == prayerVisitApprovedOrder.size() ? selectedPrayerWalk : 0;
                         long start = (long) minute - walk;
-                        long end = (long) minute + 20;
+                        long end = (long) minute + 15;
                         if (start < prayerVisitAvailable || end > prepared.durationMinutes()) {
                             scheduleSimplePrayerVisit = false;
                             break;
