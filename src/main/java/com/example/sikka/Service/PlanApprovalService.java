@@ -302,7 +302,7 @@ public class PlanApprovalService {
                     throw new ApiException("A ride activity must reference a ride");
                 }
 
-                if (!"OPEN".equals(planItem.getRide().getStatus())) {
+                if (!PlanningAvailability.canPlanRide(planItem.getRide(), visitPlan.getVisit().getVisitDate())) {
                     throw new ApiException("The plan contains a ride that is not open");
                 }
 
