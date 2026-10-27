@@ -11,4 +11,11 @@ import java.util.List;
 public class AddFamilyMembersDtoIn {
     @NotEmpty
     private List<@NotNull @Positive Integer> familyMemberIds;
+
+    @Positive
+    private Integer maxParticipants;
+
+    public AddFamilyMembersDtoIn(List<Integer> familyMemberIds) {
+        this.familyMemberIds = familyMemberIds;
+    }
 }

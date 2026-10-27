@@ -79,4 +79,35 @@ class ArrivalPrayerScheduleTest {
         ((ObjectNode) missing.path("walking")).set("routes", mapper.valueToTree(List.of()));
         assertNull(scheduler.scheduleApprovedActivitiesWithPrayer(missing, List.of(ride(1, 0))));
     }
+    @Test
+    void changedWalkAndQueueRecalculateEndTimeFromTrustedValues() {
+        ObjectNode input = input();
+        input.set("prayerEvents", mapper.valueToTree(List.of()));
+        input.set("rides", mapper.valueToTree(List.of(Map.of("id", 4, "nodeKey", "RIDE:4", "status", "OPEN", "planningWaitMinutes", 15))));
+        ((ObjectNode) input.path("walking")).set("routes", mapper.valueToTree(List.of(Map.of("fromNodeKey", "ENTRANCE", "toNodeKey", "RIDE:4", "minutes", 6))));
+        AiPlanItemDtoOut original = ride(4, 0);
+        original.setRelativeEndMinutes(24);
+        original.setActivityMinutes(8);
+        AiPlanDtoOut result = scheduler.scheduleApprovedActivitiesWithPrayer(input, List.of(original));
+        assertNotNull(result);
+        assertEquals(29, result.getActivities().get(0).getRelativeEndMinutes());
+        assertEquals(24, original.getRelativeEndMinutes());
+    }
+
+    @Test
+    void resolvedMealAndPrayersFitWithoutAiOrChangingApprovedRideOrder() {
+        ObjectNode input = input();
+        Map<String, Object> meal = new LinkedHashMap<>(Map.of("breakType", "MEAL", "timingPreference", "MIDDLE", "durationMinutes", 60, "earliestStartMinutes", 0, "latestStartMinutes", 180, "participantVisitMemberIds", List.of(1)));
+        meal.put("restaurantId", null);
+        input.set("mealPolicy", mapper.valueToTree(Map.of("breaks", List.of(meal))));
+        AiPlanDtoOut result = scheduler.scheduleArrivalWithMealsAndPrayer(input, List.of(ride(1, 0), ride(2, 22)), true);
+        assertNotNull(result);
+        assertEquals(List.of(1, 2), result.getActivities().stream().filter(activity -> activity.getRideId() != null).map(AiPlanItemDtoOut::getRideId).toList());
+        assertEquals(2, result.getActivities().stream().filter(activity -> "PRAYER".equals(activity.getBreakType())).count());
+        assertEquals(1, result.getActivities().stream().filter(activity -> "MEAL".equals(activity.getBreakType()) && activity.getActivityMinutes() == 60).count());
+        for (AiPlanItemDtoOut activity : result.getActivities()) assertEquals(activity.getWalkingMinutes() + activity.getWaitingMinutes() + activity.getActivityMinutes(), activity.getRelativeEndMinutes() - activity.getRelativeStartMinutes());
+        input.put("durationMinutes", 70);
+        assertNull(scheduler.scheduleArrivalWithMealsAndPrayer(input, List.of(ride(1, 0), ride(2, 22)), true));
+    }
+
 }

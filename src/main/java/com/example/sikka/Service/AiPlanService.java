@@ -204,7 +204,7 @@ public class AiPlanService {
             long intervalMinutes = (long) activity.getRelativeEndMinutes() - activity.getRelativeStartMinutes();
 
             if (totalMinutes != intervalMinutes) {
-                throw new ApiException("Timing mismatch: kind=" + activity.getActivityKind() + ", ride=" + activity.getRideId() + ", start=" + activity.getRelativeStartMinutes() + ", end=" + activity.getRelativeEndMinutes() + ", walk=" + activity.getWalkingMinutes() + ", wait=" + activity.getWaitingMinutes() + ", activity=" + activity.getActivityMinutes() + "; plan=" + plan.getActivities().stream().map(item -> java.util.Arrays.asList(item.getActivityKind(), item.getRideId(), item.getPlaceId(), item.getBreakType(), item.getParticipantVisitMemberIds())).toList());
+                throw new ApiException("تعذر اعتماد الأوقات لأن مدة أحد الأنشطة لا تطابق مجموع المشي والانتظار واللعب. بقيت خطتك الحالية محفوظة.");
             }
 
             Set<Integer> participantIds = new HashSet<>(activity.getParticipantVisitMemberIds());

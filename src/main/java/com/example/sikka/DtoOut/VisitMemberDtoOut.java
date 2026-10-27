@@ -15,4 +15,9 @@ public class VisitMemberDtoOut {
     private String name;
     private String rsvpStatus;
     private LocalDateTime checkedInAt;
+    private Integer familyMemberId;
+
+    public VisitMemberDtoOut(Integer id, Integer visitorProfileId, String name, String rsvpStatus, LocalDateTime checkedInAt) {
+        this(id, visitorProfileId, name, rsvpStatus, checkedInAt, null);
+    }
 }
