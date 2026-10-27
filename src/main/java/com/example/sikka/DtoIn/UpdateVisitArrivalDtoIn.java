@@ -20,4 +20,11 @@ public class UpdateVisitArrivalDtoIn {
 
     @Valid
     private MealPreferencesDtoIn mealPreferences;
+
+    private java.time.LocalDate visitDate;
+
+    public UpdateVisitArrivalDtoIn(LocalTime expectedArrivalTime, MealPreferencesDtoIn mealPreferences) {
+        this.expectedArrivalTime = expectedArrivalTime;
+        this.mealPreferences = mealPreferences;
+    }
 }

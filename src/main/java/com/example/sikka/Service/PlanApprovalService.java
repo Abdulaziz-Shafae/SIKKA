@@ -164,9 +164,17 @@ public class PlanApprovalService {
 
             validatePlanActivities(visitPlan);
 
+            for (VisitPlan previous : visitPlanRepository.findAllByVisit_Id(visit.getId())) {
+                if (!previous.getId().equals(visitPlan.getId()) && Boolean.TRUE.equals(previous.getIsActive())) {
+                    previous.setIsActive(false);
+                    visitPlanRepository.save(previous);
+                }
+            }
             visitPlan.setIsActive(true);
+            visit.setPlannedStartTime(null);
+            visit.setPlannedEndTime(null);
 
-            visitService.changeStatus(visitPlan.getVisit().getId(), "READY");
+            if (!"READY".equals(visit.getStatus())) visitService.changeStatus(visitPlan.getVisit().getId(), "READY");
         }
 
         approval.setStatus(status);
@@ -205,7 +213,7 @@ public class PlanApprovalService {
             throw new ApiException("Initial approval is only supported for group plans");
         }
 
-        if (!"PLANNING".equals(visit.getStatus())) {
+        if (!"PLANNING".equals(visit.getStatus()) && !("READY".equals(visit.getStatus()) && visit.getStartedAt() == null)) {
             throw new ApiException("The visit must be PLANNING for initial approval");
         }
 

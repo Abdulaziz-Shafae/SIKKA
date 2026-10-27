@@ -9,9 +9,24 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Data
-@AllArgsConstructor
 @NoArgsConstructor
 public class VisitorProfileDtoOut {
+    public VisitorProfileDtoOut(Integer id, Integer accountId, String name, LocalDate birthDate, BigDecimal heightCm, BigDecimal weightKg, String gender, String thrillPreference, String preferredRideTypes, String dislikedRideFeatures, String foodPreferences, LocalDateTime createdAt, LocalDateTime updatedAt) {
+        this.id = id;
+        this.accountId = accountId;
+        this.name = name;
+        this.birthDate = birthDate;
+        this.heightCm = heightCm;
+        this.weightKg = weightKg;
+        this.gender = gender;
+        this.thrillPreference = thrillPreference;
+        this.preferredRideTypes = preferredRideTypes;
+        this.dislikedRideFeatures = dislikedRideFeatures;
+        this.foodPreferences = foodPreferences;
+        this.createdAt = createdAt;
+        this.updatedAt = updatedAt;
+    }
+
     private Integer id;
     private Integer accountId;
     private String name;
@@ -25,4 +40,5 @@ public class VisitorProfileDtoOut {
     private String foodPreferences;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private String healthData;
 }

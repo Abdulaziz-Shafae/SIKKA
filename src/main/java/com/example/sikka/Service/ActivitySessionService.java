@@ -484,10 +484,6 @@ public class ActivitySessionService {
 
             LocalDateTime now = LocalDateTime.now(ZoneId.of("Asia/Riyadh"));
 
-            if (planItem.getStartsAt().isAfter(now)) {
-                throw new ApiException("The activity has not reached its scheduled start time");
-            }
-
             List<ActivitySession> matchingSessions = activitySessionRepository.findAllByVisitMember_IdAndPlanItem_IdOrderByIdAsc(member.getId(), planItem.getId());
 
             if (matchingSessions.size() > 1) {
@@ -615,10 +611,6 @@ public class ActivitySessionService {
         }
 
         LocalDateTime now = LocalDateTime.now(ZoneId.of("Asia/Riyadh"));
-
-        if (planItem.getStartsAt().isAfter(now)) {
-            throw new ApiException("The activity has not reached its scheduled start time");
-        }
 
         List<ActivitySession> matchingSessions = activitySessionRepository.findAllByVisitMember_IdAndPlanItem_IdOrderByIdAsc(member.getId(), planItem.getId());
 
