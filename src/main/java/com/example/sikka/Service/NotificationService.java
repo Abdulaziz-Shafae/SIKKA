@@ -72,10 +72,6 @@ public class NotificationService {
 
         List<Notification> notifications = notificationRepository.findAllByAccount_IdAndChannelAndStatusOrderByCreatedAtDescIdDesc(accountId, "IN_APP", "SENT");
 
-        if (notifications.isEmpty()) {
-            throw new ApiException("No notifications found");
-        }
-
         List<NotificationDtoOut> results = new ArrayList<>();
 
         for (Notification notification : notifications) {

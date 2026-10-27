@@ -30,9 +30,7 @@ public interface NotificationRepository extends JpaRepository<Notification, Inte
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select n from Notification n where n.channel = 'IN_APP' and n.status = 'PENDING' and (n.scheduledAt is null or n.scheduledAt <= :now) order by n.id asc")
     List<Notification> findDueInAppNotificationsForUpdate(@Param("now") LocalDateTime now, Pageable pageable);
-    Notification findFirstByChannelAndTypeAndStatusOrderByScheduledAtAsc(String channel, String type, String status);
-
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select n from Notification n where n.channel = 'EMAIL' and n.type = 'REGISTRATION_WELCOME_FOLLOWUP' and n.status = 'PENDING' and n.scheduledAt <= :now order by n.id asc")
-    List<Notification> findDueRegistrationEmailsForUpdate(@Param("now") LocalDateTime now, Pageable pageable);
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("update Notification n set n.status = 'FAILED', n.message = :reason where n.channel = 'EMAIL' and n.type = 'REGISTRATION_WELCOME_FOLLOWUP' and n.status = 'PENDING'")
+    int cancelPendingRegistrationFollowups(@Param("reason") String reason);
 }

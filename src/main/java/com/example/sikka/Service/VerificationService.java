@@ -38,13 +38,6 @@ public class VerificationService {
         return emailService.sendEmail(account.getEmail(), "أهلًا بك في سكة | رمز تفعيل حسابك", "حيّاك " + account.getName() + " في سكة! رمز تفعيل بريدك هو " + code + ". صالح لمدة " + CODE_MINUTES + " دقائق. بعد التفعيل تقدر تجهّز زيارتك.");
     }
 
-    public boolean sendWelcomeFollowup(Account account) {
-        if (!Boolean.TRUE.equals(account.getEmailVerified())) {
-            return sendEmailCode(account);
-        }
-        return emailService.sendEmail(account.getEmail(), "أهلًا بك في سكة", "حيّاك " + account.getName() + " في سكة! حسابك مفعّل وجاهز. خطّط يومك واستكشف الألعاب من https://sikka.up.railway.app/");
-    }
-
     private void sendPhoneCode(Account account) {
         String code = newCode();
         account.setPhoneCodeHash(hash(code));

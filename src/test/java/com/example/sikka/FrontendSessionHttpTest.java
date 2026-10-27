@@ -49,4 +49,14 @@ class FrontendSessionHttpTest {
         assertEquals(200, browser.send(HttpRequest.newBuilder(logout).POST(HttpRequest.BodyPublishers.noBody()).build(), HttpResponse.BodyHandlers.ofString()).statusCode());
         assertEquals(401, browser.send(HttpRequest.newBuilder(me).GET().build(), HttpResponse.BodyHandlers.ofString()).statusCode());
     }
+    @Test
+    void publicMapPlaceFiltersDoNotExposeAdministrativeOperations() throws Exception {
+        HttpClient guest = HttpClient.newHttpClient();
+        URI places = URI.create("http://localhost:" + port + "/api/v1/place/by-kind?kind=RESTAURANT");
+        assertEquals(200, guest.send(HttpRequest.newBuilder(places).GET().build(), HttpResponse.BodyHandlers.ofString()).statusCode());
+        URI admin = URI.create("http://localhost:" + port + "/api/v1/place/get");
+        assertEquals(401, guest.send(HttpRequest.newBuilder(admin).GET().build(), HttpResponse.BodyHandlers.ofString()).statusCode());
+        URI add = URI.create("http://localhost:" + port + "/api/v1/place/add");
+        assertEquals(401, guest.send(HttpRequest.newBuilder(add).header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString("{}")).build(), HttpResponse.BodyHandlers.ofString()).statusCode());
+    }
 }
