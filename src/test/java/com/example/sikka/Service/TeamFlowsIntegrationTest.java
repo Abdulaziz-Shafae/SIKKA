@@ -403,6 +403,21 @@ class TeamFlowsIntegrationTest {
         assertTrue(visitMemberService.getSummary(owner, visit.getId()).getMembers().stream().anyMatch(member -> first.getId().equals(member.getFamilyMemberId())));
     }
 
+    @Test
+    void previewExplainsMissingMealsAndFoodDurationBeforeGeneration() {
+        Visit visit = createVisit("SOLO");
+        mealBreakRepository.deleteAll(mealBreakRepository.findVisitMealBreaksByVisitId(visit.getId()));
+        entityManager.flush();
+        var missing = visitService.getVisitPreview(visit.getOrganizer().getId(), visit.getId());
+        assertFalse(missing.getReadyToGenerate());
+        assertTrue(missing.getMissingFields().stream().anyMatch(field -> field.startsWith("meal:") && field.contains("احفظ")));
+        visitMealBreakService.saveMealPreferences(visit.getOrganizer().getId(), visit.getId(), new MealPreferencesDtoIn("TWO_MEALS", List.of("MIDDLE", "END")));
+        visit.setDurationMinutes(60);
+        var conflicting = visitService.getVisitPreview(visit.getOrganizer().getId(), visit.getId());
+        assertFalse(conflicting.getReadyToGenerate());
+        assertTrue(conflicting.getMissingFields().stream().anyMatch(field -> field.contains("120") && field.contains("60")));
+    }
+
     private Visit createVisit(String type) {
         Account account = createAccount();
         createProfile(account);
