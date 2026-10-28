@@ -5268,7 +5268,7 @@ public class VisitPlanService {
         }
 
         normalizeArrivalNonPrayerDurations(candidate, prepared.durationMinutes());
-        aiPlanService.validatePlanCandidateTiming(candidate, prepared.durationMinutes(), prepared.planning().memberIds(), prepared.planning().tripType());
+        aiPlanService.validatePlanCandidateTiming(candidate, prepared.durationMinutes(), prepared.planning().memberIds(), prepared.planning().tripType(), input.path("allowSplit").asBoolean());
         aiPlanService.validatePlanCandidateSupervision(candidate, prepared.planning().ages());
         aiPlanService.validatePlanCandidateActivityKinds(candidate);
         aiPlanService.validatePlanCandidateEligibility(candidate, prepared.planning().eligibility());
@@ -5464,7 +5464,7 @@ public class VisitPlanService {
                 }
             }
 
-            aiPlanService.validatePlanCandidateTiming(arrivalCandidate, current.durationMinutes(), current.memberIds(), current.tripType());
+            aiPlanService.validatePlanCandidateTiming(arrivalCandidate, current.durationMinutes(), current.memberIds(), current.tripType(), readGenerationJson(current.inputJson()).path("allowSplit").asBoolean());
             aiPlanService.validatePlanCandidateSupervision(arrivalCandidate, current.ages());
             aiPlanService.validatePlanCandidateActivityKinds(arrivalCandidate);
             aiPlanService.validatePlanCandidateEligibility(arrivalCandidate, current.eligibility());
