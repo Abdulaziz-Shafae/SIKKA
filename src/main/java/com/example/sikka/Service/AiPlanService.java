@@ -156,6 +156,10 @@ public class AiPlanService {
     }
 
     public void validatePlanCandidateTiming(AiPlanDtoOut plan, Integer durationMinutes, Set<Integer> allowedMemberIds, String tripType) {
+        validatePlanCandidateTiming(plan, durationMinutes, allowedMemberIds, tripType, false);
+    }
+
+    public void validatePlanCandidateTiming(AiPlanDtoOut plan, Integer durationMinutes, Set<Integer> allowedMemberIds, String tripType, boolean allowSplit) {
 
         if (plan == null || !validator.validate(plan).isEmpty()) {
             throw new ApiException("AI plan contains invalid fields");
@@ -217,7 +221,7 @@ public class AiPlanService {
                 throw new ApiException("AI plan contains a participant outside the planning scope");
             }
 
-            if ("FAMILY".equals(tripType) && !participantIds.equals(allowedMemberIds)) {
+            if ("FAMILY".equals(tripType) && !allowSplit && !participantIds.equals(allowedMemberIds)) {
                 throw new ApiException("All family members must follow the unified activity plan");
             }
 
