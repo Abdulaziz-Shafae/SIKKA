@@ -5118,7 +5118,7 @@ public class VisitPlanService {
             candidate.setActivities(arrivalActivities);
             candidate.setWarnings(new ArrayList<>());
         } else {
-            candidate = arrivalPrayerScheduleService.scheduleArrivalPreservingPrayer(input, approvedActivities, prepared.resolvedMealPolicy() != null);
+            candidate = arrivalPrayerScheduleService.scheduleArrivalWithMealsAndPrayer(input, approvedActivities, prepared.resolvedMealPolicy() != null);
             boolean scheduleSimplePrayerVisit = candidate == null && prepared.includePrayer() && !prayerEvents.isEmpty() && fixedActivities.isEmpty() && input.path("allowSplit").isBoolean() && !input.path("allowSplit").asBoolean() && input.path("mealPolicy").path("breaks").isArray() && input.path("mealPolicy").path("breaks").isEmpty() && !approvedActivities.isEmpty();
             for (AiPlanItemDtoOut activity : approvedActivities) {
                 if (!"RIDE".equals(activity.getActivityKind()) || activity.getPlaceId() != null || activity.getBreakType() != null || !new HashSet<>(activity.getParticipantVisitMemberIds()).equals(prepared.planning().memberIds())) {
