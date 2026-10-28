@@ -2091,6 +2091,15 @@ public class VisitPlanService {
         }
     }
 
+    private void normalizeArrivalNonPrayerDurations(AiPlanDtoOut candidate, int durationMinutes) {
+        if (candidate == null || candidate.getActivities() == null) return;
+        for (AiPlanItemDtoOut activity : candidate.getActivities()) {
+            if ("PRAYER".equals(activity.getBreakType()) || activity.getRelativeStartMinutes() == null || activity.getRelativeEndMinutes() == null || activity.getWalkingMinutes() == null || activity.getWaitingMinutes() == null || activity.getActivityMinutes() == null) continue;
+            long end = (long) activity.getRelativeStartMinutes() + activity.getWalkingMinutes() + activity.getWaitingMinutes() + activity.getActivityMinutes();
+            if (end > activity.getRelativeStartMinutes() && end <= durationMinutes && end <= Integer.MAX_VALUE) activity.setRelativeEndMinutes((int) end);
+        }
+    }
+
     private AiPlanDtoOut selectInitialPlanWithExpectedPrayer(JsonNode input) {
         if (!input.path("includePrayer").asBoolean() || !input.path("expectedArrivalTime").isTextual()) return serverItineraryService.selectInitialPlan(input);
         ObjectNode scheduleInput = (ObjectNode) input.deepCopy();
@@ -5234,6 +5243,7 @@ public class VisitPlanService {
             throw new ApiException(candidate.getInfeasibilityReason() == null || candidate.getInfeasibilityReason().isBlank() ? "The approved activities and actual prayer times cannot fit; review arrival time or duration" : candidate.getInfeasibilityReason());
         }
 
+        normalizeArrivalNonPrayerDurations(candidate, prepared.durationMinutes());
         aiPlanService.validatePlanCandidateTiming(candidate, prepared.durationMinutes(), prepared.planning().memberIds(), prepared.planning().tripType());
         aiPlanService.validatePlanCandidateSupervision(candidate, prepared.planning().ages());
         aiPlanService.validatePlanCandidateActivityKinds(candidate);
