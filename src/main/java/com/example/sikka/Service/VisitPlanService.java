@@ -5305,8 +5305,23 @@ public class VisitPlanService {
             }
         }
 
-        if (available.values().stream().anyMatch(queue -> !queue.isEmpty()) || !approvedOrder.equals(proposedOrder)) {
-            throw new ApiException("Arrival scheduling must preserve every approved non-prayer activity and its order for each participant");
+        Set<Integer> droppedRideItemIds = new HashSet<>();
+        boolean prayerRideAdjustment = candidate.getWarnings() != null && candidate.getWarnings().stream().anyMatch(warning -> warning.startsWith("تم استبعاد الألعاب المتعارضة مع الصلاة عند تأكيد الوصول:"));
+        Map<Integer, List<String>> expectedOrder = new HashMap<>();
+        for (PlanItemDtoOut original : prepared.items()) {
+            if ("PRAYER".equals(original.getBreakType()) || prepared.resolvedMealPolicy() != null && ("MEAL".equals(original.getBreakType()) || "SNACK".equals(original.getBreakType()))) continue;
+            List<Integer> participants = new ArrayList<>(parseActivityParticipantIds(original.getParticipantVisitMemberIds()));
+            participants.sort(Integer::compareTo);
+            String key = writeGenerationJson(java.util.Arrays.asList(original.getActivityKind(), original.getRideId(), original.getPlaceId(), original.getBreakType(), original.getActivityMinutes(), participants, original.getSubgroupKey()));
+            if (available.get(key) != null && available.get(key).contains(original)) {
+                if (!prayerRideAdjustment || !"RIDE".equals(original.getActivityKind()) || Boolean.TRUE.equals(original.getPinned())) throw new ApiException("Arrival scheduling cannot remove a protected or non-ride activity");
+                droppedRideItemIds.add(original.getId());
+                continue;
+            }
+            for (Integer memberId : participants) expectedOrder.computeIfAbsent(memberId, ignored -> new ArrayList<>()).add(key);
+        }
+        if (!expectedOrder.equals(proposedOrder)) {
+            throw new ApiException("Arrival scheduling must retain the original order of every remaining activity");
         }
 
         for (Integer minute : prayerMinutes) {
@@ -5475,7 +5490,7 @@ public class VisitPlanService {
             }
             for (PlanItem item : oldItems) {
 
-                if ("PRAYER".equals(item.getBreakType()) || prepared.resolvedMealPolicy() != null && ("MEAL".equals(item.getBreakType()) || "SNACK".equals(item.getBreakType()))) {
+                if ("PRAYER".equals(item.getBreakType()) || droppedRideItemIds.contains(item.getId()) || prepared.resolvedMealPolicy() != null && ("MEAL".equals(item.getBreakType()) || "SNACK".equals(item.getBreakType()))) {
                     planItemRepository.delete(item);
                 }
             }
