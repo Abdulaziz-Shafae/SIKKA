@@ -80,6 +80,20 @@ class ArrivalPrayerScheduleTest {
         assertNull(scheduler.scheduleApprovedActivitiesWithPrayer(missing, List.of(ride(1, 0))));
     }
     @Test
+    void removeRideToFitPrayerButKeepValidDurationsAndUnrelatedRide() {
+        ObjectNode constrained = input();
+        constrained.put("durationMinutes", 55);
+        constrained.set("prayerEvents", mapper.valueToTree(List.of(Map.of("relativePrayerMinute", 25))));
+        AiPlanDtoOut result = scheduler.scheduleArrivalPreservingPrayer(constrained, List.of(ride(1, 0), ride(2, 22)), false);
+        assertNotNull(result);
+        assertEquals(1, result.getActivities().stream().filter(activity -> "RIDE".equals(activity.getActivityKind())).count());
+        assertEquals(1, result.getActivities().stream().filter(activity -> "PRAYER".equals(activity.getBreakType())).count());
+        for (AiPlanItemDtoOut activity : result.getActivities()) {
+            assertEquals(activity.getRelativeEndMinutes() - activity.getRelativeStartMinutes(), activity.getWalkingMinutes() + activity.getWaitingMinutes() + activity.getActivityMinutes());
+        }
+    }
+
+    @Test
     void changedWalkAndQueueRecalculateEndTimeFromTrustedValues() {
         ObjectNode input = input();
         input.set("prayerEvents", mapper.valueToTree(List.of()));
