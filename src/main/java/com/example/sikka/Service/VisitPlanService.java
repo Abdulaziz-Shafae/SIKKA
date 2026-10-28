@@ -2091,6 +2091,22 @@ public class VisitPlanService {
         }
     }
 
+    private boolean arrivalPrayerCoverageComplete(AiPlanDtoOut candidate, List<Map<String, Object>> prayerEvents, Set<Integer> memberIds) {
+        if (prayerEvents.isEmpty()) return true;
+        if (candidate == null || candidate.getActivities() == null) return false;
+        for (Map<String, Object> event : prayerEvents) {
+            int minute = (Integer) event.get("relativePrayerMinute");
+            Set<Integer> covered = new HashSet<>();
+            for (AiPlanItemDtoOut activity : candidate.getActivities()) {
+                if (!"BREAK".equals(activity.getActivityKind()) || !"PRAYER".equals(activity.getBreakType()) || activity.getRelativeStartMinutes() == null || activity.getWalkingMinutes() == null || activity.getRelativeEndMinutes() == null || activity.getActivityMinutes() == null || activity.getWaitingMinutes() == null) continue;
+                if (activity.getRelativeStartMinutes() + activity.getWalkingMinutes() != minute || activity.getRelativeEndMinutes() != minute + 15 || activity.getActivityMinutes() != 15 || activity.getWaitingMinutes() != 0 || activity.getParticipantVisitMemberIds() == null) continue;
+                covered.addAll(activity.getParticipantVisitMemberIds());
+            }
+            if (!covered.equals(memberIds)) return false;
+        }
+        return true;
+    }
+
     private void normalizeArrivalNonPrayerDurations(AiPlanDtoOut candidate, int durationMinutes) {
         if (candidate == null || candidate.getActivities() == null) return;
         for (AiPlanItemDtoOut activity : candidate.getActivities()) {
@@ -5241,6 +5257,14 @@ public class VisitPlanService {
 
         if (!Boolean.TRUE.equals(candidate.getFeasible())) {
             throw new ApiException(candidate.getInfeasibilityReason() == null || candidate.getInfeasibilityReason().isBlank() ? "The approved activities and actual prayer times cannot fit; review arrival time or duration" : candidate.getInfeasibilityReason());
+        }
+
+        if (Boolean.TRUE.equals(candidate.getFeasible()) && input.path("allowSplit").asBoolean() && !prayerEvents.isEmpty() && !arrivalPrayerCoverageComplete(candidate, prayerEvents, prepared.planning().memberIds())) {
+            input.put("validationFeedback", "The previous ARRIVAL candidate omitted prayer for one or more participants. For EVERY prayerEvents relativePrayerMinute, include BREAK PRAYER activity covering EVERY member visitMemberId, including all split participants. Each prayer must begin at exact relativePrayerMinute after walking, last 15 minutes, and not overlap any activity of that participant. Preserve non-prayer activities and their per-member order, walk routes, meals, and total duration. If impossible, return infeasible with the specific conflict; do not omit any participant prayer.");
+            candidate = aiPlanService.generatePlanCandidate(writeGenerationJson(input));
+        }
+        if (Boolean.TRUE.equals(candidate.getFeasible()) && !arrivalPrayerCoverageComplete(candidate, prayerEvents, prepared.planning().memberIds())) {
+            throw new ApiException("تعذر اعتماد الخطة لأن أحد المشاركين لا يملك استراحة لكل صلاة خلال الزيارة. خطتك الحالية محفوظة؛ عدّل وقت الوصول أو المدة ثم حاول مرة أخرى.");
         }
 
         normalizeArrivalNonPrayerDurations(candidate, prepared.durationMinutes());
