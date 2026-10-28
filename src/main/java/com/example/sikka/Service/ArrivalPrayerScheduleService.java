@@ -84,13 +84,14 @@ public class ArrivalPrayerScheduleService {
     }
 
     public AiPlanDtoOut scheduleApprovedActivitiesWithPrayer(JsonNode input, List<AiPlanItemDtoOut> approved) {
-        if (approved.isEmpty() || !input.path("fixedActivities").isEmpty() || input.path("allowSplit").asBoolean()) {
+        if (approved.isEmpty() || !input.path("fixedActivities").isEmpty()) {
             return null;
         }
         Set<Integer> members = new TreeSet<>();
         for (JsonNode member : input.path("members")) {
             members.add(member.path("visitMemberId").asInt());
         }
+        if (input.path("allowSplit").asBoolean()) return scheduleSplitWithPrayer(input, approved, members);
         for (AiPlanItemDtoOut activity : approved) {
             if (!members.equals(new TreeSet<>(activity.getParticipantVisitMemberIds()))) {
                 return null;
@@ -164,6 +165,103 @@ public class ArrivalPrayerScheduleService {
         }
         AiPlanDtoOut plan = new AiPlanDtoOut();
         if (!foodPolicyMatches(input, result)) return null;
+        plan.setFeasible(true);
+        plan.setActivities(result);
+        plan.setWarnings(new ArrayList<>());
+        return plan;
+    }
+
+    private AiPlanDtoOut scheduleSplitWithPrayer(JsonNode input, List<AiPlanItemDtoOut> approved, Set<Integer> members) {
+        if (members.isEmpty()) return null;
+        Map<String, Integer> routes = new HashMap<>();
+        for (JsonNode route : input.path("walking").path("routes")) {
+            routes.put(route.path("fromNodeKey").asString() + ">" + route.path("toNodeKey").asString(), route.path("minutes").asInt());
+        }
+        List<JsonNode> prayers = new ArrayList<>();
+        input.path("prayerEvents").forEach(prayers::add);
+        prayers.sort(Comparator.comparingInt(event -> event.path("relativePrayerMinute").asInt()));
+        List<AiPlanItemDtoOut> order = new ArrayList<>(approved);
+        order.sort(Comparator.comparing(AiPlanItemDtoOut::getRelativeStartMinutes).thenComparing(AiPlanItemDtoOut::getRelativeEndMinutes));
+        Map<Integer, Integer> clocks = new HashMap<>();
+        Map<Integer, String> positions = new HashMap<>();
+        String entrance = input.path("walking").path("entranceNodeKey").asString();
+        for (Integer member : members) {
+            clocks.put(member, 0);
+            positions.put(member, entrance);
+        }
+        List<AiPlanItemDtoOut> result = new ArrayList<>();
+        int prayerIndex = 0;
+        int activityIndex = 0;
+        int deadline = input.path("durationMinutes").asInt();
+        while (activityIndex < order.size() || prayerIndex < prayers.size()) {
+            AiPlanItemDtoOut original = activityIndex < order.size() ? order.get(activityIndex) : null;
+            Set<Integer> participants = original == null ? Set.of() : new HashSet<>(original.getParticipantVisitMemberIds());
+            if (original != null && (participants.isEmpty() || !members.containsAll(participants))) return null;
+            JsonNode resource = original == null ? null : findResource(input, original);
+            if (original != null && (original.getRideId() != null || original.getPlaceId() != null) && resource == null) return null;
+            String destination = original == null ? null : resource == null ? null : resource.path("nodeKey").asString();
+            int start = 0;
+            int walking = 0;
+            int waiting = original == null ? 0 : original.getRideId() == null ? original.getWaitingMinutes() : resource.path("planningWaitMinutes").asInt();
+            if (original != null) {
+                for (Integer member : participants) {
+                    String nextNode = destination == null ? positions.get(member) : destination;
+                    Integer walk = positions.get(member).equals(nextNode) ? 0 : routes.get(positions.get(member) + ">" + nextNode);
+                    if (walk == null) return null;
+                    start = Math.max(start, clocks.get(member));
+                    walking = Math.max(walking, walk);
+                }
+            }
+            long end = original == null ? 0 : (long) start + walking + waiting + original.getActivityMinutes();
+            int prayerMinute = prayerIndex < prayers.size() ? prayers.get(prayerIndex).path("relativePrayerMinute").asInt() : Integer.MAX_VALUE;
+            boolean prayFirst = original == null;
+            if (original != null && prayerIndex < prayers.size()) {
+                for (Integer member : participants) {
+                    String nextNode = destination == null ? positions.get(member) : destination;
+                    if (findReachablePrayerRoom(input, routes, nextNode, Math.toIntExact(Math.min(end, Integer.MAX_VALUE)), prayerMinute) == null) {
+                        prayFirst = true;
+                        break;
+                    }
+                }
+            }
+            if (prayFirst) {
+                if (prayerMinute == Integer.MAX_VALUE || prayerMinute + 15 > deadline) return null;
+                for (Integer member : members) {
+                    PrayerRoom room = findReachablePrayerRoom(input, routes, positions.get(member), clocks.get(member), prayerMinute);
+                    if (room == null) return null;
+                    AiPlanItemDtoOut prayer = copyActivity(order.get(0));
+                    prayer.setActivityKind("BREAK");
+                    prayer.setRideId(null);
+                    prayer.setPlaceId(room.id());
+                    prayer.setBreakType("PRAYER");
+                    prayer.setParticipantVisitMemberIds(new ArrayList<>(List.of(member)));
+                    prayer.setRelativeStartMinutes(prayerMinute - room.walk());
+                    prayer.setRelativeEndMinutes(prayerMinute + 15);
+                    prayer.setWalkingMinutes(room.walk());
+                    prayer.setWaitingMinutes(0);
+                    prayer.setActivityMinutes(15);
+                    result.add(prayer);
+                    clocks.put(member, prayerMinute + 15);
+                    positions.put(member, room.node());
+                }
+                prayerIndex++;
+                continue;
+            }
+            if (end > deadline) return null;
+            AiPlanItemDtoOut timed = copyActivity(original);
+            timed.setRelativeStartMinutes(start);
+            timed.setRelativeEndMinutes((int) end);
+            timed.setWalkingMinutes(walking);
+            timed.setWaitingMinutes(waiting);
+            result.add(timed);
+            for (Integer member : participants) {
+                clocks.put(member, (int) end);
+                if (destination != null) positions.put(member, destination);
+            }
+            activityIndex++;
+        }
+        if (!foodPolicyMatches(input, result)) return null;
+        AiPlanDtoOut plan = new AiPlanDtoOut();
         plan.setFeasible(true);
         plan.setActivities(result);
         plan.setWarnings(new ArrayList<>());
