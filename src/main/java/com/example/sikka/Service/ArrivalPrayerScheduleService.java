@@ -17,37 +17,6 @@ public class ArrivalPrayerScheduleService {
         return insertFoodBreaks(input, approved, meals, 0, new int[]{0});
     }
 
-    public AiPlanDtoOut scheduleArrivalPreservingPrayer(JsonNode input, List<AiPlanItemDtoOut> approved, boolean replaceFood) {
-        AiPlanDtoOut result = scheduleArrivalWithMealsAndPrayer(input, approved, replaceFood);
-        if (result != null || input.path("prayerEvents").isEmpty() || input.path("allowSplit").asBoolean() || !input.path("fixedActivities").isEmpty()) return result;
-        List<AiPlanItemDtoOut> remaining = new ArrayList<>(approved);
-        List<Integer> removedRides = new ArrayList<>();
-        while (result == null) {
-            int candidateIndex = -1;
-            int closestDistance = Integer.MAX_VALUE;
-            for (int i = 0; i < remaining.size(); i++) {
-                AiPlanItemDtoOut activity = remaining.get(i);
-                if (!"RIDE".equals(activity.getActivityKind()) || activity.getRideId() == null) continue;
-                for (JsonNode prayer : input.path("prayerEvents")) {
-                    int minute = prayer.path("relativePrayerMinute").asInt();
-                    int distance = Math.min(Math.abs(activity.getRelativeStartMinutes() - minute), Math.abs(activity.getRelativeEndMinutes() - minute));
-                    if (distance < closestDistance) {
-                        closestDistance = distance;
-                        candidateIndex = i;
-                    }
-                }
-            }
-            if (candidateIndex < 0) return null;
-            removedRides.add(remaining.remove(candidateIndex).getRideId());
-            if (remaining.isEmpty()) return null;
-            result = scheduleArrivalWithMealsAndPrayer(input, remaining, replaceFood);
-        }
-        List<String> warnings = result.getWarnings() == null ? new ArrayList<>() : new ArrayList<>(result.getWarnings());
-        warnings.add("تم استبعاد الألعاب المتعارضة مع الصلاة عند تأكيد الوصول: " + removedRides);
-        result.setWarnings(warnings);
-        return result;
-    }
-
     private AiPlanDtoOut insertFoodBreaks(JsonNode input, List<AiPlanItemDtoOut> activities, List<JsonNode> meals, int index, int[] attempts) {
         if (attempts[0] >= 4096) return null;
         if (index == meals.size()) {
