@@ -97,8 +97,8 @@ public class VisitMemberService {
     @Transactional
     public void join(Integer accountId, JoinDtoIn dto) {
         com.example.sikka.Model.Account account = accountRepository.findAccountById(accountId);
-        if (account == null || !Boolean.TRUE.equals(account.getEmailVerified()))
-            throw new ApiException("verify your account first");
+        if (account == null)
+            throw new ApiException("account not found");
 
         VisitorProfile profile = visitorProfileRepository.findVisitorProfileByAccount_Id(accountId);
         if (profile == null)
