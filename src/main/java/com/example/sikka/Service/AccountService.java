@@ -39,7 +39,7 @@ public class AccountService {
         account.setPasswordHash(passwordEncoder.encode(dto.getPassword()));
         account.setRole("USER");
         account.setStatus("ACTIVE");
-        account.setEmailVerified(false);
+        account.setEmailVerified(true);
         accountRepository.save(account);
     }
 
@@ -93,7 +93,7 @@ public class AccountService {
         account.setPasswordHash(passwordEncoder.encode(dto.getPassword()));
         account.setRole("USER");
         account.setStatus("ACTIVE");
-        account.setEmailVerified(false);
+        account.setEmailVerified(true);
         accountRepository.save(account);
 
         VisitorProfile profile = new VisitorProfile();
@@ -108,7 +108,7 @@ public class AccountService {
         profile.setFoodPreferences(dto.getFoodPreferences());
         profile.setAccount(account);
         visitorProfileRepository.save(profile);
-        return verificationService.sendVerificationCode(account);
+        return true;
     }
 
     // contract method for the other flows
