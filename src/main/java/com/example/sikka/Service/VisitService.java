@@ -213,9 +213,6 @@ public class VisitService {
         if (organizer == null)
             throw new ApiException("account not found");
 
-        if (!Boolean.TRUE.equals(organizer.getEmailVerified()))
-            throw new ApiException("verify your account first");
-
         if (!"ACTIVE".equals(organizer.getStatus())) {
             throw new ApiException("Account is not active");
         }
