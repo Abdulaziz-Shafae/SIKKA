@@ -57,7 +57,6 @@ public class SecurityConfig {
                                 "/park-map.html",
                                 "/park-map.js",
                                 "/maps/park-map.jpg"
-                                
                         ).permitAll()
 
                         .requestMatchers(
