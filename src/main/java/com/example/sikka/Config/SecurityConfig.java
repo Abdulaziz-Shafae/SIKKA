@@ -56,8 +56,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET,
                                 "/park-map.html",
                                 "/park-map.js",
-                                "/maps/park-map.jpg",
-                                "/pay-test.html"
+                                "/maps/park-map.jpg"
                         ).permitAll()
 
                         .requestMatchers(
