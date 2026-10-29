@@ -2091,6 +2091,12 @@ public class VisitPlanService {
         }
     }
 
+    private Set<Integer> scheduleMemberIds(JsonNode input) {
+        Set<Integer> members = new HashSet<>();
+        for (JsonNode member : input.path("members")) members.add(member.path("visitMemberId").asInt());
+        return members;
+    }
+
     private boolean arrivalPrayerCoverageComplete(AiPlanDtoOut candidate, List<Map<String, Object>> prayerEvents, Set<Integer> memberIds) {
         if (prayerEvents.isEmpty()) return true;
         if (candidate == null || candidate.getActivities() == null) return false;
@@ -2143,7 +2149,13 @@ public class VisitPlanService {
             selectionInput.put("prayerReserveMinutes", reserve);
             AiPlanDtoOut candidate = serverItineraryService.selectInitialPlan(selectionInput);
             if (!Boolean.TRUE.equals(candidate.getFeasible())) return candidate;
-            if (scheduleInput.path("allowSplit").asBoolean() || arrivalPrayerScheduleService.scheduleApprovedActivitiesWithPrayer(scheduleInput, candidate.getActivities()) != null) return candidate;
+            if (events.isEmpty()) return candidate;
+            AiPlanDtoOut withPrayer = arrivalPrayerScheduleService.scheduleApprovedActivitiesWithPrayer(scheduleInput, candidate.getActivities());
+            if (withPrayer != null && arrivalPrayerCoverageComplete(withPrayer, events, scheduleMemberIds(scheduleInput))) {
+                withPrayer.setWarnings(candidate.getWarnings());
+                withPrayer.setExcludedRides(candidate.getExcludedRides());
+                return withPrayer;
+            }
         }
         throw new ApiException("الألعاب والوجبات والصلاة لا تتسع ضمن المدة المحددة حسب وصولك المتوقع؛ زِد مدة الزيارة أو قلّل اختياراتك ثم ولّد الخطة.");
     }
