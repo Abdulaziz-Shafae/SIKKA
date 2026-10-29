@@ -6013,6 +6013,23 @@ public class VisitPlanService {
 
         activities.sort(Comparator.comparing(AiPlanItemDtoOut::getRelativeStartMinutes).thenComparing(AiPlanItemDtoOut::getRelativeEndMinutes));
 
+        Map<Integer, String> prayerTitlesByMinute = new HashMap<>();
+        JsonNode generationInput = readGenerationJson(inputJson);
+        if (generationInput.path("includePrayer").asBoolean() && generationInput.path("expectedArrivalTime").isTextual()) {
+            LocalDateTime expectedArrival = LocalDate.parse(generationInput.path("visitDate").asString()).atTime(java.time.LocalTime.parse(generationInput.path("expectedArrivalTime").asString()));
+            LocalDateTime expectedEnd = expectedArrival.plusMinutes(generationInput.path("durationMinutes").asInt());
+            Map<String, String> prayerNames = Map.of("Fajr", "صلاة الفجر", "Dhuhr", "صلاة الظهر", "Asr", "صلاة العصر", "Maghrib", "صلاة المغرب", "Isha", "صلاة العشاء");
+            for (LocalDate date = expectedArrival.toLocalDate(); !date.isAfter(expectedEnd.toLocalDate()); date = date.plusDays(1)) {
+                Map<String, LocalDateTime> times = prayerTimeService.getPrayerTimes(date, parkLatitude, parkLongitude);
+                for (Map.Entry<String, String> prayer : prayerNames.entrySet()) {
+                    LocalDateTime prayerAt = times.get(prayer.getKey());
+                    if (prayerAt != null && !prayerAt.isBefore(expectedArrival) && prayerAt.isBefore(expectedEnd)) {
+                        prayerTitlesByMinute.put(Math.toIntExact(java.time.Duration.between(expectedArrival, prayerAt).toMinutes()), prayer.getValue());
+                    }
+                }
+            }
+        }
+
         List<PlanItem> items = new ArrayList<>();
         int sortOrder = 0;
 
@@ -6024,6 +6041,10 @@ public class VisitPlanService {
             boolean rateable = isFoodBreak || (activity.getPlaceId() != null && rateablePlaceIds.contains(activity.getPlaceId()));
 
             PlanItem item = convertAiActivityToPlanItem(activity, groupPlan, sortOrder, priority, pinned, rateable);
+            if ("PRAYER".equals(activity.getBreakType())) {
+                String title = prayerTitlesByMinute.get(activity.getRelativeStartMinutes() + activity.getWalkingMinutes());
+                if (title != null) item.setTitle(title);
+            }
 
             items.add(item);
             sortOrder++;
