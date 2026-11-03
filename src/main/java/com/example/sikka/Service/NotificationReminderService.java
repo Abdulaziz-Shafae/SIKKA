@@ -24,20 +24,22 @@ public class NotificationReminderService {
 
     private Integer nextVisitId = 0;
 
-    @Scheduled(fixedDelayString = "${sikka.notifications.reminder-interval-ms:60000}",
-            initialDelayString = "${sikka.notifications.reminder-initial-delay-ms:60000}")
+    @Scheduled(fixedDelayString = "${sikka.notifications.reminder-interval-ms:60000}", initialDelayString = "${sikka.notifications.reminder-initial-delay-ms:60000}")
     public void sendDueReminders() {
-        if (!enabled) {
-            return;
-        }
+        if (!enabled) return;
+        dispatchDueReminders();
+    }
+
+    // Used by an authenticated external cron; the internal scheduler can remain disabled for serverless sleep.
+    public synchronized int dispatchDueReminders() {
+        int scanned = 0;
+        Integer cursor = 0;
         for (int page = 0; page < 10; page++) {
-            List<Integer> ids = visitRepository.findNotificationReminderVisitIds(nextVisitId, PageRequest.of(0, 100));
-            if (ids.isEmpty()) {
-                nextVisitId = 0;
-                return;
-            }
+            List<Integer> ids = visitRepository.findNotificationReminderVisitIds(cursor, PageRequest.of(0, 100));
+            if (ids.isEmpty()) break;
             for (Integer id : ids) {
-                nextVisitId = id;
+                cursor = id;
+                scanned++;
                 try {
                     notificationEventService.notifyDueReminders(id);
                 } catch (RuntimeException exception) {
@@ -45,5 +47,6 @@ public class NotificationReminderService {
                 }
             }
         }
+        return scanned;
     }
 }
