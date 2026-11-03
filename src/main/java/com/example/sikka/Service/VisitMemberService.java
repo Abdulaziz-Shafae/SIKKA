@@ -117,12 +117,11 @@ public class VisitMemberService {
 
     @Transactional
     public void updateRsvp(Integer accountId, Integer visitId, int statusInt) {
-        if (statusInt < 1 || statusInt > 3) {
-            throw new ApiException("Attendance action must be 1, 2 or 3");
+        if (statusInt != 1 && statusInt != 3) {
+            throw new ApiException("Attendance action must be 1 (going) or 3 (not going)");
         }
 
-        String rsvp = statusInt == 1 ? "GOING"
-                : statusInt == 2 ? "MAYBE" : "NOT_GOING";
+        String rsvp = statusInt == 1 ? "GOING" : "NOT_GOING";
 
         VisitMember member = getMemberLocked(accountId, visitId);
         checkOpenForChanges(member.getVisit());
@@ -176,6 +175,7 @@ public class VisitMemberService {
         member.setSelectedRides(json.toString());
         member.setAnswerStatus("ANSWERED");
         visitMemberRepository.save(member);
+        notificationEventService.notifyFriendsReady(member.getVisit());
     }
 
     @Transactional
@@ -528,6 +528,7 @@ public class VisitMemberService {
                 visitMemberRepository.save(participant);
             }
         }
+        notificationEventService.notifyFriendsReady(visit);
     }
 
     private void copyOrganizerPlanningChoices(VisitMember member) {
