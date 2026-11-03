@@ -19,6 +19,7 @@ import com.example.sikka.Model.Account;
 public class AccountController {
 
     private final AccountService accountService;
+    private final com.example.sikka.Service.AccountErasureService accountErasureService;
 
 
     @GetMapping("/get")
@@ -48,6 +49,14 @@ public class AccountController {
     public ResponseEntity<?> register(@RequestBody @Valid RegisterDtoIn dto) {
         boolean emailSent = accountService.register(dto);
         return ResponseEntity.status(200).body(new com.example.sikka.DtoOut.RegistrationDtoOut("registered successfully", emailSent));
+    }
+
+    @PostMapping("/delete-my-account")
+    public ResponseEntity<?> deleteMyAccount(@AuthenticationPrincipal Account account, @RequestBody @Valid com.example.sikka.DtoIn.ConfirmAccountDeletionDtoIn dto, jakarta.servlet.http.HttpServletRequest request) {
+        accountErasureService.deleteMyAccount(account.getId(), dto.getPassword());
+        jakarta.servlet.http.HttpSession session = request.getSession(false);
+        if (session != null) session.invalidate();
+        return ResponseEntity.status(200).body(new ApiResponse("Account and personal data deleted"));
     }
 
     @GetMapping("/me")
