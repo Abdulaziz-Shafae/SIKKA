@@ -73,6 +73,7 @@ public class RideNotificationActionService {
             if (items.subList(index + 1, items.size()).stream().anyMatch(item -> Boolean.TRUE.equals(item.getPinned()) || !"RIDE".equals(item.getActivityKind()) || !Objects.equals(item.getSubgroupKey(), target.getSubgroupKey()) || alreadyStarted(item))) throw new ApiException("Cannot safely defer this ride past fixed activities; choose an alternative");
             changed.remove(target);
             changed.add(target);
+            target.setRideAlertDeferred(true);
             result = "تم تأجيل اللعبة إلى نهاية الأنشطة المتبقية";
         } else if ("REPLACE".equals(action)) {
             Ride replacement = chooseVerifiedReplacement(target, items, visit);
