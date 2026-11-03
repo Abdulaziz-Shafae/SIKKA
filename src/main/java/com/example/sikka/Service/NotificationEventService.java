@@ -62,7 +62,8 @@ public class NotificationEventService {
             String rsvp = Objects.toString(candidate.getRsvpStatus(), "INVITED");
             if (!"GOING".equals(rsvp) && !"NOT_GOING".equals(rsvp)) return;
             if (split && "GOING".equals(rsvp)
-                    && !Set.of("ANSWERED", "SKIPPED").contains(candidate.getAnswerStatus())) return;
+                    && !"ANSWERED".equals(candidate.getAnswerStatus())
+                    && !"SKIPPED".equals(candidate.getAnswerStatus())) return;
         }
         save(visit.getOrganizer(), visit, "ALL_MEMBERS_RESPONDED", "الكل جاهز لسكتكم! 🎢",
                 split ? "كل الحاضرين أكدوا حضورهم وكملوا اختيارات الألعاب."
@@ -138,8 +139,8 @@ public class NotificationEventService {
 
     // 10 + 11: for the future VERIFIED payment callback only; never trust client status.
     public void notifyPaymentResult(PaymentOrder payment) {
-        if (payment.getVerifiedAt() == null
-                || (!"PAID".equals(payment.getStatus()) && !"FAILED".equals(payment.getStatus()))) {
+        if ((! "PAID".equals(payment.getStatus()) && !"FAILED".equals(payment.getStatus()))
+                || ("PAID".equals(payment.getStatus()) && payment.getVerifiedAt() == null)) {
             return;
         }
         boolean paid = "PAID".equals(payment.getStatus());
