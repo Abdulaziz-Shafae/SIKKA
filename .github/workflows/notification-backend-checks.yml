@@ -3,6 +3,10 @@ on:
   push:
     branches:
       - feature/notifications-approved-20261103
+  pull_request:
+    branches:
+      - feature/notifications-from-brevo
+      - deployment/brevo-railway
   workflow_dispatch:
 jobs:
   verify:
