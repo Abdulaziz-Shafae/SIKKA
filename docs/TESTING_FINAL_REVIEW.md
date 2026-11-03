@@ -12,7 +12,7 @@ No implementation from older, deleted review branches is imported automatically.
 
 - [x] 01 — **Temporary unlimited free visits / Moyasar disabled:** `SIKKA_PAYMENTS_ENABLED=false` default; FREE_UNLIMITED entitlement and zero price; no checkout; all visit kinds, reused visits and re-generation bypass payment checks. Existing paid logic, Moyasar integration and historical payment data remain. Inline comments in affected code describe how to reactivate. New tests assert zero price, unlimited eligibility and payment endpoint guards. Back-end CI: 129/129 passing; frontend typecheck, flow/integration checks and Railway build: passing.
 - [x] 02 — **Email-only account lifecycle:** new registrations require verification before login, email-only account verification and password reset; paused phone collection/verification/WhatsApp recovery kept in comments. Profile onboarding is preserved after verifying and logging in. Authenticated users can request irreversible account deletion with password confirmation; solo visits are removed, shared visits retain other members with anonymized deleted-account placeholders, and other active sessions are invalidated. Backend H2 regression tests cover registration, email-only verification/recovery, solo/guest/organizer deletion, invalid password and session invalidation. Tested on CI, live MySQL/Railway remains point 14.
-- [ ] 03 — Visit creation, group members, invitations and RSVP
+- [ ] 03 — Visit creation, group members, invitations and RSVP: implemented targeted hardening on testing (active + verified join gate, DRAFT-only invitation rotation/toggle, duplicate/capacity rules preserved). Added integration regression tests; frontend now exposes MAYBE and restricts member/family controls and stale invitation sharing to DRAFT. **Pending CI result and live Railway/MySQL validation** before marking complete.
 - [ ] 04 — Ride selection and priorities
 - [ ] 05 — Current approved meals/snacks/restaurant UX (do not change numbers without consent)
 - [ ] 06 — Initial planning, approvals and regeneration (do not alter AI usage or arrival AI behavior without approval)
@@ -28,3 +28,12 @@ No implementation from older, deleted review branches is imported automatically.
 **Verification for point 01:** Static review plus CI success, not yet validated on the live Railway Testing environment. No production branch changes, merges, or deploys.
 
 **Reactivation:** On the backend, set `SIKKA_PAYMENTS_ENABLED=true` after separately testing Moyasar, legacy two-free-visits quota, persisted payment orders, checkout and webhooks. The frontend checks the backend entitlement state, so it can show the existing checkout when payment is required.
+
+## Point 03 audit notes (2026-11-03)
+
+- Inspected `VisitController`, `VisitMemberController`, `VisitGroupController`, corresponding services, creation DTOs, front-end `live-api`, `backend-contract`, `live-sikka` and `group-invitation`.
+- Existing creation, group invitation, RSVP, leave/removal, family capacity confirmation and visit lifecycle APIs were retained. Admin-only legacy CRUD routes are separately restricted by `SecurityConfig` and left unchanged.
+- Previous joining code checked account existence and visitor profile but not account ACTIVE or email verified; now both are required. Existing duplicate/capacity checks remain in `createMember`.
+- Previous invitation rotate/toggle methods did not enforce DRAFT; they now lock the visit row and reject locked/non-DRAFT changes. Existing code and toggling behavior remain in place.
+- Previous frontend omitted MAYBE RSVP and displayed removal/family controls when status was not DRAFT. Changed to match backend. Old locally stored invitation code no longer displayed or converted to a link after the visit is locked.
+- No main, approved baseline, external notification provider, n8n, payment gateway, deployment, or Production changes. Not all end-to-end paths can be verified through repository inspection alone; CI and staging behavior must be checked separately.
