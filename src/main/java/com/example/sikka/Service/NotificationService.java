@@ -385,9 +385,8 @@ public class NotificationService {
         }
 
         String type = unavailable ? "RIDE_STATUS_CHANGED" : "RIDE_WAIT_CHANGED";
-        String changeKey = unavailable ? ride.getStatus() : (difference > 0 ? "UP:" : "DOWN:") + Math.floorDiv(ride.getWaitMinutes(), rideWaitChangeMinutes);
+        String changeKey = unavailable ? "CLOSED" : difference >= 30 ? "MAJOR" : "MINOR";
         String eventKey = type + ":" + reference.getId() + ":" + ride.getId() + ":" + changeKey;
-        boolean canSuggest = "IN_PROGRESS".equals(visit.getStatus()) && visit.getStartedAt() != null && !Boolean.TRUE.equals(reference.getPinned()) && plan.getProposedItems() == null && plan.getPendingScope() == null && plan.getProposalBaseSnapshot() == null;
         String message = unavailable ? "اللعبة الموجودة في خطتك صارت مغلقة أو غير متاحة. راجع الخطة، وتقدر تطلب اقتراح بديل مناسب إذا النشاط قابل للتعديل." : "تغير انتظار لعبة في خطتك من " + reference.getWaitingMinutes() + " إلى " + ride.getWaitMinutes() + " دقيقة حسب أحدث قراءة متاحة من المصدر. راجع إذا تحتاج تعديل الجدول.";
         if (Boolean.TRUE.equals(reference.getPinned())) {
             message += " النشاط مثبت؛ راجع التثبيت قبل طلب استبداله.";
@@ -407,7 +406,7 @@ public class NotificationService {
             notification.setTitle(unavailable ? "تغيرت حالة لعبة في خطتك" : "تغير وقت انتظار لعبة");
             notification.setMessage(message);
             notification.setEventKey(eventKey);
-            notification.setActionType(canSuggest ? "SUGGEST_REPLAN" : "VIEW_PLAN");
+            notification.setActionType(unavailable ? "RIDE_CLOSED" : difference >= 30 ? "RIDE_WAIT_MAJOR" : "RIDE_WAIT_MINOR");
             setInitialDeliveryStatus(notification);
             notificationRepository.save(notification);
             notificationEventService.forwardCriticalNotification(notification);
