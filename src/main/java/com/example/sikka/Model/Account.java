@@ -158,7 +158,8 @@ public class Account implements UserDetails {
     @Override
     @JsonIgnore
     public boolean isEnabled() {
-        return "ACTIVE".equals(this.status);
+        // Email activation required before login; legacy accounts have emailVerified=true.
+        return "ACTIVE".equals(this.status) && Boolean.TRUE.equals(this.emailVerified);
     }
 
 }
