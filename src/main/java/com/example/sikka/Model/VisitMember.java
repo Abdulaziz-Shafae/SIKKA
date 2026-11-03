@@ -42,8 +42,8 @@ public class VisitMember {
     @Column(columnDefinition = "varchar(10)")
     private String gender;
 
-    @Pattern(regexp = "^(INVITED|GOING|MAYBE|NOT_GOING)$",
-            message = "rsvp status must be INVITED, GOING, MAYBE, or NOT_GOING")
+    @Pattern(regexp = "^(INVITED|GOING|NOT_GOING)$",
+            message = "rsvp status must be INVITED, GOING, or NOT_GOING")
     @Column(columnDefinition = "varchar(15) not null default 'INVITED'")
     private String rsvpStatus;
 
