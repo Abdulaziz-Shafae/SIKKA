@@ -55,6 +55,14 @@ public class Account implements UserDetails {
     @Column(columnDefinition = "datetime")
     private LocalDateTime verificationExpiresAt;
 
+    // Phone verification is paused. Retain the old mapping as a comment for possible reactivation.
+    // @Column(columnDefinition = "boolean not null default false")
+    // private Boolean phoneVerified = false;
+    // @Column(columnDefinition = "varchar(255)")
+    // private String phoneCodeHash;
+    // @Column(columnDefinition = "datetime")
+    // private LocalDateTime phoneCodeExpiresAt;
+
     @Column(columnDefinition = "varchar(255)")
     private String resetTokenHash;
 
@@ -86,6 +94,10 @@ public class Account implements UserDetails {
 
     @OneToMany(mappedBy = "recordedByAccount")
     private Set<VisitRecord> visitRecords;
+
+    // No phone numbers are collected or saved while email-only authentication is active.
+    // @Column(columnDefinition = "varchar(20)")
+    // private String phone;
 
     @OneToMany(mappedBy = "buyerAccount")
     private Set<PaymentOrder> paymentOrders;
