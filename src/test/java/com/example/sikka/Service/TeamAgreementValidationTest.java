@@ -64,6 +64,6 @@ class TeamAgreementValidationTest {
     void completedRideLookupRequiresCompletedStatus() {
         VisitRecordRepository repository = mock(VisitRecordRepository.class);
         when(repository.existsByVisitMember_IdAndRide_IdAndStatus(1, 2, "COMPLETED")).thenReturn(true);
-        assertTrue(new VisitRecordService(repository, mock(AccountRepository.class), mock(VisitRepository.class), mock(VisitMemberRepository.class), mock(com.example.sikka.Repository.ActivitySessionRepository.class), mock(com.example.sikka.Repository.PlanItemRepository.class), mock(com.example.sikka.Repository.VisitPlanRepository.class), mock(VisitPlanService.class), mock(com.example.sikka.Service.ActivityTimingService.class)).hasCompletedRide(1, 2));
+        assertTrue(new VisitRecordService(repository, mock(AccountRepository.class), mock(VisitRepository.class), mock(VisitMemberRepository.class), mock(com.example.sikka.Repository.ActivitySessionRepository.class), mock(com.example.sikka.Repository.PlanItemRepository.class), mock(com.example.sikka.Repository.VisitPlanRepository.class), mock(VisitPlanService.class), mock(com.example.sikka.Service.ActivityTimingService.class), mock(NotificationEventService.class)).hasCompletedRide(1, 2));
     }
 }
