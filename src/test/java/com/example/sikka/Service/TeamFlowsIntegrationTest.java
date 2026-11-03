@@ -17,7 +17,8 @@ import java.util.Map;
 import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.*;
 
-@SpringBootTest
+// Legacy two-free-visits/payment assertions remain active only when paid mode is explicitly enabled.
+@SpringBootTest(properties = "sikka.payments.enabled=true")
 @Transactional
 class TeamFlowsIntegrationTest {
     @Autowired private EntityManager entityManager;
