@@ -121,9 +121,37 @@ public class RideNotificationActionService {
         Ride anchor = target.getRide();
         if (anchor.getMapX() == null || anchor.getMapY() == null) throw new ApiException("Original ride has no verified map coordinates");
         return rideRepository.findAll().stream().filter(ride -> !excluded.contains(ride.getId()) && "OPEN".equals(ride.getStatus()) && ride.getWaitMinutes() != null && ride.getWaitObservedAt() != null && !ride.getWaitObservedAt().isBefore(LocalDateTime.now(ZoneId.of("Asia/Riyadh")).minusMinutes(10)) && ride.getRideDurationMinutes() != null && ride.getMinHeightCm() != null && ride.getMapX() != null && ride.getMapY() != null)
-                .filter(ride -> members.stream().filter(member -> "GOING".equals(member.getRsvpStatus())).allMatch(member -> member.getVisitorProfile() != null && member.getVisitorProfile().getHeightCm() != null && member.getVisitorProfile().getHeightCm().compareTo(ride.getMinHeightCm()) >= 0))
+                .filter(ride -> Boolean.FALSE.equals(ride.getAdditionalSafetyReviewRequired()) && ride.getRequirementsVerifiedAt() != null && !"UNKNOWN".equals(ride.getHealthRuleStatus()))
+                .filter(ride -> members.stream().filter(member -> "GOING".equals(member.getRsvpStatus())).allMatch(member -> memberCanRide(member, ride)))
                 .min(Comparator.comparingDouble(ride -> Math.pow(ride.getMapX().doubleValue() - anchor.getMapX().doubleValue(),2) + Math.pow(ride.getMapY().doubleValue() - anchor.getMapY().doubleValue(),2)))
                 .orElseThrow(() -> new ApiException("No verified, open and eligible alternative ride is available"));
+    }
+
+    private boolean memberCanRide(VisitMember member, Ride ride) {
+        if (member.getVisitorProfile() == null) return false;
+        com.example.sikka.Model.VisitorProfile profile = member.getVisitorProfile();
+        if (profile.getHeightCm() == null || profile.getHeightCm().compareTo(ride.getMinHeightCm()) < 0) return false;
+        if (ride.getMaxHeightCm() != null && profile.getHeightCm().compareTo(ride.getMaxHeightCm()) > 0) return false;
+        if (ride.getMinWeightKg() != null && (profile.getWeightKg() == null || profile.getWeightKg().compareTo(ride.getMinWeightKg()) < 0)) return false;
+        if (ride.getMaxWeightKg() != null && (profile.getWeightKg() == null || profile.getWeightKg().compareTo(ride.getMaxWeightKg()) > 0)) return false;
+        if (ride.getMinAgeYears() != null || ride.getMaxAgeYears() != null) {
+            if (profile.getBirthDate() == null) return false;
+            int age = java.time.Period.between(profile.getBirthDate(), java.time.LocalDate.now(ZoneId.of("Asia/Riyadh"))).getYears();
+            if (ride.getMinAgeYears() != null && age < ride.getMinAgeYears()) return false;
+            if (ride.getMaxAgeYears() != null && age > ride.getMaxAgeYears()) return false;
+        }
+        if (ride.getHealthRestrictions() != null && !ride.getHealthRestrictions().isEmpty()) return false;
+        // Existing participant exclusions are authoritative; never override a deliberate opt-out.
+        if (member.getPreferences() != null && member.getPreferences().contains("\\"")) {
+            try {
+                tools.jackson.databind.JsonNode prefs = tools.jackson.databind.json.JsonMapper.builder().build().readTree(member.getPreferences());
+                for (tools.jackson.databind.JsonNode id : prefs.path("excludedRideIds")) if (id.asInt() == ride.getId()) return false;
+                for (tools.jackson.databind.JsonNode type : prefs.path("excludedRideTypes")) if (type.asString().equals(ride.getCategory())) return false;
+            } catch (Exception exception) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private void recalculateFutureSchedule(Visit visit, List<PlanItem> original, List<PlanItem> revised, int index, LocalDateTime now, LocalDateTime oldEnd, boolean allowExtension) {
