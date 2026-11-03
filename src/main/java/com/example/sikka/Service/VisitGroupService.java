@@ -158,8 +158,10 @@ public class VisitGroupService {
         return attachGroup(visit, groupName);
     }
 
+    @org.springframework.transaction.annotation.Transactional
     public String regenerateCode(Integer accountId, Integer visitId) {
         VisitGroup group = getOrganizerGroup(accountId, visitId);
+        requireDraftInvitations(visitId);
         String code = newCode();
         group.setInviteCodeHash(hash(code));
         visitGroupRepository.save(group);
@@ -189,8 +191,10 @@ public class VisitGroupService {
     }
 
     // flips invitations on/off, returns the new value
+    @org.springframework.transaction.annotation.Transactional
     public boolean toggleInvitations(Integer accountId, Integer visitId) {
         VisitGroup group = getOrganizerGroup(accountId, visitId);
+        requireDraftInvitations(visitId);
         group.setInvitationsEnabled(!group.getInvitationsEnabled());
         visitGroupRepository.save(group);
         return group.getInvitationsEnabled();
@@ -205,6 +209,14 @@ public class VisitGroupService {
         if (visit.getGroup() == null)
             throw new ApiException("visit has no group");
         return visit.getGroup();
+    }
+
+    // Testing point 03: old flow allowed rotating and reopening invitations after planning began.
+    // The old code-generation/toggle logic remains above; only the DRAFT precondition is new.
+    private void requireDraftInvitations(Integer visitId) {
+        Visit visit = visitRepository.findVisitByIdForUpdate(visitId);
+        if (visit == null || !"DRAFT".equals(visit.getStatus()) || Boolean.TRUE.equals(visit.getMembersLocked()))
+            throw new ApiException("Invitations can only be changed before planning begins");
     }
 
     private String newCode() {
