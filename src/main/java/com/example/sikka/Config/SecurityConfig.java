@@ -20,7 +20,7 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http, com.example.sikka.Repository.AccountRepository accountRepository) throws Exception {
         return http
                 .csrf(csrf -> csrf.disable())
 
@@ -134,6 +134,8 @@ public class SecurityConfig {
                             response.getWriter().write("{\"message\":\"Access denied\"}");
                         })
                 )
+
+                .addFilterBefore(new DeletedAccountSessionFilter(accountRepository), org.springframework.security.web.access.intercept.AuthorizationFilter.class)
 
                 .httpBasic(basic -> {})
 
