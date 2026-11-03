@@ -7,7 +7,7 @@ import com.example.sikka.Model.Visit;
 import com.example.sikka.Repository.AccountRepository;
 import com.example.sikka.Repository.PaymentOrderRepository;
 import com.example.sikka.Repository.VisitRepository;
-import lombok.AllArgsConstructor;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,7 +18,7 @@ import java.util.UUID;
 import java.util.Set;
 
 @Service
-@AllArgsConstructor
+@RequiredArgsConstructor
 public class PaymentOrderService {
 
     private final jakarta.persistence.EntityManager entityManager;
