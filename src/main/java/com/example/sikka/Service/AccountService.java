@@ -89,7 +89,6 @@ public class AccountService {
         Account account = new Account();
         account.setName(dto.getName());
         account.setEmail(dto.getEmail());
-        account.setPhone(dto.getPhone());
         account.setPasswordHash(passwordEncoder.encode(dto.getPassword()));
         account.setRole("USER");
         account.setStatus("ACTIVE");
@@ -125,6 +124,6 @@ public class AccountService {
     }
 
     private AccountDtoOut toDtoOut(Account a) {
-        return new AccountDtoOut(a.getId(), a.getName(), a.getEmail(), a.getRole(), a.getStatus(), a.getEmailVerified(), a.getPhoneVerified(), a.getCreatedAt());
+        return new AccountDtoOut(a.getId(), a.getName(), a.getEmail(), a.getRole(), a.getStatus(), a.getEmailVerified(), a.getCreatedAt());
     }
 }
