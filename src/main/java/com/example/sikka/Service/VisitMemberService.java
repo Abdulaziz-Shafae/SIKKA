@@ -208,6 +208,7 @@ public class VisitMemberService {
         visitMemberRepository.save(member);
     }
 
+    @Transactional
     public void review(Integer accountId, Integer visitId, ReviewDtoIn dto) {
         VisitMember member = getMember(accountId, visitId);
 
