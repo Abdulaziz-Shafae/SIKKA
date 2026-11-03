@@ -36,6 +36,8 @@ public class AccountService {
         Account account = new Account();
         account.setName(dto.getName());
         account.setEmail(dto.getEmail());
+        // Phone signup paused; do not collect or persist a phone number.
+        // account.setPhone(dto.getPhone());
         account.setPasswordHash(passwordEncoder.encode(dto.getPassword()));
         account.setRole("USER");
         account.setStatus("ACTIVE");
@@ -124,6 +126,7 @@ public class AccountService {
     }
 
     private AccountDtoOut toDtoOut(Account a) {
+        // Former response: a.getPhoneVerified() was included here; email-only mode excludes it.
         return new AccountDtoOut(a.getId(), a.getName(), a.getEmail(), a.getRole(), a.getStatus(), a.getEmailVerified(), a.getCreatedAt());
     }
 }
