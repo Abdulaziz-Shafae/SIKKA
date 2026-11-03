@@ -13,6 +13,7 @@ import java.util.List;
 
 @Repository
 public interface ActivitySessionRepository extends JpaRepository<ActivitySession, Integer> {
+    List<ActivitySession> findAllByPlanItem_Id(Integer planItemId);
 
     ActivitySession findActivitySessionById(Integer activitySessionId);
 
