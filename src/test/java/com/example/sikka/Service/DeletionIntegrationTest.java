@@ -62,7 +62,7 @@ class DeletionIntegrationTest {
         VisitorProfile guestProfile = persistProfile(guest);
         VisitMember guestMember = persistMember(visit, guestProfile);
         guestMember.setName("Guest real name");
-        guestMember.setPreferences("{\\"preferredRideIds\\":[1]}");
+        guestMember.setPreferences("[]");
         Integer guestId = guest.getId(), guestProfileId = guestProfile.getId(), organizerId = organizer.getId(), visitId = visit.getId(), ownerMemberId = ownerMember.getId(), guestMemberId = guestMember.getId();
         flushAndClear();
         accountErasureService.deleteMyAccount(guestId, "GuestConfirm123!");
