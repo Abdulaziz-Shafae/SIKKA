@@ -34,6 +34,30 @@ public class EmailService {
         return RestClient.builder().baseUrl("https://api.brevo.com").requestFactory(factory).build();
     }
 
+    // Send the generated recap image as a private PNG attachment, not a public visitor-data URL.
+    public boolean sendEmailWithImage(String to, String subject, String text, byte[] png) {
+        if (png == null || png.length == 0 || png.length > 8_000_000) return false;
+        try {
+            if (brevoApiKey != null && !brevoApiKey.isBlank()) {
+                java.util.Map<String, Object> body = java.util.Map.of("sender", java.util.Map.of("email", from, "name", "Sikka"), "to", java.util.List.of(java.util.Map.of("email", to)), "subject", subject, "textContent", text, "attachment", java.util.List.of(java.util.Map.of("name", "sikka-visit-summary.png", "content", java.util.Base64.getEncoder().encodeToString(png))));
+                emailApiClient.post().uri("/v3/smtp/email").header("api-key", brevoApiKey).contentType(MediaType.APPLICATION_JSON).body(body).retrieve().toBodilessEntity();
+                return true;
+            }
+            jakarta.mail.internet.MimeMessage message = mailSender.createMimeMessage();
+            org.springframework.mail.javamail.MimeMessageHelper helper = new org.springframework.mail.javamail.MimeMessageHelper(message, true, "UTF-8");
+            helper.setFrom(from, "Sikka");
+            helper.setTo(to);
+            helper.setSubject(subject);
+            helper.setText(text, false);
+            helper.addAttachment("sikka-visit-summary.png", new org.springframework.core.io.ByteArrayResource(png), "image/png");
+            mailSender.send(message);
+            return true;
+        } catch (Exception exception) {
+            log.warn("Failed to send visit recap image: {}", exception.getClass().getSimpleName());
+            return false;
+        }
+    }
+
     // never throws: a failed email must not break the request that triggered it
     public boolean sendEmail(String to, String subject, String text) {
         try {
