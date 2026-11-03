@@ -211,7 +211,7 @@ public class NotificationEventService {
                     || !penultimateRideCompletedBeforeMeal(meal.getVisitMember(), item)) {
                 continue;
             }
-            save(recipient(meal.getVisitMember()), visit, "MEAL_RESTAURANT_REMINDER", "وين ناكل بعد شوي؟ 🍔",
+            save(visit.getOrganizer(), visit, "MEAL_RESTAURANT_REMINDER", "وين ناكل بعد شوي؟ 🍔",
                     "بعد اللعبة الجاية عندكم استراحة أكل. اتفقوا على المطعم وأنتم بالطريق، وتقدرون تختارونه بعد اللعبة.",
                     "MEAL_RESTAURANT_REMINDER:" + item.getId() + ":" + item.getStartsAt(), false, item);
         }
