@@ -52,6 +52,7 @@ public class VisitRecordService {
     private final JsonMapper participantJsonMapper = JsonMapper.builder().enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS).build();
     private final VisitPlanService visitPlanService;
     private final ActivityTimingService activityTimingService;
+    private final NotificationEventService notificationEventService;
 
     @jakarta.persistence.PersistenceContext
     private jakarta.persistence.EntityManager entityManager;
@@ -320,6 +321,19 @@ public class VisitRecordService {
 
         if ("COMPLETED".equals(status)) {
             activityTimingService.advanceRemainingActivitiesAfterCompletion(visit, planItem, recordedAt, this::parseRideActivityParticipantIds);
+            // Prompt for the meal after the penultimate ride without relying on background scheduling.
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                new org.springframework.transaction.support.TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        try {
+                            notificationEventService.notifyDueReminders(visitId);
+                        } catch (RuntimeException exception) {
+                            // A reminder failure must never roll back a successfully recorded ride.
+                        }
+                    }
+                }
+            );
         }
     }
 
