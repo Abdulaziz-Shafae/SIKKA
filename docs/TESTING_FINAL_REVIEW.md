@@ -17,7 +17,7 @@ No implementation from older, deleted review branches is imported automatically.
 - [ ] 05 — Current approved meals/snacks/restaurant UX (do not change numbers without consent)
 - [ ] 06 — Initial planning, approvals and regeneration (do not alter AI usage or arrival AI behavior without approval)
 - [ ] 07 — Live visit activity workflow and replan: frontend-only changes on `Sikka-front/testing` require explicit skip confirmation, expose manual `suggest-replan` with reason, and clarify proposal remains non-operative pending approval. Added `live-flow.cjs` contract/source assertions. **CI/build and Railway end-to-end not yet verified**.
-- [ ] 08 — Prayer scheduling
+- [ ] 08 — Prayer scheduling: frontend display changes on `Sikka-front/testing` show server-confirmed prayer name, calculate actual prayer start from scheduled walking start, show known prayer-room name, and label times provisional before confirmed arrival. Added `live-flow.cjs` assertions. CI/build and Railway/MySQL checks pending.
 - [ ] 09 — Map and navigation
 - [ ] 10 — Brevo and n8n notifications (Brevo implementation must remain unchanged until separately approved)
 - [ ] 11 — Visit rating, recap and image
@@ -45,3 +45,11 @@ No implementation from older, deleted review branches is imported automatically.
 - The manual replan form appears for active approved visits in progress and without an outstanding proposal. It requires a nonempty reason and calls the pre-existing `/api/v1/visit-plan/suggest-replan/{visitId}` endpoint; the proposal still requires approval and does not automatically replace the active schedule.
 - Added explanatory message to the proposal area and basic integration/source assertions in `scripts/checks/live-flow.cjs`.
 - No backend, AI, notification, paid-mode, main branch, production deployment, or approved baseline modifications in this point. Full runtime tests and staging validation remain pending.
+
+## Point 08 approved frontend changes (2026-11-03)
+
+- User approved improving prayer title/time/place display and clarifying provisional times before arrival confirmation, with no modification to AI, Aladhan, or notifications.
+- `lib/prayer-presentation.ts`: derives display values strictly from plan item `title`, `startsAt`, `walkingMinutes`, and known PRAYER_ROOM place; never guesses the prayer name from clock time. For scheduled prayer, item `startsAt` is walking start and prayer time is walking start plus walking minutes.
+- `components/sikka/live-plan.tsx`: shows confirmed prayer name/time/prayer-room when provided; otherwise clearly distinguishes unknown or provisional values. Non-prayer activity display unchanged.
+- `scripts/checks/live-flow.cjs`: new presentation and source-wire assertions. Actual Node check, TypeScript build, and Railway end-to-end testing remain pending.
+- Backend runtime unchanged, including prayer API, scheduling, AI, approved baseline, Brevo, n8n and Production.
