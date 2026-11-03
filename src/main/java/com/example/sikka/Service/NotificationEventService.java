@@ -48,24 +48,25 @@ public class NotificationEventService {
         // WhatsApp reminders are disabled by the approved delivery policy.
     }
 
-    // 1 + 2: called only after a real RSVP change, while the visit is locked.
+    // FRIENDS only: together requires RSVP, split also requires planning answers.
     public void notifyMemberRsvp(VisitMember member, boolean firstResponse) {
-        Visit visit = member.getVisit();
-        if (member.getVisitorProfile() == null
-                || member.getVisitorProfile().getAccount().getId().equals(visit.getOrganizer().getId())) {
-            return;
+        notifyFriendsReady(member.getVisit());
+    }
+
+    public void notifyFriendsReady(Visit visit) {
+        if (!"FRIENDS".equals(visit.getTripType())) return;
+        List<VisitMember> members = visitMemberRepository.findAllByVisit_Id(visit.getId());
+        if (members.isEmpty()) return;
+        boolean split = "SPLIT".equals(visit.getTogetherMode());
+        for (VisitMember candidate : members) {
+            String rsvp = Objects.toString(candidate.getRsvpStatus(), "INVITED");
+            if (!"GOING".equals(rsvp) && !"NOT_GOING".equals(rsvp)) return;
+            if (split && "GOING".equals(rsvp)
+                    && !Set.of("ANSWERED", "SKIPPED").contains(candidate.getAnswerStatus())) return;
         }
-        if (!firstResponse) {
-            return;
-        }
-        for (VisitMember other : visitMemberRepository.findAllByVisit_Id(visit.getId())) {
-            if (!Set.of("GOING", "MAYBE", "NOT_GOING").contains(Objects.toString(other.getRsvpStatus(), ""))) {
-                return;
-            }
-        }
-        save(visit.getOrganizer(), visit, "ALL_MEMBERS_RESPONDED", "اكتملت ردود أعضاء الزيارة",
-                "جميع الأعضاء المنضمين حاليًا ردّوا على الحضور للزيارة رقم " + visit.getId()
-                        + ". راجع الردود؛ قد يكون بعضها ربما أو عدم الحضور.",
+        save(visit.getOrganizer(), visit, "ALL_MEMBERS_RESPONDED", "الكل جاهز لسكتكم! 🎢",
+                split ? "كل الحاضرين أكدوا حضورهم وكملوا اختيارات الألعاب."
+                      : "كل المدعوين ردوا على الدعوة وسكتكم جاهزة للتجهيز.",
                 "ALL_MEMBERS_RESPONDED:" + visit.getId(), true, null);
     }
 
@@ -143,11 +144,11 @@ public class NotificationEventService {
         }
         boolean paid = "PAID".equals(payment.getStatus());
         String type = paid ? "PAYMENT_PAID" : "PAYMENT_FAILED";
-        save(payment.getBuyerAccount(), payment.getVisit(), type,
+        emailOnly(payment.getBuyerAccount(), payment.getVisit(), type,
                 paid ? "تم الدفع بنجاح" : "لم تكتمل عملية الدفع",
                 "طلب الدفع رقم " + payment.getId() + " بمبلغ " + payment.getAmountSar()
                         + (paid ? " ريال تم تأكيده بنجاح." : " ريال لم يكتمل. راجع الطلب في التطبيق قبل المحاولة مجددًا."),
-                type + ":" + payment.getId(), true, null);
+                type + ":" + payment.getId());
     }
 
     // Reuse the existing IN_APP row and its recipient; do not recreate delay/ride logic.
@@ -171,11 +172,11 @@ public class NotificationEventService {
                     continue;
                 }
                 for (Account target : recipients(visit, null).values()) {
-                    save(target, visit, "VISIT_REMINDER", "تذكير بموعد زيارتك",
+                    emailOnly(target, visit, "VISIT_REMINDER", "تذكير بموعد زيارتك",
                             "باقي " + hoursBefore + " ساعة على زيارتك رقم " + visitId
                                     + "، موعد الوصول " + start.toLocalDate() + " الساعة "
                                     + start.toLocalTime() + " بتوقيت الرياض.",
-                            "VISIT_REMINDER:" + visitId + ":" + start + ":" + hoursBefore, true, null);
+                            "VISIT_REMINDER:" + visitId + ":" + start + ":" + hoursBefore);
                 }
             }
         }
@@ -318,6 +319,19 @@ public class NotificationEventService {
             queueEmail(notification);
         }
         return notification;
+    }
+
+    // Email-only events never create a visible IN_APP inbox entry.
+    private void emailOnly(Account account, Visit visit, String type, String title, String message, String eventKey) {
+        if (account == null || !"ACTIVE".equals(account.getStatus())) return;
+        Notification source = new Notification();
+        source.setAccount(account);
+        source.setVisit(visit);
+        source.setType(type);
+        source.setTitle(title);
+        source.setMessage(message);
+        source.setEventKey(eventKey);
+        queueEmail(source);
     }
 
     private void queueEmail(Notification source) {
