@@ -59,11 +59,6 @@ public class VisitMemberController {
         return ResponseEntity.status(200).body(new ApiResponse("rsvp updated successfully"));
     }
 
-    @PutMapping("/rsvp/maybe/{visitId}")
-    public ResponseEntity<?> markAttendanceAsMaybe(@AuthenticationPrincipal Account account, @PathVariable Integer visitId) {
-        visitMemberService.updateRsvp(account.getId(), visitId, 2);
-        return ResponseEntity.status(200).body(new ApiResponse("rsvp updated successfully"));
-    }
 
     @PutMapping("/rsvp/not-going/{visitId}")
     public ResponseEntity<?> declineAttendance(@AuthenticationPrincipal Account account, @PathVariable Integer visitId) {
