@@ -450,6 +450,41 @@ class TeamFlowsIntegrationTest {
         assertTrue(error.getMessage().contains("المنظّم"));
     }
 
+    @Autowired private VisitGroupService visitGroupService;
+
+    @Test
+    void invitationsRequireActiveVerifiedAccountAndRejectDuplicateMembers() {
+        Visit visit = createVisit("FRIENDS");
+        String code = visitGroupService.regenerateCode(visit.getOrganizer().getId(), visit.getId());
+        Account friend = createAccount();
+        createProfile(friend);
+        friend.setEmailVerified(false);
+        assertThrows(ApiException.class, () -> visitMemberService.join(friend.getId(), new JoinDtoIn(code)));
+        friend.setEmailVerified(true);
+        friend.setStatus("BLOCKED");
+        assertThrows(ApiException.class, () -> visitMemberService.join(friend.getId(), new JoinDtoIn(code)));
+        friend.setStatus("ACTIVE");
+        visitMemberService.join(friend.getId(), new JoinDtoIn(code));
+        assertEquals(2, visitMemberRepository.findAllByVisit_Id(visit.getId()).size());
+        assertThrows(ApiException.class, () -> visitMemberService.join(friend.getId(), new JoinDtoIn(code)));
+        assertEquals(2, visitMemberRepository.findAllByVisit_Id(visit.getId()).size());
+    }
+
+    @Test
+    void invitationChangesStopWhenVisitIsLockedOrPlanningBegins() {
+        Visit visit = createVisit("FRIENDS");
+        Integer organizerId = visit.getOrganizer().getId();
+        String oldCode = visitGroupService.regenerateCode(organizerId, visit.getId());
+        assertNotNull(oldCode);
+        visit.setMembersLocked(true);
+        assertThrows(ApiException.class, () -> visitGroupService.regenerateCode(organizerId, visit.getId()));
+        assertThrows(ApiException.class, () -> visitGroupService.toggleInvitations(organizerId, visit.getId()));
+        visit.setMembersLocked(false);
+        visit.setStatus("PLANNING");
+        assertThrows(ApiException.class, () -> visitGroupService.regenerateCode(organizerId, visit.getId()));
+        assertThrows(ApiException.class, () -> visitGroupService.toggleInvitations(organizerId, visit.getId()));
+    }
+
     private Visit createVisit(String type) {
         Account account = createAccount();
         createProfile(account);
