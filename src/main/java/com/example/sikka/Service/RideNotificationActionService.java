@@ -55,8 +55,14 @@ public class RideNotificationActionService {
             if (!"RIDE_WAIT_MAJOR".equals(notification.getActionType())) throw new ApiException("This action requires at least 30 minutes of additional wait");
         }
 
-        List<PlanItem> items = new ArrayList<>(planItemRepository.findAllByVisitPlan_Id(plan.getId()));
-        items.sort(Comparator.comparing(PlanItem::getSortOrder));
+        List<PlanItem> allItems = new ArrayList<>(planItemRepository.findAllByVisitPlan_Id(plan.getId()));
+        allItems.sort(Comparator.comparing(PlanItem::getSortOrder));
+        // SPLIT subgroups have independent parallel timelines. Never retime another subgroup.
+        List<PlanItem> items = new ArrayList<>(allItems);
+        if ("SPLIT".equals(visit.getTogetherMode())) {
+            if (allItems.stream().anyMatch(item -> "MEETING_POINT".equals(item.getActivityKind()) && item.getStartsAt() != null && item.getStartsAt().isAfter(LocalDateTime.now(ZoneId.of("Asia/Riyadh"))))) throw new ApiException("Parallel plans have a fixed group meeting; request organizer review instead");
+            items.removeIf(item -> !Objects.equals(item.getSubgroupKey(), target.getSubgroupKey()) || !Objects.equals(item.getParticipantVisitMemberIds(), target.getParticipantVisitMemberIds()));
+        }
         int index = items.indexOf(target);
         if (index < 0 || target.getStartsAt() == null || target.getEndsAt() == null) throw new ApiException("The scheduled ride could not be found");
         LocalDateTime now = LocalDateTime.now(ZoneId.of("Asia/Riyadh"));
@@ -64,7 +70,7 @@ public class RideNotificationActionService {
 
         List<PlanItem> changed = new ArrayList<>(items);
         int originalDuration = visit.getDurationMinutes();
-        LocalDateTime oldEnd = items.get(items.size() - 1).getEndsAt();
+        LocalDateTime oldEnd = allItems.stream().map(PlanItem::getEndsAt).filter(Objects::nonNull).max(Comparator.naturalOrder()).orElse(null);
         if (oldEnd == null) throw new ApiException("An activity has no scheduled end");
         String result;
 
@@ -76,7 +82,7 @@ public class RideNotificationActionService {
             target.setRideAlertDeferred(true);
             result = "تم تأجيل اللعبة إلى نهاية الأنشطة المتبقية";
         } else if ("REPLACE".equals(action)) {
-            Ride replacement = chooseVerifiedReplacement(target, items, visit);
+            Ride replacement = chooseVerifiedReplacement(target, allItems, visit);
             target.setRide(replacement);
             target.setTitle(replacement.getName());
             target.setWaitingMinutes(replacement.getWaitMinutes());
@@ -161,6 +167,7 @@ public class RideNotificationActionService {
         LocalDateTime cursor = previous == null ? original.get(0).getStartsAt() : previous.getEndsAt();
         if (cursor == null) throw new ApiException("Previous activity timing is missing");
         cursor = cursor.isBefore(now) ? now : cursor;
+        List<Integer> originalSortSlots = original.stream().map(PlanItem::getSortOrder).toList();
         for (int i = index; i < revised.size(); i++) {
             PlanItem current = revised.get(i);
             if (alreadyStarted(current) || Boolean.TRUE.equals(current.getPinned())) {
@@ -183,7 +190,7 @@ public class RideNotificationActionService {
                 current.setRelativeStartMinutes(Math.toIntExact(java.time.Duration.between(base, cursor).toMinutes()));
                 current.setRelativeEndMinutes(Math.toIntExact(java.time.Duration.between(base, end).toMinutes()));
             }
-            current.setSortOrder(i);
+            current.setSortOrder(originalSortSlots.get(i));
             planItemRepository.save(current);
             cursor = end;
             previous = current;
