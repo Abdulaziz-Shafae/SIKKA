@@ -415,6 +415,7 @@ public class NotificationEventService {
         });
     }
 
+    /* Legacy WhatsApp notifications paused (email and in-app only):
     private void queueWhatsApp(Notification source) {
         String key = source.getEventKey();
         Account account = source.getAccount();
@@ -453,6 +454,7 @@ public class NotificationEventService {
             }
         });
     }
+    */
 
     private LocalDateTime now() {
         return LocalDateTime.now(ZoneId.of("Asia/Riyadh"));
