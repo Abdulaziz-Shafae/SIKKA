@@ -43,8 +43,8 @@ public class VisitMemberService {
     private final com.example.sikka.Repository.VisitRecordRepository visitRecordRepository;
     private final N8nNotificationService n8nNotificationService;
     private final NotificationEventService notificationEventService;
-    private final VisitRecapImageService visitRecapImageService;
     private final com.example.sikka.Repository.AccountRepository accountRepository;
+    private final VisitRecapImageService visitRecapImageService;
     // ---------- CRUD ----------
 
     public List<VisitMember> get() {
