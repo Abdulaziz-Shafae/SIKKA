@@ -21,7 +21,7 @@ public class VerificationService {
     private final AccountRepository accountRepository;
     private final EmailService emailService;
     // Phone verification paused; WhatsApp sending is not needed in email-only account flows.
-    // private final WhatsAppService whatsAppService;
+    private final WhatsAppService whatsAppService; // Retain constructor compatibility; not called in email-only mode.
     private final SecureRandom random = new SecureRandom();
 
     public boolean sendVerificationCode(Account account) {
