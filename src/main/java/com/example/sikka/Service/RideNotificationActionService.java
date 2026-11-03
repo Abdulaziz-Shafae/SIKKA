@@ -127,11 +127,7 @@ public class RideNotificationActionService {
         List<VisitMember> members = visitMemberRepository.findAllByVisit_Id(visit.getId());
         Ride anchor = target.getRide();
         if (anchor.getMapX() == null || anchor.getMapY() == null) throw new ApiException("Original ride has no verified map coordinates");
-        return rideRepository.findAll().stream().filter(ride -> !excluded.contains(ride.getId()) && "OPEN".equals(ride.getStatus()) && ride.getWaitMinutes() != null && ride.getWaitObservedAt() != null && !ride.getWaitObservedAt().isBefore(LocalDateTime.now(ZoneId.of("Asia/Riyadh")).minusMinutes(10)) && ride.getRideDurationMinutes() != null && ride.getMinHeightCm() != null && ride.getMapX() != null && ride.getMapY() != null)
-                .filter(ride -> Boolean.FALSE.equals(ride.getAdditionalSafetyReviewRequired()) && ride.getRequirementsVerifiedAt() != null && !"UNKNOWN".equals(ride.getHealthRuleStatus()))
-                .filter(ride -> members.stream().filter(member -> "GOING".equals(member.getRsvpStatus())).allMatch(member -> memberCanRide(member, ride)))
-                .min(Comparator.comparingDouble(ride -> Math.pow(ride.getMapX().doubleValue() - anchor.getMapX().doubleValue(),2) + Math.pow(ride.getMapY().doubleValue() - anchor.getMapY().doubleValue(),2)))
-                .orElseThrow(() -> new ApiException("No verified, open and eligible alternative ride is available"));
+        return rideRepository.findAll().stream().filter(ride -> !excluded.contains(ride.getId()) && "OPEN".equals(ride.getStatus()) && ride.getWaitMinutes() != null && ride.getWaitObservedAt() != null && !ride.getWaitObservedAt().isBefore(LocalDateTime.now(ZoneId.of("Asia/Riyadh")).minusMinutes(10)) && ride.getRideDurationMinutes() != null && ride.getMinHeightCm() != null && ride.getMapX() != null && ride.getMapY() != null) .filter(ride -> Boolean.FALSE.equals(ride.getAdditionalSafetyReviewRequired()) && ride.getRequirementsVerifiedAt() != null && !"UNKNOWN".equals(ride.getHealthRuleStatus())) .filter(ride -> members.stream().filter(member -> "GOING".equals(member.getRsvpStatus())).allMatch(member -> memberCanRide(member, ride))) .min(Comparator.comparingDouble(ride -> Math.pow(ride.getMapX().doubleValue() - anchor.getMapX().doubleValue(),2) + Math.pow(ride.getMapY().doubleValue() - anchor.getMapY().doubleValue(),2))) .orElseThrow(() -> new ApiException("No verified, open and eligible alternative ride is available"));
     }
 
     private boolean memberCanRide(VisitMember member, Ride ride) {
