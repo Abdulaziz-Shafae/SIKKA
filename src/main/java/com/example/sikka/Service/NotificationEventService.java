@@ -164,12 +164,18 @@ public class NotificationEventService {
         LocalDateTime now = now();
         if ("READY".equals(visit.getStatus()) && visit.getVisitDate() != null && visit.getPlannedStartTime() != null) {
             LocalDateTime start = visit.getVisitDate().atTime(visit.getPlannedStartTime());
-            if (start.isAfter(now) && !start.isAfter(now.plusHours(24))) {
-                for (Account recipient : recipients(visit, null).values()) {
-                    save(recipient, visit, "VISIT_REMINDER", "تذكير بموعد زيارتك",
-                            "موعد الزيارة رقم " + visitId + " هو " + start.toLocalDate()
-                                    + " الساعة " + start.toLocalTime() + " بتوقيت الرياض.",
-                            "VISIT_REMINDER:" + visitId + ":" + start, true, null);
+            // Check two short reminder windows, each with a distinct key for this arrival time.
+            for (int hoursBefore : new int[]{24, 2}) {
+                LocalDateTime due = start.minusHours(hoursBefore);
+                if (now.isBefore(due) || !now.isBefore(due.plusMinutes(2))) {
+                    continue;
+                }
+                for (Account target : recipients(visit, null).values()) {
+                    save(target, visit, "VISIT_REMINDER", "تذكير بموعد زيارتك",
+                            "باقي " + hoursBefore + " ساعة على زيارتك رقم " + visitId
+                                    + "، موعد الوصول " + start.toLocalDate() + " الساعة "
+                                    + start.toLocalTime() + " بتوقيت الرياض.",
+                            "VISIT_REMINDER:" + visitId + ":" + start + ":" + hoursBefore, true, null);
                 }
             }
         }
@@ -186,16 +192,34 @@ public class NotificationEventService {
                     || !"GROUP".equals(item.getVisitPlan().getPlanKind())
                     || !"SCHEDULED".equals(item.getVisitPlan().getTimingMode())
                     || item.getStartsAt() == null || !item.getStartsAt().isAfter(now)
-                    || item.getStartsAt().isAfter(now.plusMinutes(30))
                     || !participantIds(item.getParticipantVisitMemberIds()).contains(meal.getVisitMember().getId())
-                    || activityAlreadyStarted(meal.getVisitMember(), item)) {
+                    || activityAlreadyStarted(meal.getVisitMember(), item)
+                    || !penultimateRideCompletedBeforeMeal(meal.getVisitMember(), item)) {
                 continue;
             }
-            save(recipient(meal.getVisitMember()), visit, "MEAL_RESTAURANT_REMINDER", "اختر مكان استراحة الطعام",
-                    "اقتربت استراحة الطعام الساعة " + item.getStartsAt().toLocalTime()
-                            + " بتوقيت الرياض. افتح التطبيق لاختيار المكان.",
+            save(recipient(meal.getVisitMember()), visit, "MEAL_RESTAURANT_REMINDER", "وين ناكل بعد شوي؟ 🍔",
+                    "بعد اللعبة الجاية عندكم استراحة أكل. اتفقوا على المطعم وأنتم بالطريق، وتقدرون تختارونه بعد اللعبة.",
                     "MEAL_RESTAURANT_REMINDER:" + item.getId() + ":" + item.getStartsAt(), false, item);
         }
+    }
+
+    private boolean penultimateRideCompletedBeforeMeal(VisitMember member, PlanItem mealItem) {
+        if (mealItem.getSortOrder() == null || mealItem.getVisitPlan() == null) return false;
+        List<PlanItem> precedingRides = planItemRepository.findAllByVisitPlan_Id(mealItem.getVisitPlan().getId())
+                .stream()
+                .filter(item -> "RIDE".equals(item.getActivityKind()) && item.getSortOrder() != null
+                        && item.getSortOrder() < mealItem.getSortOrder()
+                        && Objects.equals(item.getSubgroupKey(), mealItem.getSubgroupKey())
+                        && participantIds(item.getParticipantVisitMemberIds()).contains(member.getId()))
+                .sorted(Comparator.comparing(PlanItem::getSortOrder))
+                .toList();
+        if (precedingRides.size() < 2) return false;
+        PlanItem prior = precedingRides.get(precedingRides.size() - 2);
+        PlanItem next = precedingRides.get(precedingRides.size() - 1);
+        if (activityAlreadyStarted(member, next)) return false;
+        return visitRecordRepository.findAllByVisitMember_IdOrderByCreatedAtDescIdDesc(member.getId())
+                .stream().anyMatch(record -> "COMPLETED".equals(record.getStatus())
+                        && record.getPlanItem() != null && prior.getId().equals(record.getPlanItem().getId()));
     }
 
     private boolean activityAlreadyStarted(VisitMember member, PlanItem item) {
