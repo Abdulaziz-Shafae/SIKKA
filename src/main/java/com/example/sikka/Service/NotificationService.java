@@ -384,6 +384,12 @@ public class NotificationService {
             }
         }
 
+        // Only the organizer can modify a group schedule. Everyone may see light wait notices.
+        if (unavailable || difference >= 30) {
+            recipients.clear();
+            recipients.add(visit.getOrganizer().getId());
+        }
+
         String type = unavailable ? "RIDE_STATUS_CHANGED" : "RIDE_WAIT_CHANGED";
         String changeKey = unavailable ? "CLOSED" : difference >= 30 ? "MAJOR" : "MINOR";
         String eventKey = type + ":" + reference.getId() + ":" + ride.getId() + ":" + changeKey;
