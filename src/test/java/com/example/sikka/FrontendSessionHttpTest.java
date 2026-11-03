@@ -52,6 +52,36 @@ class FrontendSessionHttpTest {
         assertEquals(401, browser.send(HttpRequest.newBuilder(me).GET().build(), HttpResponse.BodyHandlers.ofString()).statusCode());
     }
     @Test
+    void deletingAccountInvalidatesOtherExistingBrowserSessions() throws Exception {
+        Account account = new Account();
+        account.setName("Self deletion HTTP");
+        account.setEmail("erasure-" + java.util.UUID.randomUUID() + "@example.test");
+        account.setPasswordHash(passwordEncoder.encode("DeleteMe123!"));
+        account.setRole("USER");
+        account.setStatus("ACTIVE");
+        account.setEmailVerified(true);
+        accountRepository.save(account);
+        Integer accountId = account.getId();
+        URI login = URI.create("http://localhost:" + port + "/api/v1/auth/login");
+        URI me = URI.create("http://localhost:" + port + "/api/v1/account/me");
+        URI erase = URI.create("http://localhost:" + port + "/api/v1/account/delete-my-account");
+        CookieManager firstCookies = new CookieManager(null, CookiePolicy.ACCEPT_ALL);
+        CookieManager secondCookies = new CookieManager(null, CookiePolicy.ACCEPT_ALL);
+        HttpClient first = HttpClient.newBuilder().cookieHandler(firstCookies).build();
+        HttpClient second = HttpClient.newBuilder().cookieHandler(secondCookies).build();
+        String form = "username=" + java.net.URLEncoder.encode(account.getEmail(), java.nio.charset.StandardCharsets.UTF_8) + "&password=DeleteMe123%21";
+        for (HttpClient browser : new HttpClient[]{first,second}) {
+            assertEquals(200,browser.send(HttpRequest.newBuilder(login).header("Content-Type","application/x-www-form-urlencoded").POST(HttpRequest.BodyPublishers.ofString(form)).build(),HttpResponse.BodyHandlers.ofString()).statusCode());
+            assertEquals(200,browser.send(HttpRequest.newBuilder(me).GET().build(),HttpResponse.BodyHandlers.ofString()).statusCode());
+        }
+        HttpResponse<String> erased=first.send(HttpRequest.newBuilder(erase).header("Content-Type","application/json").POST(HttpRequest.BodyPublishers.ofString("{\"password\":\"DeleteMe123!\"}")).build(),HttpResponse.BodyHandlers.ofString());
+        assertEquals(200,erased.statusCode(),erased.body());
+        assertFalse(accountRepository.existsById(accountId));
+        assertEquals(401,first.send(HttpRequest.newBuilder(me).GET().build(),HttpResponse.BodyHandlers.ofString()).statusCode());
+        assertEquals(401,second.send(HttpRequest.newBuilder(me).GET().build(),HttpResponse.BodyHandlers.ofString()).statusCode());
+    }
+
+    @Test
     void publicMapPlaceFiltersDoNotExposeAdministrativeOperations() throws Exception {
         HttpClient guest = HttpClient.newHttpClient();
         assertEquals(200, guest.send(HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/v1/ride/catalog")).GET().build(), HttpResponse.BodyHandlers.ofString()).statusCode());
