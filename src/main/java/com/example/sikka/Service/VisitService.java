@@ -428,6 +428,7 @@ public class VisitService {
             throw new ApiException("cannot change status from " + visit.getStatus() + " to " + status);
 
         visit.setStatus(status);
+        if ("COMPLETED".equals(status)) visit.setCompletedAt(LocalDateTime.now(ZoneId.of("Asia/Riyadh")));
         visitRepository.save(visit);
         notificationEventService.notifyVisitStatus(visit);
     }
