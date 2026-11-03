@@ -1,7 +1,7 @@
 name: Verify Sikka
 on:
   push:
-    branches: [main, 'integration/**']
+    branches: [main, testing, 'integration/**']
   pull_request:
     branches: [main]
 permissions:
