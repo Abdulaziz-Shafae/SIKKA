@@ -132,7 +132,7 @@ public class VisitService {
         }
         validateVisitDetails(dto.getVisitDate(), dto.getMaxParticipants());
 
-        if (visit.getReusedFromVisitId() != null && !paymentOrderService.hasPaidVisit(visit.getOrganizer().getId(), visit.getId())) {
+        if (visit.getReusedFromVisitId() != null && !paymentOrderService.isFreeMode() && !paymentOrderService.hasPaidVisit(visit.getOrganizer().getId(), visit.getId())) {
             if (!Objects.equals(dto.getName(), visit.getName()) || !Objects.equals(dto.getMaxParticipants(), visit.getMaxParticipants())) throw new ApiException("Pay before changing repeated visit details");
         }
 
@@ -281,7 +281,7 @@ public class VisitService {
         if (!"DRAFT".equals(visit.getStatus()) || Boolean.TRUE.equals(visit.getMembersLocked()))
             throw new ApiException("تعديل التفاصيل متاح قبل توليد الخطة؛ بعد الاعتماد استخدم تعديل الموعد والوجبات من الخطة.");
 
-        if (visit.getReusedFromVisitId() != null && !paymentOrderService.hasPaidVisit(accountId, visitId)) {
+        if (visit.getReusedFromVisitId() != null && !paymentOrderService.isFreeMode() && !paymentOrderService.hasPaidVisit(accountId, visitId)) {
             if (!Objects.equals(visit.getName(), dto.getName()) || !Objects.equals(visit.getTripType(), dto.getTripType()) || !Objects.equals(visit.getMaxParticipants(), resolveMaxParticipants(dto)) || !Objects.equals(visit.getDurationMinutes(), dto.getDurationMinutes()) || !Objects.equals(visit.getGoals(), dto.getGoals()) || !Objects.equals(visit.getPrimaryGoal(), dto.getPrimaryGoal()) || !Objects.equals(visit.getTogetherMode(), dto.getTogetherMode()) || !Objects.equals(visit.getIncludePrayer(), dto.getIncludePrayer())) throw new ApiException("Payment is required before changing repeated visit preferences");
         }
 
@@ -383,7 +383,7 @@ public class VisitService {
             }
         }
 
-        if (visit.getReusedFromVisitId() == null && !Boolean.TRUE.equals(visit.getFreeSlotReserved()) && !paymentOrderService.hasPaidVisit(accountId, visitId)) {
+        if (!paymentOrderService.isFreeMode() && visit.getReusedFromVisitId() == null && !Boolean.TRUE.equals(visit.getFreeSlotReserved()) && !paymentOrderService.hasPaidVisit(accountId, visitId)) {
             throw new ApiException("Visit payment or free entitlement is required");
         }
         ParkOperatingHours.validateVisitWindow(visit.getVisitDate(), java.time.LocalTime.now(ZoneId.of("Asia/Riyadh")), 1);
