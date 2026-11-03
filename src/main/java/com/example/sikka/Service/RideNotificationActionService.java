@@ -117,8 +117,9 @@ public class RideNotificationActionService {
         for (PlanItem item : items) if (item.getRide() != null) excluded.add(item.getRide().getId());
         List<VisitMember> members = visitMemberRepository.findAllByVisit_Id(visit.getId());
         Ride anchor = target.getRide();
+        if (anchor.getMapX() == null || anchor.getMapY() == null) throw new ApiException("Original ride has no verified map coordinates");
         return rideRepository.findAll().stream().filter(ride -> !excluded.contains(ride.getId()) && "OPEN".equals(ride.getStatus()) && ride.getWaitMinutes() != null && ride.getWaitObservedAt() != null && !ride.getWaitObservedAt().isBefore(LocalDateTime.now(ZoneId.of("Asia/Riyadh")).minusMinutes(10)) && ride.getRideDurationMinutes() != null && ride.getMinHeightCm() != null && ride.getMapX() != null && ride.getMapY() != null)
-                .filter(ride -> members.stream().filter(member -> "GOING".equals(member.getRsvpStatus())).allMatch(member -> member.getVisitorProfile() != null && member.getVisitorProfile().getHeightCm() != null && java.math.BigDecimal.valueOf(member.getVisitorProfile().getHeightCm()).compareTo(ride.getMinHeightCm()) >= 0))
+                .filter(ride -> members.stream().filter(member -> "GOING".equals(member.getRsvpStatus())).allMatch(member -> member.getVisitorProfile() != null && member.getVisitorProfile().getHeightCm() != null && member.getVisitorProfile().getHeightCm().compareTo(ride.getMinHeightCm()) >= 0))
                 .min(Comparator.comparingDouble(ride -> Math.pow(ride.getMapX().doubleValue() - anchor.getMapX().doubleValue(),2) + Math.pow(ride.getMapY().doubleValue() - anchor.getMapY().doubleValue(),2)))
                 .orElseThrow(() -> new ApiException("No verified, open and eligible alternative ride is available"));
     }
