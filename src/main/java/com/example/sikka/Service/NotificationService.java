@@ -335,7 +335,7 @@ public class NotificationService {
         boolean unavailable = "CLOSED".equals(ride.getStatus()) || "UNAVAILABLE".equals(ride.getStatus());
         boolean recentWait = ride.getWaitMinutes() != null && ride.getWaitMinutes() >= 0 && ride.getWaitObservedAt() != null && !ride.getWaitObservedAt().isAfter(now) && !ride.getWaitObservedAt().isBefore(now.minusMinutes(rideWaitFreshnessMinutes)) && ride.getWaitSource() != null && !ride.getWaitSource().isBlank() && !"UNKNOWN".equals(ride.getWaitSource());
         long difference = recentWait && reference.getWaitingMinutes() != null && reference.getWaitingMinutes() >= 0 ? (long) ride.getWaitMinutes() - reference.getWaitingMinutes() : 0;
-        if (!unavailable && (!"OPEN".equals(ride.getStatus()) || !recentWait || Math.abs(difference) < rideWaitChangeMinutes)) {
+        if (!unavailable && (!"OPEN".equals(ride.getStatus()) || !recentWait || difference < rideWaitChangeMinutes)) {
             return 0;
         }
 
