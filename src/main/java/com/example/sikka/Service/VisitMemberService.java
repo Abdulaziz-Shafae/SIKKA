@@ -43,6 +43,7 @@ public class VisitMemberService {
     private final com.example.sikka.Repository.VisitRecordRepository visitRecordRepository;
     private final N8nNotificationService n8nNotificationService;
     private final NotificationEventService notificationEventService;
+    private final VisitRecapImageService visitRecapImageService;
     private final com.example.sikka.Repository.AccountRepository accountRepository;
     // ---------- CRUD ----------
 
@@ -236,6 +237,12 @@ public class VisitMemberService {
     }
 
 
+
+    public byte[] getMyVisitRecapImage(Integer accountId, Integer visitId) {
+        VisitMember member = getMember(accountId, visitId);
+        if (!"COMPLETED".equals(member.getVisit().getStatus()) || member.getVisitRating() == null || member.getSikkaRating() == null) throw new ApiException("Complete the visit and ratings before requesting your recap");
+        return visitRecapImageService.createCompletedVisitImage(visitId, member.getId());
+    }
 
     // organizer removes a member (a friend or a family member)
     @Transactional
