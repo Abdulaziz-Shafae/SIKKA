@@ -335,6 +335,7 @@ public class NotificationService {
         boolean unavailable = "CLOSED".equals(ride.getStatus()) || "UNAVAILABLE".equals(ride.getStatus());
         boolean recentWait = ride.getWaitMinutes() != null && ride.getWaitMinutes() >= 0 && ride.getWaitObservedAt() != null && !ride.getWaitObservedAt().isAfter(now) && !ride.getWaitObservedAt().isBefore(now.minusMinutes(rideWaitFreshnessMinutes)) && ride.getWaitSource() != null && !ride.getWaitSource().isBlank() && !"UNKNOWN".equals(ride.getWaitSource());
         long difference = recentWait && reference.getWaitingMinutes() != null && reference.getWaitingMinutes() >= 0 ? (long) ride.getWaitMinutes() - reference.getWaitingMinutes() : 0;
+        if (unavailable && Boolean.TRUE.equals(reference.getRideAlertDeferred()) && now.isBefore(reference.getStartsAt().minusMinutes(15))) return 0;
         if (!unavailable && (!"OPEN".equals(ride.getStatus()) || !recentWait || difference < rideWaitChangeMinutes)) {
             return 0;
         }
@@ -391,7 +392,7 @@ public class NotificationService {
         }
 
         String type = unavailable ? "RIDE_STATUS_CHANGED" : "RIDE_WAIT_CHANGED";
-        String changeKey = unavailable ? "CLOSED" : difference >= 30 ? "MAJOR" : "MINOR";
+        String changeKey = unavailable ? "CLOSED:" + reference.getStartsAt() : difference >= 30 ? "MAJOR" : "MINOR";
         String eventKey = type + ":" + reference.getId() + ":" + ride.getId() + ":" + changeKey;
         String message = unavailable ? "اللعبة الموجودة في خطتك صارت مغلقة أو غير متاحة. راجع الخطة، وتقدر تطلب اقتراح بديل مناسب إذا النشاط قابل للتعديل." : "تغير انتظار لعبة في خطتك من " + reference.getWaitingMinutes() + " إلى " + ride.getWaitMinutes() + " دقيقة حسب أحدث قراءة متاحة من المصدر. راجع إذا تحتاج تعديل الجدول.";
         if (Boolean.TRUE.equals(reference.getPinned())) {
