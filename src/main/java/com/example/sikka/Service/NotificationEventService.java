@@ -183,7 +183,7 @@ public class NotificationEventService {
                 LocalDateTime due = start.minusHours(hoursBefore);
                 // External cron may wake a sleeping service late. Never miss a reminder merely because the scan was delayed.
                 // A newly created visit does not generate historical reminders more than 24h late.
-                if (now.isBefore(due) || !now.isBefore(start) || now.isAfter(due.plusHours(24))) {
+                if (now.isBefore(due) || !now.isBefore(start) || now.isAfter(hoursBefore == 24 ? due.plusHours(1) : due.plusHours(2))) {
                     continue;
                 }
                 for (Account target : recipients(visit, null).values()) {
