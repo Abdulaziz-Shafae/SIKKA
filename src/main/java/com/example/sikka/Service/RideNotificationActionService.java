@@ -44,8 +44,10 @@ public class RideNotificationActionService {
         if (plan == null || !"GROUP".equals(plan.getPlanKind()) || !Boolean.TRUE.equals(plan.getIsActive()) || !"SCHEDULED".equals(plan.getTimingMode()) || plan.getProposedItems() != null || plan.getPendingScope() != null || plan.getProposalBaseSnapshot() != null || plan.getPlanApproval() == null || !"APPROVED".equals(plan.getPlanApproval().getStatus())) throw new ApiException("Finish existing proposals before changing the approved schedule");
         if (Boolean.TRUE.equals(target.getPinned()) || alreadyStarted(target)) throw new ApiException("An active or pinned ride cannot be changed automatically");
         if (!Set.of("DEFER", "REPLACE", "KEEP", "ADJUST").contains(action)) throw new ApiException("Unknown ride action");
-        if ("DEFER".equals(action) || "REPLACE".equals(action)) {
+        if ("DEFER".equals(action)) {
             if (!"RIDE_STATUS_CHANGED".equals(notification.getType()) || "OPEN".equals(target.getRide().getStatus())) throw new ApiException("This ride is no longer reported closed");
+        } else if ("REPLACE".equals(action)) {
+            if (!"RIDE_STATUS_CHANGED".equals(notification.getType()) && (!"RIDE_WAIT_CHANGED".equals(notification.getType()) || !"RIDE_WAIT_MAJOR".equals(notification.getActionType()))) throw new ApiException("Ride replacement requires a closure or major waiting alert");
         } else if (!"RIDE_WAIT_CHANGED".equals(notification.getType())) {
             throw new ApiException("This action requires a wait-time alert");
         }
