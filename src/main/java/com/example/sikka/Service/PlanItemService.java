@@ -89,7 +89,7 @@ public class PlanItemService {
         }
 
         Visit visit = visitPlan.getVisit();
-        if (visit.getReusedFromVisitId() != null && !paymentOrderService.hasPaidVisit(visit.getOrganizer().getId(), visit.getId())) throw new ApiException("Pay before editing repeated visit plan items");
+        if (visit.getReusedFromVisitId() != null && !paymentOrderService.isFreeMode() && !paymentOrderService.hasPaidVisit(visit.getOrganizer().getId(), visit.getId())) throw new ApiException("Pay before editing repeated visit plan items");
 
         if ("GROUP".equals(visitPlan.getPlanKind())) {
 
