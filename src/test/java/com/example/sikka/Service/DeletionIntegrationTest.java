@@ -35,6 +35,49 @@ class DeletionIntegrationTest {
     private VisitPlanService visitPlanService;
 
     @Test
+    void eraseAccountWithOnlySoloVisitDeletesEntireVisitAndProfile() {
+        Account owner = persistAccount("erase-solo-owner");
+        owner.setPasswordHash(passwordEncoder.encode("SoloConfirm123!"));
+        VisitorProfile profile = persistProfile(owner);
+        Visit visit = persistVisit(owner);
+        VisitMember member = persistMember(visit, profile);
+        Integer ownerId = owner.getId(), profileId = profile.getId(), visitId = visit.getId(), memberId = member.getId();
+        flushAndClear();
+        accountErasureService.deleteMyAccount(ownerId, "SoloConfirm123!");
+        flushAndClear();
+        assertNull(entityManager.find(Account.class, ownerId));
+        assertNull(entityManager.find(VisitorProfile.class, profileId));
+        assertNull(entityManager.find(Visit.class, visitId));
+        assertNull(entityManager.find(VisitMember.class, memberId));
+    }
+
+    @Test
+    void eraseFriendAccountLeavesOrganizerVisitAndOtherParticipantsUnaffected() {
+        Account organizer = persistAccount("erase-friend-owner");
+        VisitorProfile organizerProfile = persistProfile(organizer);
+        Visit visit = persistVisit(organizer);
+        VisitMember ownerMember = persistMember(visit, organizerProfile);
+        Account guest = persistAccount("erase-friend-guest");
+        guest.setPasswordHash(passwordEncoder.encode("GuestConfirm123!"));
+        VisitorProfile guestProfile = persistProfile(guest);
+        VisitMember guestMember = persistMember(visit, guestProfile);
+        guestMember.setName("Guest real name");
+        guestMember.setPreferences("{\\"preferredRideIds\\":[1]}");
+        Integer guestId = guest.getId(), guestProfileId = guestProfile.getId(), organizerId = organizer.getId(), visitId = visit.getId(), ownerMemberId = ownerMember.getId(), guestMemberId = guestMember.getId();
+        flushAndClear();
+        accountErasureService.deleteMyAccount(guestId, "GuestConfirm123!");
+        flushAndClear();
+        assertNull(entityManager.find(Account.class, guestId));
+        assertNull(entityManager.find(VisitorProfile.class, guestProfileId));
+        assertEquals(organizerId, entityManager.find(Visit.class, visitId).getOrganizer().getId());
+        assertNotNull(entityManager.find(VisitMember.class, ownerMemberId));
+        VisitMember formerGuest = entityManager.find(VisitMember.class, guestMemberId);
+        assertEquals("Deleted participant", formerGuest.getName());
+        assertNull(formerGuest.getPreferences());
+        assertNull(formerGuest.getVisitorProfile());
+    }
+
+    @Test
     void deleteOwnAccountWithoutDeletingAnotherMemberFromSharedVisit() {
         Account organizer = persistAccount("self-erasure-owner");
         organizer.setPasswordHash(passwordEncoder.encode("Confirm123!"));
