@@ -136,14 +136,14 @@ public class NotificationEventService {
                 .filter(record -> "COMPLETED".equals(record.getStatus()) && record.getRide() != null)
                 .sorted(Comparator.comparing(VisitRecord::getCompletedAt, Comparator.nullsLast(Comparator.naturalOrder())))
                 .toList();
-        StringBuilder message = new StringBuilder("يا سلام على سكتكم! 🎢\\nزيارة: ").append(visit.getName()).append("\\nالتاريخ: ").append(visit.getVisitDate());
+        StringBuilder message = new StringBuilder("يا سلام على سكتكم! 🎢\nزيارة: ").append(visit.getName()).append("\nالتاريخ: ").append(visit.getVisitDate());
         if (visit.getStartedAt() != null && visit.getCompletedAt() != null && !visit.getCompletedAt().isBefore(visit.getStartedAt())) {
             long duration = java.time.Duration.between(visit.getStartedAt(), visit.getCompletedAt()).toMinutes();
-            message.append("\\nمدة الزيارة الفعلية: ").append(duration / 60).append(" ساعة و").append(duration % 60).append(" دقيقة");
+            message.append("\nمدة الزيارة الفعلية: ").append(duration / 60).append(" ساعة و").append(duration % 60).append(" دقيقة");
         }
-        message.append("\\nالألعاب المكتملة: ").append(playedRides.size());
+        message.append("\nالألعاب المكتملة: ").append(playedRides.size());
         for (VisitRecord record : playedRides) {
-            message.append("\\n- ").append(record.getRide().getName());
+            message.append("\n- ").append(record.getRide().getName());
             if (record.getCompletedAt() != null) message.append(" — ").append(record.getCompletedAt().toLocalTime());
         }
         emailOnly(account, visit, "VISIT_COMPLETED", "يا سلام على سكتكم! 🚂🎉", message.toString(), "VISIT_COMPLETED:" + visit.getId() + ":" + member.getId());
