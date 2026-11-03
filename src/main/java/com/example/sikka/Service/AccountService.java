@@ -89,11 +89,13 @@ public class AccountService {
         Account account = new Account();
         account.setName(dto.getName());
         account.setEmail(dto.getEmail());
-        account.setPhone(dto.getPhone());
+        // Phone account collection paused; restore only after approval.
+        // account.setPhone(dto.getPhone());
         account.setPasswordHash(passwordEncoder.encode(dto.getPassword()));
         account.setRole("USER");
         account.setStatus("ACTIVE");
-        account.setEmailVerified(true);
+        // Email verification is required after signup, unlike the former auto-verification.
+        account.setEmailVerified(false);
         accountRepository.save(account);
 
         VisitorProfile profile = new VisitorProfile();
@@ -108,7 +110,8 @@ public class AccountService {
         profile.setFoodPreferences(dto.getFoodPreferences());
         profile.setAccount(account);
         visitorProfileRepository.save(profile);
-        return true;
+        // If delivery fails the user remains unverified and can request a fresh email code.
+        return verificationService.sendVerificationCode(account);
     }
 
     // contract method for the other flows
