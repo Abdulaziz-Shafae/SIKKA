@@ -29,6 +29,7 @@ public class AuthController {
         return ResponseEntity.status(200).body(new ApiResponse("if the account exists and is not verified, a new code was sent"));
     }
 
+    /* Paused phone verification endpoints retained for future reactivation.
     @PostMapping("/verify-phone")
     public ResponseEntity<?> verifyPhone(@RequestBody @Valid VerifyEmailDtoIn dto) {
         verificationService.verifyPhone(dto.getEmail(), dto.getCode());
@@ -40,6 +41,8 @@ public class AuthController {
         verificationService.resendPhoneCode(dto.getEmail());
         return ResponseEntity.status(200).body(new ApiResponse("if the account has an unverified phone, a new code was sent"));
     }
+
+    */
 
     @PostMapping("/forgot-password")
     public ResponseEntity<?> forgotPassword(@RequestBody @Valid EmailDtoIn dto) {
