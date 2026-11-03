@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.*;
 public class NotificationController {
 
     private final NotificationService notificationService;
+    private final com.example.sikka.Service.RideNotificationActionService rideNotificationActionService;
 
     @GetMapping("/get/my-notifications")
     public ResponseEntity<?> getMyNotifications(@AuthenticationPrincipal Account account) {
@@ -43,6 +44,11 @@ public class NotificationController {
     @GetMapping("/unread-count")
     public ResponseEntity<?> getUnreadNotificationsCount(@AuthenticationPrincipal Account account) {
         return ResponseEntity.status(200).body(notificationService.getUnreadNotificationsCount(account.getId()));
+    }
+
+    @PutMapping("/ride-action/{notificationId}/{action}")
+    public ResponseEntity<?> applyRideNotificationAction(@AuthenticationPrincipal Account account, @PathVariable Integer notificationId, @PathVariable String action) {
+        return ResponseEntity.ok(new ApiResponse(rideNotificationActionService.applyRideNotificationAction(account.getId(), notificationId, action)));
     }
 
     @PutMapping("/respond-delay/{notificationId}")
