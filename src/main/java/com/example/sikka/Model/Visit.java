@@ -116,6 +116,8 @@ public class Visit {
 
     private LocalDateTime startedAt;
 
+    private LocalDateTime completedAt;
+
     @Column(columnDefinition = "json")
     private String sharedSelectedRides;
 
