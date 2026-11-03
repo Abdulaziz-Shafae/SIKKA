@@ -94,7 +94,7 @@ public class AccountService {
         account.setPasswordHash(passwordEncoder.encode(dto.getPassword()));
         account.setRole("USER");
         account.setStatus("ACTIVE");
-        account.setEmailVerified(true);
+        account.setEmailVerified(false);
         accountRepository.save(account);
 
         VisitorProfile profile = new VisitorProfile();
@@ -109,7 +109,7 @@ public class AccountService {
         profile.setFoodPreferences(dto.getFoodPreferences());
         profile.setAccount(account);
         visitorProfileRepository.save(profile);
-        return true;
+        // Account remains unverified even when email delivery fails; the user can request a new code.\n        return verificationService.sendVerificationCode(account);
     }
 
     // contract method for the other flows
