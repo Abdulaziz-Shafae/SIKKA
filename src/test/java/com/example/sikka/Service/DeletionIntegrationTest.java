@@ -20,6 +20,10 @@ class DeletionIntegrationTest {
     @Autowired
     private AccountService accountService;
     @Autowired
+    private AccountErasureService accountErasureService;
+    @Autowired
+    private org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
+    @Autowired
     private VisitorProfileService visitorProfileService;
     @Autowired
     private VisitService visitService;
@@ -29,6 +33,53 @@ class DeletionIntegrationTest {
     private VisitMemberService visitMemberService;
     @Autowired
     private VisitPlanService visitPlanService;
+
+    @Test
+    void deleteOwnAccountWithoutDeletingAnotherMemberFromSharedVisit() {
+        Account organizer = persistAccount("self-erasure-owner");
+        organizer.setPasswordHash(passwordEncoder.encode("Confirm123!"));
+        VisitorProfile organizerProfile = persistProfile(organizer);
+        Account friend = persistAccount("self-erasure-friend");
+        VisitorProfile friendProfile = persistProfile(friend);
+        Visit visit = persistVisit(organizer);
+        VisitMember ownerMember = persistMember(visit, organizerProfile);
+        ownerMember.setName("Personal owner name");
+        ownerMember.setSelectedRides("[{\"rideId\":1}]");
+        VisitMember friendMember = persistMember(visit, friendProfile);
+        friendMember.setName("Friend still here");
+        Integer organizerId = organizer.getId(), friendId = friend.getId(), visitId = visit.getId(), ownerMemberId = ownerMember.getId(), friendMemberId = friendMember.getId(), profileId = organizerProfile.getId();
+        flushAndClear();
+        accountErasureService.deleteMyAccount(organizerId, "Confirm123!");
+        flushAndClear();
+        assertNull(entityManager.find(Account.class, organizerId));
+        assertNull(entityManager.find(VisitorProfile.class, profileId));
+        assertNotNull(entityManager.find(Account.class, friendId));
+        assertNotNull(entityManager.find(VisitMember.class, friendMemberId));
+        assertEquals("Friend still here", entityManager.find(VisitMember.class, friendMemberId).getName());
+        Visit shared = entityManager.find(Visit.class, visitId);
+        assertNotNull(shared);
+        assertNotEquals(organizerId, shared.getOrganizer().getId());
+        assertEquals("BLOCKED", shared.getOrganizer().getStatus());
+        VisitMember former = entityManager.find(VisitMember.class, ownerMemberId);
+        assertNull(former.getVisitorProfile());
+        assertNull(former.getSelectedRides());
+        assertNull(former.getBirthDate());
+        assertEquals("Deleted participant", former.getName());
+        assertEquals("NOT_GOING", former.getRsvpStatus());
+    }
+
+    @Test
+    void refuseSelfErasureOnWrongPasswordWithoutChangingVisit() {
+        Account owner = persistAccount("self-erasure-reject");
+        owner.setPasswordHash(passwordEncoder.encode("Correct123!"));
+        Visit visit = persistVisit(owner);
+        Integer ownerId = owner.getId(), visitId = visit.getId();
+        flushAndClear();
+        assertThrows(ApiException.class, () -> accountErasureService.deleteMyAccount(ownerId, "incorrect"));
+        flushAndClear();
+        assertNotNull(entityManager.find(Account.class, ownerId));
+        assertEquals(ownerId, entityManager.find(Visit.class, visitId).getOrganizer().getId());
+    }
 
     @Test
     void deleteUnlinkedAccountAndItsProfile() {
