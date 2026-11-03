@@ -33,7 +33,7 @@ public class NotificationEventService {
     private final VisitMealBreakRepository visitMealBreakRepository;
     private final ActivitySessionRepository activitySessionRepository;
     private final VisitRecordRepository visitRecordRepository;
-    private final N8nNotificationService n8nNotificationService;
+    private final EmailService emailService;
     private final WhatsAppService whatsAppService;
     private final PrivacyConsentService privacyConsentService;
     private final PlatformTransactionManager transactionManager;
@@ -372,15 +372,13 @@ public class NotificationEventService {
         notificationRepository.save(email);
         Integer emailId = email.getId();
         String address = account.getEmail();
-        String type = email.getType();
         String title = email.getTitle();
         String message = email.getMessage();
-        // Include recipient so n8n can later deduplicate the same event per recipient.
-        String deliveryKey = "EMAIL:" + account.getId() + ":" + key;
+        // A unique account/channel/event key provides delivery idempotency in the database.
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
-                boolean sent = n8nNotificationService.sendNotification(deliveryKey, type, address, title, message);
+                boolean sent = emailService.sendEmail(address, title, message);
                 try {
                     TransactionTemplate template = new TransactionTemplate(transactionManager);
                     template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
