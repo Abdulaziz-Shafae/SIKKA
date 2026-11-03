@@ -16,7 +16,7 @@ No implementation from older, deleted review branches is imported automatically.
 - [ ] 04 — Ride selection and priorities
 - [ ] 05 — Current approved meals/snacks/restaurant UX (do not change numbers without consent)
 - [ ] 06 — Initial planning, approvals and regeneration (do not alter AI usage or arrival AI behavior without approval)
-- [ ] 07 — Live visit activity workflow and replan
+- [ ] 07 — Live visit activity workflow and replan: frontend-only changes on `Sikka-front/testing` require explicit skip confirmation, expose manual `suggest-replan` with reason, and clarify proposal remains non-operative pending approval. Added `live-flow.cjs` contract/source assertions. **CI/build and Railway end-to-end not yet verified**.
 - [ ] 08 — Prayer scheduling
 - [ ] 09 — Map and navigation
 - [ ] 10 — Brevo and n8n notifications (Brevo implementation must remain unchanged until separately approved)
@@ -37,3 +37,11 @@ No implementation from older, deleted review branches is imported automatically.
 - Previous invitation rotate/toggle methods did not enforce DRAFT; they now lock the visit row and reject locked/non-DRAFT changes. Existing code and toggling behavior remain in place.
 - Previous frontend omitted MAYBE RSVP and displayed removal/family controls when status was not DRAFT. Changed to match backend. Old locally stored invitation code no longer displayed or converted to a link after the visit is locked.
 - No main, approved baseline, external notification provider, n8n, payment gateway, deployment, or Production changes. Not all end-to-end paths can be verified through repository inspection alone; CI and staging behavior must be checked separately.
+
+## Point 07 approved changes (2026-11-03)
+
+- User approved frontend skip confirmation and manual replan action, retaining existing AI, notification, and execution backend semantics.
+- `components/sikka/live-plan.tsx`: skip button now opens an explicit confirmation dialog, and API call is only made through the dialog's confirmation; cancellation closes without server request.
+- The manual replan form appears for active approved visits in progress and without an outstanding proposal. It requires a nonempty reason and calls the pre-existing `/api/v1/visit-plan/suggest-replan/{visitId}` endpoint; the proposal still requires approval and does not automatically replace the active schedule.
+- Added explanatory message to the proposal area and basic integration/source assertions in `scripts/checks/live-flow.cjs`.
+- No backend, AI, notification, paid-mode, main branch, production deployment, or approved baseline modifications in this point. Full runtime tests and staging validation remain pending.
