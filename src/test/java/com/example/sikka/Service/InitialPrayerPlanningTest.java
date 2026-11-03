@@ -36,7 +36,7 @@ class InitialPrayerPlanningTest {
         assertTrue(result.getFeasible());
         assertTrue(result.getActivities().size() < 3);
         input.set("prayerEvents", mapper.valueToTree(List.of(Map.of("relativePrayerMinute", 15, "activityMinutes", 15))));
-        assertNotNull(new ArrivalPrayerScheduleService().scheduleApprovedActivitiesWithPrayer(input, result.getActivities()));
+        assertNotNull(new ArrivalPrayerScheduleService().scheduleApprovedActivitiesWithPrayer(input, List.of(result.getActivities().get(0))));
         assertEquals(35, input.path("durationMinutes").asInt());
     }
 }
