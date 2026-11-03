@@ -231,6 +231,7 @@ public class VisitMemberService {
         if (dto.getSikkaReview() != null)
             member.setSikkaReview(dto.getSikkaReview());
         visitMemberRepository.save(member);
+        notificationEventService.notifyVisitRatingSubmitted(member);
     }
 
 
