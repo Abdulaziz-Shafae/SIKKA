@@ -99,6 +99,9 @@ public class VisitMemberService {
         com.example.sikka.Model.Account account = accountRepository.findAccountById(accountId);
         if (account == null)
             throw new ApiException("account not found");
+        // Testing point 03: previously any existing account could join by invite code. Keep active, email-verified accounts only.
+        if (!"ACTIVE".equals(account.getStatus()) || !Boolean.TRUE.equals(account.getEmailVerified()))
+            throw new ApiException("Verify your email and activate your account before joining a visit");
 
         VisitorProfile profile = visitorProfileRepository.findVisitorProfileByAccount_Id(accountId);
         if (profile == null)
