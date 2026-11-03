@@ -142,7 +142,7 @@ public class RideNotificationActionService {
         }
         if (ride.getHealthRestrictions() != null && !ride.getHealthRestrictions().isEmpty()) return false;
         // Existing participant exclusions are authoritative; never override a deliberate opt-out.
-        if (member.getPreferences() != null && member.getPreferences().contains("\\"")) {
+        if (member.getPreferences() != null && !member.getPreferences().isBlank()) {
             try {
                 tools.jackson.databind.JsonNode prefs = tools.jackson.databind.json.JsonMapper.builder().build().readTree(member.getPreferences());
                 for (tools.jackson.databind.JsonNode id : prefs.path("excludedRideIds")) if (id.asInt() == ride.getId()) return false;
