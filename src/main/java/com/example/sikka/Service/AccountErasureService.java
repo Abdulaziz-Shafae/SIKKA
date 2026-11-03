@@ -3,7 +3,6 @@ package com.example.sikka.Service;
 import com.example.sikka.Api.ApiException;
 import com.example.sikka.Model.Account;
 import jakarta.persistence.EntityManager;
-import jakarta.persistence.LockModeType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -22,8 +21,10 @@ public class AccountErasureService {
     @Transactional
     public void deleteMyAccount(Integer accountId, String password) {
         if (accountId == null || password == null || password.isBlank()) throw new ApiException("Enter your password to confirm account deletion");
-        Account account = entityManager.find(Account.class, accountId, LockModeType.PESSIMISTIC_WRITE);
-        if (account == null || !"ACTIVE".equals(account.getStatus()) || !passwordEncoder.matches(password, account.getPasswordHash())) throw new ApiException("Password confirmation failed");
+        // Lock the row without triggering Hibernate's eager one-to-one profile join under PESSIMISTIC_WRITE.
+        @SuppressWarnings("unchecked")
+        List<Object[]> accountRows = entityManager.createNativeQuery("SELECT status, password_hash FROM account WHERE id = :id FOR UPDATE").setParameter("id", accountId).getResultList();
+        if (accountRows.isEmpty() || !"ACTIVE".equals(String.valueOf(accountRows.get(0)[0])) || !passwordEncoder.matches(password, String.valueOf(accountRows.get(0)[1]))) throw new ApiException("Password confirmation failed");
 
         // A visit that belongs only to this account can be removed using the existing tested visit deletion path.
         List<Integer> ownedVisits = entityManager.createQuery("select v.id from Visit v where v.organizer.id = :accountId", Integer.class).setParameter("accountId", accountId).getResultList();
