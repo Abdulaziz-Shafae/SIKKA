@@ -34,6 +34,7 @@ public class NotificationEventService {
     private final ActivitySessionRepository activitySessionRepository;
     private final VisitRecordRepository visitRecordRepository;
     private final EmailService emailService;
+    private final VisitRecapImageService visitRecapImageService;
     private final WhatsAppService whatsAppService;
     private final PrivacyConsentService privacyConsentService;
     private final PlatformTransactionManager transactionManager;
@@ -380,7 +381,21 @@ public class NotificationEventService {
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
-                boolean sent = emailService.sendEmail(address, title, message);
+                boolean sent;
+                if ("VISIT_COMPLETED".equals(email.getType()) && email.getEventKey() != null) {
+                    try {
+                        String[] tokens = email.getEventKey().split(":");
+                        Integer visitId = Integer.valueOf(tokens[1]);
+                        Integer memberId = Integer.valueOf(tokens[2]);
+                        byte[] image = visitRecapImageService.createCompletedVisitImage(visitId, memberId);
+                        sent = emailService.sendEmailWithImage(address, title, message, image);
+                    } catch (Exception exception) {
+                        log.warn("Visit recap email with image could not be generated: {}", exception.getClass().getSimpleName());
+                        sent = false;
+                    }
+                } else {
+                    sent = emailService.sendEmail(address, title, message);
+                }
                 try {
                     TransactionTemplate template = new TransactionTemplate(transactionManager);
                     template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
