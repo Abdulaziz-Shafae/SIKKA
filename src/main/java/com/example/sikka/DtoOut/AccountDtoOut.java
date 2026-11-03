@@ -16,5 +16,7 @@ public class AccountDtoOut {
     private String role;
     private String status;
     private Boolean emailVerified;
+    // Phone verification disabled; retain for future feature reactivation.
+    // private Boolean phoneVerified;
     private LocalDateTime createdAt;
 }
