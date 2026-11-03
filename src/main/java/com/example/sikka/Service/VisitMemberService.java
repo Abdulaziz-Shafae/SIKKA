@@ -98,8 +98,10 @@ public class VisitMemberService {
     @Transactional
     public void join(Integer accountId, JoinDtoIn dto) {
         com.example.sikka.Model.Account account = accountRepository.findAccountById(accountId);
-        if (account == null)
-            throw new ApiException("account not found");
+        if (account == null || !"ACTIVE".equals(account.getStatus()))
+            throw new ApiException("An active account is required");
+        if (!Boolean.TRUE.equals(account.getEmailVerified()))
+            throw new ApiException("verify your account first");
 
         VisitorProfile profile = visitorProfileRepository.findVisitorProfileByAccount_Id(accountId);
         if (profile == null)
