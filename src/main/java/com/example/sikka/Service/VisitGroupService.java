@@ -160,6 +160,7 @@ public class VisitGroupService {
 
     public String regenerateCode(Integer accountId, Integer visitId) {
         VisitGroup group = getOrganizerGroup(accountId, visitId);
+        if (group.getVisit() == null || !"DRAFT".equals(group.getVisit().getStatus()) || Boolean.TRUE.equals(group.getVisit().getMembersLocked())) throw new ApiException("Invitation code can only change before planning starts");
         String code = newCode();
         group.setInviteCodeHash(hash(code));
         visitGroupRepository.save(group);
