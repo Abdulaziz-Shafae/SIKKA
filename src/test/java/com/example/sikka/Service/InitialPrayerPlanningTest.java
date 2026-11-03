@@ -22,7 +22,7 @@ class InitialPrayerPlanningTest {
         ReflectionTestUtils.setField(service, "participantJsonMapper", mapper);
         ReflectionTestUtils.setField(service, "parkLatitude", 24.5866431);
         ReflectionTestUtils.setField(service, "parkLongitude", 46.3310353);
-        LocalDate date = LocalDate.of(2026, 10, 28);
+        LocalDate date = LocalDate.now(ZoneId.of("Asia/Riyadh")).plusDays(1);
         when(prayer.getPrayerTimes(eq(date), anyDouble(), anyDouble())).thenReturn(Map.of("Fajr", date.atTime(5, 0), "Dhuhr", date.atTime(12, 0), "Asr", date.atTime(16, 15), "Maghrib", date.atTime(17, 30), "Isha", date.atTime(19, 0)));
         ObjectNode input = ReflectionTestUtils.invokeMethod(new ServerItineraryServiceTest(), "input", 35, false);
         input.put("visitDate", date.toString());
