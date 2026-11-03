@@ -17,7 +17,7 @@ import java.util.Map;
 import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.*;
 
-@SpringBootTest
+@SpringBootTest(properties = "sikka.payments.enabled=true")
 @Transactional
 class TeamFlowsIntegrationTest {
     @Autowired private EntityManager entityManager;
