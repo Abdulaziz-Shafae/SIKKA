@@ -27,6 +27,7 @@ public class PaymentOrderService {
     private final VisitRepository visitRepository;
     private final com.example.sikka.Repository.PlanHistoryRepository planHistoryRepository;
     private final MoyasarService moyasarService;
+    private final NotificationEventService notificationEventService;
 
     public List<PaymentOrder> getMyPaymentOrders(Integer accountId){
         Account account = accountRepository.findAccountById(accountId);
@@ -163,7 +164,9 @@ public class PaymentOrderService {
                 reason = "Payment failed";
             order.setStatus("FAILED");
             order.setFailureReason(reason.length() > 500 ? reason.substring(0, 500) : reason);
-            return paymentOrderRepository.save(order);
+            PaymentOrder failed = paymentOrderRepository.save(order);
+            notificationEventService.notifyPaymentResult(failed);
+            return failed;
         }
         if (!"paid".equals(status))
             throw new ApiException("Payment is not completed yet");
@@ -181,7 +184,9 @@ public class PaymentOrderService {
         order.setVerifiedAt(now);
         order.setPaidAt(now);
         order.setFailureReason(null);
-        return paymentOrderRepository.save(order);
+        PaymentOrder paid = paymentOrderRepository.save(order);
+        notificationEventService.notifyPaymentResult(paid);
+        return paid;
     }
 
     private BigDecimal getPrice(Visit visit) {
