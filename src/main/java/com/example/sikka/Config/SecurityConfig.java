@@ -20,7 +20,7 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http, com.example.sikka.Repository.AccountRepository accountRepository) throws Exception {
         return http
                 .csrf(csrf -> csrf.disable())
 
@@ -32,7 +32,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/account/register", "/api/v1/auth/login").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/google-calendar/oauth/callback").permitAll()
                         .requestMatchers("/api/v1/auth/verify-email", "/api/v1/auth/resend-verification",
-                                "/api/v1/auth/verify-phone", "/api/v1/auth/resend-phone-verification",
+                                // "/api/v1/auth/verify-phone", "/api/v1/auth/resend-phone-verification",
                                 "/api/v1/auth/forgot-password", "/api/v1/auth/reset-password").permitAll()
                         .requestMatchers(HttpMethod.GET,
                                 "/api/v1/ride/get",
@@ -132,6 +132,8 @@ public class SecurityConfig {
                             response.getWriter().write("{\"message\":\"Access denied\"}");
                         })
                 )
+
+                .addFilterBefore(new DeletedAccountSessionFilter(accountRepository), org.springframework.security.web.access.intercept.AuthorizationFilter.class)
 
                 .httpBasic(basic -> {})
 
