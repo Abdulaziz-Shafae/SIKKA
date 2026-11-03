@@ -45,7 +45,7 @@ public class NotificationEventService {
         long slot = java.time.Instant.now().getEpochSecond() / 600;
         Notification notice = save(member.getVisitorProfile().getAccount(), member.getVisit(), "PLANNING_REMINDER", attendance ? "تذكير بتأكيد حضورك" : "تذكير بإكمال اختياراتك", message, "PLANNING_REMINDER:" + member.getId() + ":" + attendance + ":" + slot, true, null);
         Account recipient = member.getVisitorProfile().getAccount();
-        if (notice != null && Boolean.TRUE.equals(recipient.getPhoneVerified()) && recipient.getPhone() != null && privacyConsentService.hasConsent(member.getVisitorProfile().getId(), "WHATSAPP")) queueWhatsApp(notice);
+        // WhatsApp reminders are disabled by the approved delivery policy.
     }
 
     // 1 + 2: called only after a real RSVP change, while the visit is locked.
@@ -55,12 +55,6 @@ public class NotificationEventService {
                 || member.getVisitorProfile().getAccount().getId().equals(visit.getOrganizer().getId())) {
             return;
         }
-        String attendance = "GOING".equals(member.getRsvpStatus()) ? "سيحضر"
-                : "MAYBE".equals(member.getRsvpStatus()) ? "لم يحسم حضوره بعد" : "لن يحضر";
-        String occurrence = UUID.randomUUID().toString();
-        save(visit.getOrganizer(), visit, "MEMBER_RSVP", "تحديث حضور أحد أعضاء الزيارة",
-                "العضو " + member.getVisitorProfile().getName() + " حدّث رده: " + attendance + ".",
-                "MEMBER_RSVP:" + member.getId() + ":" + occurrence, false, null);
         if (!firstResponse) {
             return;
         }
@@ -72,44 +66,32 @@ public class NotificationEventService {
         save(visit.getOrganizer(), visit, "ALL_MEMBERS_RESPONDED", "اكتملت ردود أعضاء الزيارة",
                 "جميع الأعضاء المنضمين حاليًا ردّوا على الحضور للزيارة رقم " + visit.getId()
                         + ". راجع الردود؛ قد يكون بعضها ربما أو عدم الحضور.",
-                "ALL_MEMBERS_RESPONDED:" + visit.getId() + ":" + occurrence, false, null);
+                "ALL_MEMBERS_RESPONDED:" + visit.getId(), true, null);
     }
 
     // 3: generated means ready to review, not approved or ready to start.
     public void notifyPlanGenerated(PlanHistory history) {
-        if (!"SUCCEEDED".equals(history.getStatus())) {
-            return;
-        }
-        save(history.getVisit().getOrganizer(), history.getVisit(), "PLAN_GENERATED", "الخطة جاهزة للمراجعة",
-                "اكتمل تجهيز خطة الزيارة رقم " + history.getVisit().getId() + ". افتح التطبيق لمراجعتها.",
-                "PLAN_GENERATED:" + history.getId(), false, null);
+        // Generated plans are already visible; no notification needed.
     }
 
     // 4: initial approval; replan requests have their own proposal key.
     public void notifyPlanApprovalRequested(PlanApproval approval) {
-        if (!"PENDING".equals(approval.getStatus())) {
-            return;
-        }
-        VisitPlan plan = approval.getVisitPlan();
-        save(approval.getRequiredApproverAccount(), plan.getVisit(), "PLAN_APPROVAL_REQUEST",
-                "خطة الزيارة بانتظار موافقتك",
-                "راجع الخطة رقم " + plan.getId() + " للزيارة رقم " + plan.getVisit().getId()
-                        + " في التطبيق، ثم وافق عليها أو ارفضها.",
-                "PLAN_APPROVAL_REQUEST:" + approval.getId(), true, null);
+        // Initial approval occurs directly in the plan view.
     }
 
     // 5: only confirmed participants, with managed family members routed to organizer.
     public void notifyPlanApprovalResult(PlanApproval approval) {
-        if (!"APPROVED".equals(approval.getStatus()) && !"REJECTED".equals(approval.getStatus())) {
+        if (!"APPROVED".equals(approval.getStatus())) {
             return;
         }
         Visit visit = approval.getVisitPlan().getVisit();
         boolean approved = "APPROVED".equals(approval.getStatus());
         for (Account recipient : recipients(visit, null).values()) {
+            if (recipient.getId().equals(visit.getOrganizer().getId())) continue;
             save(recipient, visit, "PLAN_APPROVAL_RESULT", approved ? "تم اعتماد الخطة" : "لم يتم اعتماد الخطة",
                     "الخطة رقم " + approval.getVisitPlan().getId()
                             + (approved ? " تم اعتمادها. راجع تفاصيلها في التطبيق." : " تم رفضها. انتظر تحديث المنظّم."),
-                    "PLAN_APPROVAL_RESULT:" + approval.getId() + ":" + approval.getStatus(), false, null);
+                    "PLAN_APPROVAL_RESULT:" + approval.getId() + ":" + approval.getStatus(), true, null);
         }
     }
 
@@ -123,12 +105,13 @@ public class NotificationEventService {
                 "اقتراح تعديل الخطة بانتظار موافقتك",
                 "يوجد اقتراح لتعديل الخطة رقم " + plan.getId()
                         + ". راجع الاقتراح في التطبيق؛ لم يتم تطبيقه تلقائيًا.",
-                proposalEventKey("REPLAN_APPROVAL_REQUEST", plan.getId(), proposalKey), true, null);
+                proposalEventKey("REPLAN_APPROVAL_REQUEST", plan.getId(), proposalKey), false, null);
     }
 
     // 7: pass affected IDs before the caller clears the proposal fields.
     public void notifyReplanResult(VisitPlan plan, String proposalKey, boolean approved,
                                   List<Integer> affectedMemberIds) {
+        if (!approved) return;
         for (Account recipient : recipients(plan.getVisit(), new HashSet<>(affectedMemberIds)).values()) {
             save(recipient, plan.getVisit(), "REPLAN_RESULT", approved ? "تم تعديل الخطة" : "تم رفض تعديل الخطة",
                     "اقتراح تعديل الخطة رقم " + plan.getId()
@@ -139,7 +122,7 @@ public class NotificationEventService {
 
     // 8 + 9: use only after the actual status transition.
     public void notifyVisitStatus(Visit visit) {
-        if (!"IN_PROGRESS".equals(visit.getStatus()) && !"COMPLETED".equals(visit.getStatus())) {
+        if (!"COMPLETED".equals(visit.getStatus())) {
             return;
         }
         boolean started = "IN_PROGRESS".equals(visit.getStatus());
@@ -148,7 +131,7 @@ public class NotificationEventService {
             save(recipient, visit, type, started ? "بدأت الزيارة" : "انتهت الزيارة",
                     "الزيارة رقم " + visit.getId()
                             + (started ? " بدأت. افتح خطتك وتابع الأنشطة." : " اكتملت. نأمل أنك استمتعت؛ يمكنك تقييم الزيارة."),
-                    type + ":" + visit.getId(), false, null);
+                    type + ":" + visit.getId(), true, null);
         }
     }
 
@@ -169,12 +152,7 @@ public class NotificationEventService {
 
     // Reuse the existing IN_APP row and its recipient; do not recreate delay/ride logic.
     public void forwardCriticalNotification(Notification notification) {
-        if (!"IN_APP".equals(notification.getChannel()) || !"SENT".equals(notification.getStatus())
-                || (!"ACTIVITY_DELAY".equals(notification.getType())
-                && !"RIDE_STATUS_CHANGED".equals(notification.getType()))) {
-            return;
-        }
-        queueEmail(notification);
+        // All during-visit alerts are in-app only.
     }
 
     // 12, 13, 14: scheduled reminders, re-read under the visit lock each time.
@@ -197,34 +175,6 @@ public class NotificationEventService {
         }
         if (!"IN_PROGRESS".equals(visit.getStatus())) {
             return;
-        }
-        for (VisitPlan plan : visitPlanRepository.findAllByVisit_IdAndPlanKind(visitId, "GROUP")) {
-            if (!Boolean.TRUE.equals(plan.getIsActive()) || !"SCHEDULED".equals(plan.getTimingMode())) {
-                continue;
-            }
-            for (PlanItem item : planItemRepository.findAllByVisitPlan_Id(plan.getId())) {
-                if (item.getStartsAt() == null || !item.getStartsAt().isAfter(now)
-                        || item.getStartsAt().isAfter(now.plusMinutes(10))) {
-                    continue;
-                }
-                Set<Integer> participantIds = participantIds(item.getParticipantVisitMemberIds());
-                Map<Integer, Account> targets = new LinkedHashMap<>();
-                for (VisitMember member : visitMemberRepository.findAllByVisit_IdAndRsvpStatus(visitId, "GOING")) {
-                    if (!participantIds.contains(member.getId()) || activityAlreadyStarted(member, item)) {
-                        continue;
-                    }
-                    Account recipient = recipient(member);
-                    if (recipient != null) {
-                        targets.put(recipient.getId(), recipient);
-                    }
-                }
-                for (Account target : targets.values()) {
-                    save(target, visit, "ACTIVITY_REMINDER", "اقترب موعد نشاطك",
-                            "النشاط " + Objects.toString(item.getTitle(), "رقم " + item.getId())
-                                    + " يبدأ الساعة " + item.getStartsAt().toLocalTime() + " بتوقيت الرياض.",
-                            "ACTIVITY_REMINDER:" + item.getId() + ":" + item.getStartsAt(), false, item);
-                }
-            }
         }
         for (VisitMealBreak meal : visitMealBreakRepository.findVisitMealBreaksByVisitId(visitId)) {
             PlanItem item = meal.getPlanItem();
