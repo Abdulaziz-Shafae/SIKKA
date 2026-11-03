@@ -7,7 +7,8 @@ import com.example.sikka.Model.Visit;
 import com.example.sikka.Repository.AccountRepository;
 import com.example.sikka.Repository.PaymentOrderRepository;
 import com.example.sikka.Repository.VisitRepository;
-import lombok.AllArgsConstructor;
+import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,7 +19,7 @@ import java.util.UUID;
 import java.util.Set;
 
 @Service
-@AllArgsConstructor
+@RequiredArgsConstructor
 public class PaymentOrderService {
 
     private final jakarta.persistence.EntityManager entityManager;
@@ -27,6 +28,16 @@ public class PaymentOrderService {
     private final VisitRepository visitRepository;
     private final com.example.sikka.Repository.PlanHistoryRepository planHistoryRepository;
     private final MoyasarService moyasarService;
+
+    // TEMPORARY FREE MODE: keep Moyasar and all paid-mode logic below for reactivation.
+    @Value("${sikka.payments.enabled:false}")
+    private boolean paymentsEnabled;
+
+    public boolean isFreeMode() { return !paymentsEnabled; }
+
+    private void requirePaymentsEnabled() {
+        if (isFreeMode()) throw new ApiException("Payments are temporarily disabled; all Sikka visits are free");
+    }
 
     public List<PaymentOrder> getMyPaymentOrders(Integer accountId){
         Account account = accountRepository.findAccountById(accountId);
@@ -68,6 +79,7 @@ public class PaymentOrderService {
 
     @Transactional
     public PaymentOrder addPaymentOrder(Integer accountId, Integer visitId){
+        requirePaymentsEnabled(); // Old Moyasar order creation retained below (disabled in free mode).
         Account account = accountRepository.findAccountById(accountId);
 
         if (account == null){
@@ -139,6 +151,7 @@ public class PaymentOrderService {
     // confirms a payment by asking Moyasar itself; the frontend's word is never trusted
     @Transactional
     public PaymentOrder confirmPayment(Integer accountId, Integer paymentOrderId, String moyasarPaymentId) {
+        requirePaymentsEnabled(); // Old Moyasar payment confirmation retained below (disabled in free mode).
         PaymentOrder order = paymentOrderRepository.findPaymentOrderById(paymentOrderId);
         if (order == null)
             throw new ApiException("Payment order not found");
@@ -186,6 +199,8 @@ public class PaymentOrderService {
 
     private BigDecimal getPrice(Visit visit) {
         if (!Set.of("SOLO", "FRIENDS", "FAMILY").contains(visit.getTripType())) throw new ApiException("Valid tripType is required");
+        // Paid pricing kept for later: SOLO = 19 SAR, FRIENDS/FAMILY = 29 SAR.
+        if (isFreeMode()) return BigDecimal.ZERO;
         return new BigDecimal("SOLO".equals(visit.getTripType()) ? "19.00" : "29.00");
     }
 
@@ -207,6 +222,12 @@ public class PaymentOrderService {
     @Transactional(readOnly = true)
     public com.example.sikka.DtoOut.PlanningAccessDtoOut getPlanningAccess(Integer accountId, Integer visitId) {
         Visit visit = getPlanningVisit(accountId, visitId);
+        // Temporary mode: no first-two-visits quota, visit fees or regeneration fees.
+        if (isFreeMode()) {
+            boolean allowed = visit.getStartedAt() == null && Set.of("DRAFT", "PLANNING", "READY").contains(visit.getStatus());
+            return new com.example.sikka.DtoOut.PlanningAccessDtoOut(0, false, BigDecimal.ZERO, "FREE_UNLIMITED", allowed);
+        }
+        // Legacy paid/two-free-visits policy retained below, not executed while free.
         boolean paid = isPaid(accountId, visit);
         boolean reusable = visit.getReusedFromVisitId() != null;
         boolean reserved = Boolean.TRUE.equals(visit.getFreeSlotReserved());
@@ -232,11 +253,12 @@ public class PaymentOrderService {
             if (!previous.getVisit().getId().equals(visitId) || !previous.getOperationType().equals(operationType)) throw new ApiException("Request key is already used for another operation");
             return previous.getId();
         }
-        boolean paid = isPaid(accountId, visit);
+        // Legacy entitlement calculation retained; bypass all paid quota checks in free mode.
+        boolean paid = !isFreeMode() && isPaid(accountId, visit);
         boolean reused = visit.getReusedFromVisitId() != null;
         boolean reserved = Boolean.TRUE.equals(visit.getFreeSlotReserved());
-        if (!paid && (reused || !reserved && occupiedFreeSlots(accountId) >= 2)) throw new ApiException("A server-verified payment is required");
-        if (!paid && !reserved) {
+        if (!isFreeMode() && !paid && (reused || !reserved && occupiedFreeSlots(accountId) >= 2)) throw new ApiException("A server-verified payment is required");
+        if (!isFreeMode() && !paid && !reserved) {
             visit.setFreeSlotReserved(true);
             visitRepository.save(visit);
         }
@@ -254,7 +276,7 @@ public class PaymentOrderService {
         planHistoryRepository.findAccountByIdForGenerationUpdate(accountId);
         com.example.sikka.Model.PlanHistory history = planHistoryRepository.findPlanHistoryByIdForUpdate(planHistoryId);
         if (history == null || !history.getAccount().getId().equals(accountId) || !"PROCESSING".equals(history.getStatus())) throw new ApiException("Processing generation request not found");
-        if ("PAID".equals(history.getBillingMode()) && !isPaid(accountId, history.getVisit())) throw new ApiException("Server-verified payment is required");
+        if (!isFreeMode() && "PAID".equals(history.getBillingMode()) && !isPaid(accountId, history.getVisit())) throw new ApiException("Server-verified payment is required");
     }
 
     @Transactional
