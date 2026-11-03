@@ -181,7 +181,9 @@ public class NotificationEventService {
             // Check two short reminder windows, each with a distinct key for this arrival time.
             for (int hoursBefore : new int[]{24, 2}) {
                 LocalDateTime due = start.minusHours(hoursBefore);
-                if (now.isBefore(due) || !now.isBefore(due.plusMinutes(2))) {
+                // External cron may wake a sleeping service late. Never miss a reminder merely because the scan was delayed.
+                // A newly created visit does not generate historical reminders more than 24h late.
+                if (now.isBefore(due) || !now.isBefore(start) || now.isAfter(due.plusHours(24))) {
                     continue;
                 }
                 for (Account target : recipients(visit, null).values()) {
