@@ -109,7 +109,8 @@ public class AccountService {
         profile.setFoodPreferences(dto.getFoodPreferences());
         profile.setAccount(account);
         visitorProfileRepository.save(profile);
-        // Account remains unverified even when email delivery fails; the user can request a new code.\n        return verificationService.sendVerificationCode(account);
+        // Account remains unverified even when email delivery fails; the user can request a new code.
+        return verificationService.sendVerificationCode(account);
     }
 
     // contract method for the other flows
