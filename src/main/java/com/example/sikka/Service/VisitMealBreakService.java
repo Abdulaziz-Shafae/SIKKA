@@ -615,7 +615,7 @@ public class VisitMealBreakService {
         if (!"DRAFT".equals(visit.getStatus()) || Boolean.TRUE.equals(visit.getMembersLocked())) {
             throw new ApiException("Meal preferences can only be saved before planning; deferred answers during the visit require schedule preparation");
         }
-        java.util.Map<String, List<String>> choices = java.util.Map.of("NONE", List.of(), "SKIPPED", List.of(), "DEFERRED", List.of(), "ONE_MEAL", List.of("MEAL"), "TWO_SNACKS", List.of("SNACK", "SNACK"), "SNACK", List.of("SNACK"), "MEAL_AND_SNACK", List.of("MEAL", "SNACK"));
+        java.util.Map<String, List<String>> choices = java.util.Map.of("NONE", List.of(), "SKIPPED", List.of(), "DEFERRED", List.of(), "ONE_MEAL", List.of("MEAL"), "TWO_MEALS", List.of("MEAL", "MEAL"), "TWO_SNACKS", List.of("SNACK", "SNACK"), "SNACK", List.of("SNACK"), "MEAL_AND_SNACK", List.of("MEAL", "SNACK"));
         if (dto == null || !choices.containsKey(dto.getChoice())) {
             throw new ApiException("A valid meal preference is required");
         }
