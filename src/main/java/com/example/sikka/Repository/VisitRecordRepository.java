@@ -13,6 +13,7 @@ import java.util.List;
 
 @Repository
 public interface VisitRecordRepository extends JpaRepository<VisitRecord, Integer> {
+    boolean existsByPlanItem_Id(Integer planItemId);
 
     VisitRecord findVisitRecordById(Integer id);
 
