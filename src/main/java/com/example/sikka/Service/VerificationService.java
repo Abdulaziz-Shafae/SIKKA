@@ -24,10 +24,9 @@ public class VerificationService {
     private final SecureRandom random = new SecureRandom();
 
     public boolean sendVerificationCode(Account account) {
-        boolean emailSent = sendEmailCode(account);
-        if (account.getPhone() != null && !account.getPhone().isBlank())
-            sendPhoneCode(account);
-        return emailSent;
+        // Phone verification paused:
+        // if (account.getPhone() != null && !account.getPhone().isBlank()) sendPhoneCode(account);
+        return sendEmailCode(account);
     }
 
     private boolean sendEmailCode(Account account) {
@@ -38,6 +37,7 @@ public class VerificationService {
         return emailService.sendEmail(account.getEmail(), "أهلًا بك في سكة | رمز تفعيل حسابك", "حيّاك " + account.getName() + " في سكة! رمز تفعيل بريدك هو " + code + ". صالح لمدة " + CODE_MINUTES + " دقائق. بعد التفعيل تقدر تجهّز زيارتك.");
     }
 
+    /* Phone verification paused; original implementation retained.
     private void sendPhoneCode(Account account) {
         String code = newCode();
         account.setPhoneCodeHash(hash(code));
@@ -45,6 +45,8 @@ public class VerificationService {
         accountRepository.save(account);
         whatsAppService.sendMessage(account.getPhone(), "Your Sikka phone verification code is " + code + ". It expires in " + CODE_MINUTES + " minutes.");
     }
+
+    */
 
     public void resendVerificationCode(String email) {
         Account account = accountRepository.findAccountByEmail(email);
@@ -69,6 +71,7 @@ public class VerificationService {
         emailService.sendEmail(account.getEmail(), "Sikka email verified", "Your email has been verified successfully. Welcome to Sikka!");
     }
 
+    /* Phone verification paused; original endpoints retained.
     public void resendPhoneCode(String email) {
         Account account = accountRepository.findAccountByEmail(email);
         if (account == null || account.getPhone() == null || account.getPhone().isBlank() || Boolean.TRUE.equals(account.getPhoneVerified()))
@@ -91,6 +94,8 @@ public class VerificationService {
         accountRepository.save(account);
         whatsAppService.sendMessage(account.getPhone(), "Your phone number has been verified successfully. Welcome to Sikka!");
     }
+
+    */
 
     // forgot password: unknown email is ignored silently (we do not reveal which emails exist)
     public void sendResetCode(String email) {
@@ -121,11 +126,9 @@ public class VerificationService {
     }
 
     private void deliver(Account account, String subject, String text) {
-        boolean sent = false;
-        if (Boolean.TRUE.equals(account.getPhoneVerified()) && account.getPhone() != null && !account.getPhone().isBlank())
-            sent = whatsAppService.sendMessage(account.getPhone(), text);
-        if (!sent)
-            emailService.sendEmail(account.getEmail(), subject, text);
+        // Legacy WhatsApp password recovery paused:
+        // if (Boolean.TRUE.equals(account.getPhoneVerified())) whatsAppService.sendMessage(account.getPhone(), text);
+        emailService.sendEmail(account.getEmail(), subject, text);
     }
 
     private String newCode() {
