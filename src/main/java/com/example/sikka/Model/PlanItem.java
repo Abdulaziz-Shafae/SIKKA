@@ -40,7 +40,7 @@ public class PlanItem {
     @JsonIgnore
     private LocalDateTime executionReleasedAt;
 
-    @Column(name = "ride_alert_deferred", nullable = false)
+    @Column(name = "ride_alert_deferred", columnDefinition = "BOOLEAN NOT NULL DEFAULT FALSE")
     private Boolean rideAlertDeferred = false;
 
     @PositiveOrZero(message = "Walking minutes must be zero or greater")
