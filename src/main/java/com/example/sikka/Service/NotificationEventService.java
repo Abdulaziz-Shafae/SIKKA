@@ -122,19 +122,31 @@ public class NotificationEventService {
         }
     }
 
-    // 8 + 9: use only after the actual status transition.
+    // Visit completion is not emailed until the attendee submits both ratings.
     public void notifyVisitStatus(Visit visit) {
-        if (!"COMPLETED".equals(visit.getStatus())) {
-            return;
+        // The visit recap is intentionally sent only after rating submission.
+    }
+
+    public void notifyVisitRatingSubmitted(VisitMember member) {
+        Visit visit = member.getVisit();
+        if (!"COMPLETED".equals(visit.getStatus()) || member.getVisitRating() == null || member.getSikkaRating() == null || !"GOING".equals(member.getRsvpStatus())) return;
+        Account account = recipient(member);
+        if (account == null) return;
+        List<VisitRecord> playedRides = visitRecordRepository.findAllByVisitMember_IdOrderByCreatedAtDescIdDesc(member.getId()).stream()
+                .filter(record -> "COMPLETED".equals(record.getStatus()) && record.getRide() != null)
+                .sorted(Comparator.comparing(VisitRecord::getCompletedAt, Comparator.nullsLast(Comparator.naturalOrder())))
+                .toList();
+        StringBuilder message = new StringBuilder("يا سلام على سكتكم! 🎢\\nزيارة: ").append(visit.getName()).append("\\nالتاريخ: ").append(visit.getVisitDate());
+        if (visit.getStartedAt() != null && visit.getCompletedAt() != null && !visit.getCompletedAt().isBefore(visit.getStartedAt())) {
+            long duration = java.time.Duration.between(visit.getStartedAt(), visit.getCompletedAt()).toMinutes();
+            message.append("\\nمدة الزيارة الفعلية: ").append(duration / 60).append(" ساعة و").append(duration % 60).append(" دقيقة");
         }
-        boolean started = "IN_PROGRESS".equals(visit.getStatus());
-        String type = started ? "VISIT_STARTED" : "VISIT_COMPLETED";
-        for (Account recipient : recipients(visit, null).values()) {
-            save(recipient, visit, type, started ? "بدأت الزيارة" : "انتهت الزيارة",
-                    "الزيارة رقم " + visit.getId()
-                            + (started ? " بدأت. افتح خطتك وتابع الأنشطة." : " اكتملت. نأمل أنك استمتعت؛ يمكنك تقييم الزيارة."),
-                    type + ":" + visit.getId(), true, null);
+        message.append("\\nالألعاب المكتملة: ").append(playedRides.size());
+        for (VisitRecord record : playedRides) {
+            message.append("\\n- ").append(record.getRide().getName());
+            if (record.getCompletedAt() != null) message.append(" — ").append(record.getCompletedAt().toLocalTime());
         }
+        emailOnly(account, visit, "VISIT_COMPLETED", "يا سلام على سكتكم! 🚂🎉", message.toString(), "VISIT_COMPLETED:" + visit.getId() + ":" + member.getId());
     }
 
     // 10 + 11: for the future VERIFIED payment callback only; never trust client status.
