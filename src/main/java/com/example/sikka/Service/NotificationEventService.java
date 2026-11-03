@@ -396,14 +396,15 @@ public class NotificationEventService {
                 } else {
                     sent = emailService.sendEmail(address, title, message);
                 }
+                final boolean sentOutcome = sent;
                 try {
                     TransactionTemplate template = new TransactionTemplate(transactionManager);
                     template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
                     template.executeWithoutResult(transaction -> {
                         Notification saved = notificationRepository.findNotificationById(emailId);
                         if (saved != null && "PENDING".equals(saved.getStatus())) {
-                            saved.setStatus(sent ? "SENT" : "FAILED");
-                            saved.setSentAt(sent ? now() : null);
+                            saved.setStatus(sentOutcome ? "SENT" : "FAILED");
+                            saved.setSentAt(sentOutcome ? now() : null);
                             notificationRepository.save(saved);
                         }
                     });
