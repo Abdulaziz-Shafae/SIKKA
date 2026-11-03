@@ -78,6 +78,11 @@ public class VisitMemberController {
         return ResponseEntity.status(200).body(new ApiResponse("checked in successfully"));
     }
 
+    @GetMapping(value = "/recap-image/{visitId}", produces = "image/png")
+    public ResponseEntity<byte[]> getMyVisitRecapImage(@AuthenticationPrincipal Account account, @PathVariable Integer visitId) {
+        return ResponseEntity.ok().header("Cache-Control", "private, no-store").body(visitMemberService.getMyVisitRecapImage(account.getId(), visitId));
+    }
+
     @PutMapping("/review/{visitId}")
     public ResponseEntity<?> review(@AuthenticationPrincipal Account account, @PathVariable Integer visitId, @RequestBody @Valid ReviewDtoIn dto) {
         visitMemberService.review(account.getId(), visitId, dto);
