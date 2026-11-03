@@ -43,6 +43,7 @@ class TeamFlowsHttpTest {
         account.setPasswordHash(passwordEncoder.encode(password));
         account.setRole("USER");
         account.setStatus("ACTIVE");
+        account.setEmailVerified(true); // Login requires verified email.
         accountRepository.save(account);
         String authorization = "Basic " + Base64.getEncoder().encodeToString((email + ":" + password).getBytes(StandardCharsets.UTF_8));
         HttpClient client = HttpClient.newHttpClient();
