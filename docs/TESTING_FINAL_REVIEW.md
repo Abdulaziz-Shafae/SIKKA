@@ -20,7 +20,7 @@ No implementation from older, deleted review branches is imported automatically.
 - [ ] 08 — Prayer scheduling: frontend display changes on `Sikka-front/testing` show server-confirmed prayer name, calculate actual prayer start from scheduled walking start, show known prayer-room name, and label times provisional before confirmed arrival. Added `live-flow.cjs` assertions. CI/build and Railway/MySQL checks pending.
 - [ ] 09 — Map and navigation: frontend `testing` now numbers plan pins, matches accurate real GPS fixes to georeferenced walking-network edges (rejects inaccurate/outside fixes), and offers `وجهني لها` from a matched user location to a selected ride, with approximate network route. Added regression assertions. Typecheck/build/device GPS/Railway tests pending.
 - [ ] 10 — Brevo and n8n notifications (Brevo implementation must remain unchanged until separately approved)
-- [ ] 11 — Visit rating, recap and image
+- [ ] 11 — Visit rating, recap and image: frontend testing now renders a fixed-layout ride-only visit poster from authenticated visit summary, completed ride records, and catalogue. Four rides per row, eight per image, additional same-layout pages. No achievements. Local helper test passed; full build, PNG export, live DB and screenshot visual parity pending.
 - [ ] 12 — Frontend simplification and responsive / accessibility
 - [ ] 13 — Security, authorization and privacy
 - [ ] 14 — End-to-end on Railway Testing, MySQL validation, required data comparison, release readiness
@@ -61,3 +61,11 @@ No implementation from older, deleted review branches is imported automatically.
 - New `lib/gps-walking-route.ts` uses the already-supplied georeferenced `lib/park-routes.json` walkway node latitude/longitude and image points, snaps to a nearby walking edge only if GPS accuracy <=15 m and distance from known walkway <=12 m, rejects untrusted positioning, and uses existing graph edges for shortest-path directions. There is no arbitrary GPS-to-image global affine calibration or straight-line substitute. GPS readings remain in the browser.
 - The existing `entrancesVerified=false` map source and estimated route semantics are unchanged. The plotted point is an approximate walkway match, not an independently field-verified precise location or safety-certified navigation. Live GPS/device walking and image-registration accuracy require on-site testing before release.
 - New source/contract assertions in `scripts/checks/planning-readiness.cjs`. No changes to backend runtime, AI, notifications, protected baseline, main, or Production. GitHub commit verification only; Node tests/typecheck/build and Railway integration are pending.
+
+## Point 11 approved visit-summary design (2026-11-06)
+- Approved poster: Sikka branding, track zigzag, red-blue ride cars facing right on top and left on bottom; four ride cards per row. Layout dimensions are fixed. User explicitly rejected achievements, and poster includes rides only (not meals/snacks).
+- Data inputs: existing authorized `/api/v1/visit-record/visit-summary/{visitId}`, `/api/v1/visit-record/get/my-records/{visitId}`, `/api/v1/visit/details/{visitId}`, and `/api/v1/ride/get`.
+- `lib/visit-poster.ts` accepts only authenticated `COMPLETED` records for the confirmed summary member, sorts by completion timestamp, checks record count against backend total, and displays world-record text only for database rides flagged `RECORD_BREAKING` with verified named record metadata. Unknown records get no trophy claim.
+- `components/sikka/visit-summary-poster.tsx` locks geometry of poster; save as PNG uses embedded same-origin logo; `components/sikka/visit-review.tsx` integrates without changing the rating form or its state logic.
+- `scripts/checks/visit-poster.cjs` added to `check:flows` and matching data logic was run locally: PASS for completed/skipped/member filtering, chronology, DB flag and pagination. Full frontend build, browser image comparison to supplied reference, PNG export and live Railway/database verification are still pending.
+- Backend runtime, AI, payments, notifications, Brevo/n8n, main and Production unchanged.
