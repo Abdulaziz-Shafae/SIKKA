@@ -18,7 +18,7 @@ No implementation from older, deleted review branches is imported automatically.
 - [ ] 06 — Initial planning, approvals and regeneration (do not alter AI usage or arrival AI behavior without approval)
 - [ ] 07 — Live visit activity workflow and replan: frontend-only changes on `Sikka-front/testing` require explicit skip confirmation, expose manual `suggest-replan` with reason, and clarify proposal remains non-operative pending approval. Added `live-flow.cjs` contract/source assertions. **CI/build and Railway end-to-end not yet verified**.
 - [ ] 08 — Prayer scheduling: frontend display changes on `Sikka-front/testing` show server-confirmed prayer name, calculate actual prayer start from scheduled walking start, show known prayer-room name, and label times provisional before confirmed arrival. Added `live-flow.cjs` assertions. CI/build and Railway/MySQL checks pending.
-- [ ] 09 — Map and navigation
+- [ ] 09 — Map and navigation: frontend `testing` now numbers plan pins, matches accurate real GPS fixes to georeferenced walking-network edges (rejects inaccurate/outside fixes), and offers `وجهني لها` from a matched user location to a selected ride, with approximate network route. Added regression assertions. Typecheck/build/device GPS/Railway tests pending.
 - [ ] 10 — Brevo and n8n notifications (Brevo implementation must remain unchanged until separately approved)
 - [ ] 11 — Visit rating, recap and image
 - [ ] 12 — Frontend simplification and responsive / accessibility
@@ -53,3 +53,11 @@ No implementation from older, deleted review branches is imported automatically.
 - `components/sikka/live-plan.tsx`: shows confirmed prayer name/time/prayer-room when provided; otherwise clearly distinguishes unknown or provisional values. Non-prayer activity display unchanged.
 - `scripts/checks/live-flow.cjs`: new presentation and source-wire assertions. Actual Node check, TypeScript build, and Railway end-to-end testing remain pending.
 - Backend runtime unchanged, including prayer API, scheduling, AI, approved baseline, Brevo, n8n and Production.
+
+## Point 09 approved changes (2026-11-06)
+
+- User approved: (1) chronological plan numbers on map markers, (2) current location dot only when reliably mapped, and (3) `وجهني لها` route from current GPS position to a chosen ride. User explicitly rejected additional missing-route explanation UI.
+- Frontend `park-map.tsx`: displays numbered planned locations (and checkmarks for completed activities), keeps multiple activities at one place grouped, starts/stops live browser location on user action, shows blue approximate point only for a validated map match, and offers stop guidance and approximate walk distance/time to a selected ride.
+- New `lib/gps-walking-route.ts` uses the already-supplied georeferenced `lib/park-routes.json` walkway node latitude/longitude and image points, snaps to a nearby walking edge only if GPS accuracy <=15 m and distance from known walkway <=12 m, rejects untrusted positioning, and uses existing graph edges for shortest-path directions. There is no arbitrary GPS-to-image global affine calibration or straight-line substitute. GPS readings remain in the browser.
+- The existing `entrancesVerified=false` map source and estimated route semantics are unchanged. The plotted point is an approximate walkway match, not an independently field-verified precise location or safety-certified navigation. Live GPS/device walking and image-registration accuracy require on-site testing before release.
+- New source/contract assertions in `scripts/checks/planning-readiness.cjs`. No changes to backend runtime, AI, notifications, protected baseline, main, or Production. GitHub commit verification only; Node tests/typecheck/build and Railway integration are pending.
