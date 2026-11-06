@@ -21,7 +21,7 @@ No implementation from older, deleted review branches is imported automatically.
 - [ ] 09 — Map and navigation: frontend `testing` now numbers plan pins, matches accurate real GPS fixes to georeferenced walking-network edges (rejects inaccurate/outside fixes), and offers `وجهني لها` from a matched user location to a selected ride, with approximate network route. Added regression assertions. Typecheck/build/device GPS/Railway tests pending.
 - [ ] 10 — Brevo and n8n notifications (Brevo implementation must remain unchanged until separately approved)
 - [ ] 11 — Visit rating, recap and image: frontend testing now renders a fixed-layout ride-only visit poster from authenticated visit summary, completed ride records, and catalogue. Four rides per row, eight per image, additional same-layout pages. No achievements. Local helper test passed; full build, PNG export, live DB and screenshot visual parity pending.
-- [ ] 12 — Frontend simplification and responsive / accessibility
+- [ ] 12 — Frontend responsive/accessibility: approved updates committed to `Sikka-front/testing`: poster preview scrolls horizontally on small screens without changing SVG or PNG artwork, skip/replan/completion modal keyboard focus is contained/restored with Escape, and mobile map targets/toolbar/selection spacing improved. Static source checks passed; CI build and real-device/browser tests pending.
 - [ ] 13 — Security, authorization and privacy
 - [ ] 14 — End-to-end on Railway Testing, MySQL validation, required data comparison, release readiness
 
@@ -69,3 +69,11 @@ No implementation from older, deleted review branches is imported automatically.
 - `components/sikka/visit-summary-poster.tsx` locks geometry of poster; save as PNG uses embedded same-origin logo; `components/sikka/visit-review.tsx` integrates without changing the rating form or its state logic.
 - `scripts/checks/visit-poster.cjs` added to `check:flows` and matching data logic was run locally: PASS for completed/skipped/member filtering, chronology, DB flag and pagination. Full frontend build, browser image comparison to supplied reference, PNG export and live Railway/database verification are still pending.
 - Backend runtime, AI, payments, notifications, Brevo/n8n, main and Production unchanged.
+
+## Point 12 approved responsive/accessibility changes (2026-11-06)
+- User approved exactly 3 frontend-only changes: mobile summary poster preview, accessible confirmation/replan/completion dialogs, mobile map controls. No functional changes to AI, notifications, payment, GPS routing, map assets, source coordinates, poster original SVG geometry, main or Production.
+- `components/sikka/visit-summary-poster.tsx`: adds a horizontally scrollable focusable preview wrapper; exported SVG and PNG dimensions/layout unchanged.
+- `components/sikka/use-modal-focus.ts` and `components/sikka/live-plan.tsx`: focus containment, Escape and original-trigger focus restoration, with initial focus only after capture; the original completion, skip and replan business/API flows are unchanged.
+- `app/globals.css`: 44px touch targets, responsive toolbar/plan selection controls and keyboard scrollable poster preview; dialog max-height limits within dynamic viewport; all scoped to testing CSS rules.
+- `scripts/checks/responsive-accessibility.cjs` added to frontend `check:flows` (syntax/contract checks).
+- GitHub content verification: PASS. Actual Node test execution, TypeScript typecheck/build, browser/mobile/iPad testing, screenshot verification and Railway deploy: NOT YET VERIFIED. No backend runtime edits.
