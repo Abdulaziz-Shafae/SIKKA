@@ -30,10 +30,14 @@ public class NightBeforeVisitReminderService {
     }
 
     public int sendTomorrowReminders() {
+        return sendTomorrowReminders(ZonedDateTime.now(RIYADH));
+    }
+
+    // Package-local clock injection keeps the scheduler deterministic in tests.
+    int sendTomorrowReminders(ZonedDateTime now) {
         if (!enabled) throw new IllegalStateException("Night-before reminders are disabled");
-        ZonedDateTime now = ZonedDateTime.now(RIYADH);
         if (!isNightlyWindow(now)) throw new IllegalStateException("Night-before reminders only run at 20:00 Asia/Riyadh");
-        LocalDate tomorrow = now.toLocalDate().plusDays(1);
+        LocalDate tomorrow = now.withZoneSameInstant(RIYADH).toLocalDate().plusDays(1);
         int processed = 0;
         // The data query is made only on the external trigger, not every minute.
         for (int page = 0; page < 100; page++) {
