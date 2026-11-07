@@ -1,6 +1,7 @@
 package com.example.sikka.Service;
 
 import com.example.sikka.Repository.VisitRepository;
+import com.example.sikka.Config.VisitMonitorGate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -17,6 +18,8 @@ public class NotificationReminderService {
 
     private final VisitRepository visitRepository;
     private final NotificationEventService notificationEventService;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private VisitMonitorGate visitMonitorGate;
 
     // Explicit opt-in while the team finishes notification tests.
     @Value("${sikka.notifications.reminders-enabled:false}")
@@ -27,7 +30,7 @@ public class NotificationReminderService {
     @Scheduled(fixedDelayString = "${sikka.notifications.reminder-interval-ms:60000}",
             initialDelayString = "${sikka.notifications.reminder-initial-delay-ms:60000}")
     public void sendDueReminders() {
-        if (!enabled) {
+        if (!enabled || (visitMonitorGate != null && !visitMonitorGate.shouldMonitor())) {
             return;
         }
         for (int page = 0; page < 10; page++) {
