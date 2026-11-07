@@ -95,6 +95,22 @@ class SecurityHardeningHttpTest {
         assertEquals(429,login(client,a.getEmail(),"StrongPassword#13",csrf).statusCode());
     }
 
+    @Test void repeatedWrongBasicCredentialsAreTemporarilyBlocked()throws Exception {
+        Account a=account();HttpClient client=browser();
+        String wrong="Basic "+java.util.Base64.getEncoder().encodeToString(
+                (a.getEmail()+":invalid-password").getBytes(StandardCharsets.UTF_8));
+        for(int i=0;i<5;i++) {
+            HttpRequest req=HttpRequest.newBuilder(uri("/api/v1/account/me"))
+                    .header("Authorization",wrong).GET().build();
+            assertEquals(401,client.send(req,HttpResponse.BodyHandlers.ofString()).statusCode());
+        }
+        String valid="Basic "+java.util.Base64.getEncoder().encodeToString(
+                (a.getEmail()+":StrongPassword#13").getBytes(StandardCharsets.UTF_8));
+        HttpRequest blocked=HttpRequest.newBuilder(uri("/api/v1/account/me"))
+                .header("Authorization",valid).GET().build();
+        assertEquals(429,client.send(blocked,HttpResponse.BodyHandlers.ofString()).statusCode());
+    }
+
     @Test void repeatedInvalidEmailAndResetCodesAreLimited() {
         Account a=account();
         for(int i=0;i<5;i++)
