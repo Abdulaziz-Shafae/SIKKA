@@ -1,5 +1,6 @@
 package com.example.sikka.Service;
 
+import com.example.sikka.Config.VisitMonitorGate;
 import com.example.sikka.Model.ActivitySession;
 import com.example.sikka.Repository.ActivitySessionRepository;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +21,7 @@ public class ActivityDelayMonitorService {
 
     private final ActivitySessionRepository activitySessionRepository;
     private final NotificationService notificationService;
+    private final VisitMonitorGate visitMonitorGate;
 
     @Value("${sikka.delay.monitor-enabled:true}")
     private boolean monitorEnabled;
@@ -28,7 +30,7 @@ public class ActivityDelayMonitorService {
 
     @Scheduled(fixedDelayString = "${sikka.delay.check-interval-ms:60000}", initialDelayString = "${sikka.delay.initial-delay-ms:30000}")
     public void checkCurrentActivityDelays() {
-        if (!monitorEnabled) {
+        if (!monitorEnabled || !visitMonitorGate.shouldMonitor()) {
             return;
         }
         LocalDateTime now = LocalDateTime.now(ZoneId.of("Asia/Riyadh"));
