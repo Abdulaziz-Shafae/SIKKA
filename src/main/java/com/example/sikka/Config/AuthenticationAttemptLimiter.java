@@ -35,6 +35,10 @@ public class AuthenticationAttemptLimiter {
         // Bound memory even if attackers spray unique identities.
         if (attempts.size() > 10000) {
             attempts.entrySet().removeIf(entry -> entry.getValue().expiresAt() <= now);
+            // Limit a hostile spray of never-before-seen identifiers.
+            if (attempts.size() > 10000) {
+                attempts.keySet().stream().limit(1000).toList().forEach(attempts::remove);
+            }
         }
     }
 
