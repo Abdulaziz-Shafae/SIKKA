@@ -13,6 +13,8 @@ public interface VisitRepository extends JpaRepository<Visit, Integer> {
 
     Visit findVisitById(Integer id);
 
+    boolean existsByStatus(String status);
+
     @Query(value = "select * from visit where id = :visitId for update", nativeQuery = true)
     Visit findVisitByIdForUpdate(@Param("visitId") Integer visitId);
 
