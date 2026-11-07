@@ -25,7 +25,8 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http, com.example.sikka.Repository.AccountRepository accountRepository, AuthenticationAttemptLimiter limiter) throws Exception {
         return http
-                .csrf(csrf -> csrf.csrfTokenRepository(new HttpSessionCsrfTokenRepository()))
+                .csrf(csrf -> csrf.csrfTokenRepository(new HttpSessionCsrfTokenRepository())
+                        .ignoringRequestMatchers("/api/v1/nightly-reminder/run"))
 
                 .sessionManagement(sm -> sm
                         .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
@@ -38,6 +39,7 @@ public class SecurityConfig {
                                 // "/api/v1/auth/verify-phone", "/api/v1/auth/resend-phone-verification",
                                 "/api/v1/auth/forgot-password", "/api/v1/auth/reset-password").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/auth/csrf").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/nightly-reminder/run").permitAll()
                         .requestMatchers(HttpMethod.GET,
                                 "/api/v1/ride/get",
                                 "/api/v1/ride/catalog",
