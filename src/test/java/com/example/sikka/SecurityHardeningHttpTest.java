@@ -1,6 +1,8 @@
 package com.example.sikka;
 
 import com.example.sikka.Config.AuthenticationAttemptLimiter;
+import com.example.sikka.Service.VerificationService;
+import com.example.sikka.Api.ApiException;
 import com.example.sikka.Model.Account;
 import com.example.sikka.Repository.AccountRepository;
 import org.junit.jupiter.api.Test;
@@ -26,6 +28,7 @@ class SecurityHardeningHttpTest {
     @Autowired AccountRepository accounts;
     @Autowired PasswordEncoder passwordEncoder;
     @Autowired AuthenticationAttemptLimiter limiter;
+    @Autowired VerificationService verification;
     private URI uri(String path) { return URI.create("http://localhost:"+port+path); }
     private HttpClient browser() {
         return HttpClient.newBuilder().cookieHandler(new CookieManager(null,CookiePolicy.ACCEPT_ALL)).build();
@@ -82,6 +85,24 @@ class SecurityHardeningHttpTest {
         assertEquals(200,login(client,a.getEmail(),"StrongPassword#13",token(client)).statusCode());
         a.setStatus("SUSPENDED");accounts.save(a);
         assertEquals(401,get(client,"/api/v1/account/me").statusCode());
+    }
+
+    @Test void repeatedBadLoginIsTemporarilyBlocked()throws Exception {
+        Account a=account();HttpClient client=browser();
+        String csrf=token(client);
+        for(int i=0;i<5;i++)
+            assertEquals(401,login(client,a.getEmail(),"incorrect-password",csrf).statusCode());
+        assertEquals(429,login(client,a.getEmail(),"StrongPassword#13",csrf).statusCode());
+    }
+
+    @Test void repeatedInvalidEmailAndResetCodesAreLimited() {
+        Account a=account();
+        for(int i=0;i<5;i++)
+            assertThrows(ApiException.class,()->verification.verify(a.getEmail(),"000001"));
+        assertTrue(assertThrows(ApiException.class,()->verification.verify(a.getEmail(),"000001")).getMessage().contains("too many"));
+        for(int i=0;i<5;i++)
+            assertThrows(ApiException.class,()->verification.resetPassword(a.getEmail(),"000001","NewStrongPassword#13"));
+        assertTrue(assertThrows(ApiException.class,()->verification.resetPassword(a.getEmail(),"000001","NewStrongPassword#13")).getMessage().contains("too many"));
     }
 
     @Test void failedAttemptsThrottleAndSuccessfulAttemptClearsState() {
