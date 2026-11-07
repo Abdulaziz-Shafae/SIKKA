@@ -2,6 +2,7 @@ package com.example.sikka.Service;
 
 import com.example.sikka.Model.Ride;
 import com.example.sikka.Repository.RideRepository;
+import com.example.sikka.Config.VisitMonitorGate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -22,6 +23,9 @@ import java.util.*;
 @Slf4j
 public class QueueAnalyticsSyncService {
     private final RideRepository rideRepository;
+    // Optional for isolated unit tests that construct the service without Spring.
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private VisitMonitorGate visitMonitorGate;
     private final JsonMapper jsonMapper;
     private final HttpClient httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(4)).build();
     @Value("${sikka.queue-analytics.enabled:false}")
@@ -31,7 +35,7 @@ public class QueueAnalyticsSyncService {
 
     @Scheduled(fixedDelayString = "${sikka.queue-analytics.interval-ms:300000}", initialDelayString = "${sikka.queue-analytics.initial-delay-ms:5000}")
     public void synchronizeAnalyticsReadings() {
-        if (!enabled) return;
+        if (!enabled || (visitMonitorGate != null && !visitMonitorGate.shouldMonitor())) return;
         try {
             JsonNode catalogue = fetchJson("/api/v1/rides");
             List<Ride> rides = rideRepository.findAll();
