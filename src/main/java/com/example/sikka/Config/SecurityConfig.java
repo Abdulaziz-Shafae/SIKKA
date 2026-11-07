@@ -11,6 +11,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.authentication.www.BasicAuthenticationFilter;
 
 @Configuration
 @EnableWebSecurity
@@ -138,6 +139,7 @@ public class SecurityConfig {
 
                 .addFilterBefore(new DeletedAccountSessionFilter(accountRepository), org.springframework.security.web.access.intercept.AuthorizationFilter.class)
                 .addFilterBefore(new LoginAttemptFilter(limiter), UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(new BasicAttemptFilter(limiter), BasicAuthenticationFilter.class)
 
                 .httpBasic(basic -> {})
 
