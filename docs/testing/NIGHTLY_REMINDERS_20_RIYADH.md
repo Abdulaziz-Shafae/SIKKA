@@ -35,3 +35,13 @@ No Railway deployment, no scheduled job, no external emails were created or sent
 
 ## Rollback
 Remove/disable the external scheduler first; set `SIKKA_NOTIFICATIONS_NIGHT_BEFORE_ENABLED=false`; redeploy Staging if required. Data remains unchanged.
+
+## 2026-11-07 Railway Staging preparation (not deployed)
+
+- The separate Bun Function `sikka-nightly-reminders-staging` is **STAGED** with cron `0 17 * * *`, with `SIKKA_NIGHTLY_CRON_ENABLED=false` and no sender secret. It is not a running Railway service and cannot send emails.
+- SIKKA Backend and Frontend service source changes to branch `testing` are **STAGED**, not applied. Staged frontend env: `SIKKA_BACKEND_URL=http://sikka-backend-test.railway.internal:8080`, `NEXT_PUBLIC_SIKKA_API_URL=/api/backend`. Verify private host and port before applying. Existing legacy env values have not been deleted.
+- Staged backend env: Hikari maximum pool 3, minimum idle 0, idle timeout 30000 ms, keepalive 0, plus `SIKKA_NOTIFICATIONS_NIGHT_BEFORE_ENABLED=false`.
+- `VisitMonitorGate` checks for an IN_PROGRESS visit once at backend startup or after a successful start/complete HTTP request, and arms a 10-minute window on successful visit-plan / park-exploration requests. The existing monitors skip SQL/Queue Analytics network work outside that window, unless any visit remains IN_PROGRESS. This preserves in-progress monitoring even if a device is locked; no database migration.
+- Scheduled jobs still wake in JVM time but return without database or HTTP access when idle. Whether Railway actually sleeps must be measured from runtime metrics/network flows after a successful test deployment.
+- Added unit tests for monitor idle short-circuits, gate behavior, cron time window and unauthorized trigger. The unit test files have been committed but no verified Maven build/test results were accessible during this preparation. Do not accept the staged Railway patch until the build and full regression tests pass.
+- To activate later: test n8n delivery in a non-production sink, securely stage identical >=32-character keys in backend and Function, set backend `SIKKA_NOTIFICATIONS_NIGHT_BEFORE_ENABLED=true` and Function `SIKKA_NIGHTLY_CRON_ENABLED=true`, then apply only after authorization. NEVER send test reminders to actual visit participants.
