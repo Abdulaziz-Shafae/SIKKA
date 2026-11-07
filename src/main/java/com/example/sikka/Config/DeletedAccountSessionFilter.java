@@ -17,10 +17,19 @@ import java.io.IOException;
 public class DeletedAccountSessionFilter extends OncePerRequestFilter {
     private final AccountRepository accountRepository;
 
+    private boolean sessionAccountValid(Account principal) {
+        Account current = accountRepository.findAccountById(principal.getId());
+        return current != null
+                && "ACTIVE".equals(current.getStatus())
+                && Boolean.TRUE.equals(current.getEmailVerified())
+                && java.util.Objects.equals(current.getPasswordHash(), principal.getPasswordHash())
+                && java.util.Objects.equals(current.getRole(), principal.getRole());
+    }
+
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain) throws ServletException, IOException {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication != null && authentication.getPrincipal() instanceof Account account && !accountRepository.existsById(account.getId())) {
+        if (authentication != null && authentication.getPrincipal() instanceof Account account && !sessionAccountValid(account)) {
             SecurityContextHolder.clearContext();
             jakarta.servlet.http.HttpSession session = request.getSession(false);
             if (session != null) session.invalidate();
