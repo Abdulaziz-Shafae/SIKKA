@@ -177,6 +177,28 @@ public class NotificationEventService {
         queueEmail(notification);
     }
 
+    /**
+     * An externally triggered 20:00 Asia/Riyadh job calls this once per eligible visit.
+     * Recheck under the visit lock: the plan or attendance might have changed since the initial lookup.
+     */
+    public void notifyNightBeforeVisit(Integer visitId, java.time.LocalDate tomorrow) {
+        Visit visit = visitRepository.findVisitByIdForUpdate(visitId);
+        if (visit == null || !"READY".equals(visit.getStatus()) || !tomorrow.equals(visit.getVisitDate())) return;
+        boolean approved = visitPlanRepository.findAllByVisit_IdAndPlanKind(visitId, "GROUP").stream()
+                .anyMatch(plan -> Boolean.TRUE.equals(plan.getIsActive())
+                        && plan.getPlanApproval() != null
+                        && "APPROVED".equals(plan.getPlanApproval().getStatus()));
+        if (!approved) return;
+        for (Account account : recipients(visit, null).values()) {
+            save(account, visit, "NIGHT_BEFORE_VISIT_REMINDER", "بكرا موعد سكتك!",
+                    "بكرا " + tomorrow + " موعد زيارتك في سكة"
+                            + (visit.getPlannedStartTime() == null ? "." :
+                            "، الساعة " + visit.getPlannedStartTime() + " بتوقيت الرياض.")
+                            + " خطتك جاهزة، نشوفك بكرا!",
+                    "NIGHT_BEFORE_VISIT_REMINDER:" + visitId + ":" + tomorrow, true, null);
+        }
+    }
+
     // 12, 13, 14: scheduled reminders, re-read under the visit lock each time.
     public void notifyDueReminders(Integer visitId) {
         Visit visit = visitRepository.findVisitByIdForUpdate(visitId);
