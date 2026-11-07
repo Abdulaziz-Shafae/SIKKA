@@ -35,6 +35,31 @@ class NightBeforeVisitReminderServiceTest {
         verifyNoInteractions(visits, sender);
     }
 
+    @Test void sendsOnlySelectedTomorrowVisitIdsAtEightPm() {
+        VisitRepository visits = mock(VisitRepository.class);
+        NotificationEventService sender = mock(NotificationEventService.class);
+        NightBeforeVisitReminderService service = new NightBeforeVisitReminderService(visits, sender);
+        ReflectionTestUtils.setField(service, "enabled", true);
+        LocalDate tomorrow = LocalDate.of(2026, 11, 8);
+        when(visits.findReadyApprovedVisitsOn(eq(tomorrow), eq(PageRequest.of(0,100))))
+                .thenReturn(List.of(10, 11));
+        assertEquals(2, service.sendTomorrowReminders(
+                ZonedDateTime.of(2026, 11, 7, 20, 0, 0, 0, ZoneId.of("Asia/Riyadh"))));
+        verify(sender).notifyNightBeforeVisit(10, tomorrow);
+        verify(sender).notifyNightBeforeVisit(11, tomorrow);
+        verifyNoMoreInteractions(sender);
+    }
+
+    @Test void outsideEightPmDoesNotQueryOrSend() {
+        VisitRepository visits = mock(VisitRepository.class);
+        NotificationEventService sender = mock(NotificationEventService.class);
+        NightBeforeVisitReminderService service = new NightBeforeVisitReminderService(visits, sender);
+        ReflectionTestUtils.setField(service, "enabled", true);
+        assertThrows(IllegalStateException.class, () -> service.sendTomorrowReminders(
+                ZonedDateTime.of(2026, 11, 7, 19, 55, 0, 0, ZoneId.of("Asia/Riyadh"))));
+        verifyNoInteractions(visits, sender);
+    }
+
     @Test void onlyExplicitlyEnabledRunnerCanConsiderWork() {
         VisitRepository visits = mock(VisitRepository.class);
         NotificationEventService sender = mock(NotificationEventService.class);
