@@ -1,5 +1,6 @@
 package com.example.sikka.Service;
 
+import com.example.sikka.Config.VisitMonitorGate;
 import com.example.sikka.Model.PlanItem;
 import com.example.sikka.Repository.PlanItemRepository;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +19,7 @@ public class RideChangeMonitorService {
 
     private final PlanItemRepository planItemRepository;
     private final NotificationService notificationService;
+    private final VisitMonitorGate visitMonitorGate;
 
     @Value("${sikka.replan.ride-monitor-enabled:true}")
     private boolean monitorEnabled;
@@ -26,7 +28,7 @@ public class RideChangeMonitorService {
 
     @Scheduled(fixedDelayString = "${sikka.replan.ride-check-interval-ms:120000}", initialDelayString = "${sikka.replan.ride-initial-delay-ms:45000}")
     public void checkPlannedRideChanges() {
-        if (!monitorEnabled) {
+        if (!monitorEnabled || !visitMonitorGate.shouldMonitor()) {
             return;
         }
         Integer afterId = nextPlanItemId;
