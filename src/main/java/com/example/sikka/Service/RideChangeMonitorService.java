@@ -24,7 +24,7 @@ public class RideChangeMonitorService {
 
     private Integer nextPlanItemId = 0;
 
-    @Scheduled(fixedDelayString = "${sikka.replan.ride-check-interval-ms:60000}", initialDelayString = "${sikka.replan.ride-initial-delay-ms:45000}")
+    @Scheduled(fixedDelayString = "${sikka.replan.ride-check-interval-ms:120000}", initialDelayString = "${sikka.replan.ride-initial-delay-ms:45000}")
     public void checkPlannedRideChanges() {
         if (!monitorEnabled) {
             return;
