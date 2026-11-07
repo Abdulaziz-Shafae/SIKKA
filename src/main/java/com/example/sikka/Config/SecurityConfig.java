@@ -9,6 +9,8 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 @Configuration
 @EnableWebSecurity
@@ -20,9 +22,9 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http, com.example.sikka.Repository.AccountRepository accountRepository) throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http, com.example.sikka.Repository.AccountRepository accountRepository, AuthenticationAttemptLimiter limiter) throws Exception {
         return http
-                .csrf(csrf -> csrf.disable())
+                .csrf(csrf -> csrf.csrfTokenRepository(new HttpSessionCsrfTokenRepository()))
 
                 .sessionManagement(sm -> sm
                         .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
@@ -34,6 +36,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/auth/verify-email", "/api/v1/auth/resend-verification",
                                 // "/api/v1/auth/verify-phone", "/api/v1/auth/resend-phone-verification",
                                 "/api/v1/auth/forgot-password", "/api/v1/auth/reset-password").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/auth/csrf").permitAll()
                         .requestMatchers(HttpMethod.GET,
                                 "/api/v1/ride/get",
                                 "/api/v1/ride/catalog",
@@ -111,7 +114,7 @@ public class SecurityConfig {
                         .anyRequest().authenticated()
                 )
 
-                .formLogin(form -> form.loginProcessingUrl("/api/v1/auth/login").successHandler((request, response, authentication) -> { response.setStatus(200); response.setContentType("application/json;charset=UTF-8"); response.getWriter().write("{\"message\":\"Login successful\"}"); }).failureHandler((request, response, exception) -> { response.setStatus(401); response.setContentType("application/json;charset=UTF-8"); response.getWriter().write("{\"message\":\"Invalid email or password\"}"); }).permitAll())
+                .formLogin(form -> form.loginProcessingUrl("/api/v1/auth/login").successHandler((request, response, authentication) -> { limiter.succeeded("login", request.getParameter("username")); response.setStatus(200); response.setContentType("application/json;charset=UTF-8"); response.getWriter().write("{\"message\":\"Login successful\"}"); }).failureHandler((request, response, exception) -> { limiter.failed("login", request.getParameter("username")); response.setStatus(401); response.setContentType("application/json;charset=UTF-8"); response.getWriter().write("{\"message\":\"Invalid email or password\"}"); }).permitAll())
 
                 .logout(logout -> logout
                         .logoutUrl("/api/v1/auth/logout")
@@ -134,6 +137,7 @@ public class SecurityConfig {
                 )
 
                 .addFilterBefore(new DeletedAccountSessionFilter(accountRepository), org.springframework.security.web.access.intercept.AuthorizationFilter.class)
+                .addFilterBefore(new LoginAttemptFilter(limiter), UsernamePasswordAuthenticationFilter.class)
 
                 .httpBasic(basic -> {})
 
