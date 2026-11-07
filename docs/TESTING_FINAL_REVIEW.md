@@ -22,7 +22,7 @@ No implementation from older, deleted review branches is imported automatically.
 - [ ] 10 — Brevo and n8n notifications (Brevo implementation must remain unchanged until separately approved)
 - [ ] 11 — Visit rating, recap and image: frontend testing now renders a fixed-layout ride-only visit poster from authenticated visit summary, completed ride records, and catalogue. Four rides per row, eight per image, additional same-layout pages. No achievements. Local helper test passed; full build, PNG export, live DB and screenshot visual parity pending.
 - [ ] 12 — Frontend responsive/accessibility: approved updates committed to `Sikka-front/testing`: poster preview scrolls horizontally on small screens without changing SVG or PNG artwork, skip/replan/completion modal keyboard focus is contained/restored with Escape, and mobile map targets/toolbar/selection spacing improved. Static source checks passed; CI build and real-device/browser tests pending.
-- [ ] 13 — Security, authorization and privacy
+- [ ] 13 — Security, authorization and privacy: four approved hardening changes committed to SIKKA/testing and Sikka-front/testing (CSRF token, login/code attempt limits, old-session invalidation after password reset, disabled-account rejection). HTTP and contract tests added; full Java/Node test run, browser, Railway verification pending.
 - [ ] 14 — End-to-end on Railway Testing, MySQL validation, required data comparison, release readiness
 
 **Verification for point 01:** Static review plus CI success, not yet validated on the live Railway Testing environment. No production branch changes, merges, or deploys.
@@ -77,3 +77,16 @@ No implementation from older, deleted review branches is imported automatically.
 - `app/globals.css`: 44px touch targets, responsive toolbar/plan selection controls and keyboard scrollable poster preview; dialog max-height limits within dynamic viewport; all scoped to testing CSS rules.
 - `scripts/checks/responsive-accessibility.cjs` added to frontend `check:flows` (syntax/contract checks).
 - GitHub content verification: PASS. Actual Node test execution, TypeScript typecheck/build, browser/mobile/iPad testing, screenshot verification and Railway deploy: NOT YET VERIFIED. No backend runtime edits.
+
+## Point 13 security hardening (2026-11-07)
+
+User approved only the following four changes on `testing`, without replacing Spring Security sessions, altering AI, notifications or payment logic, or touching main/Production.
+
+1. CSRF: Enabled Spring Security HttpSessionCsrfTokenRepository. Added GET `/api/v1/auth/csrf` for a same-session token. The existing frontend `lib/api-client.ts` obtains a fresh token before unsafe requests (including login/logout), and the same-origin `app/api/backend/[...path]/route.ts` forwards X-CSRF-TOKEN. No public webhook exceptions added. Direct browser session mutation without a valid CSRF token should be rejected.
+2. Attempts: AuthenticationAttemptLimiter limits five failures in ten minutes per normalized account identifier, using hashed in-memory keys. The browser form login and HTTP Basic share the same limit; email verification and password-reset codes have separate limits. Resend cooldown remains unchanged. This is PER JVM ONLY and is not a shared multi-instance/Redis limiter. Consider Redis before multi-replica production.
+3. Password reset sessions: existing DeletedAccountSessionFilter compares the authenticated principal password hash against the current database account password hash on subsequent requests and invalidates old sessions after password changes.
+4. Disabled accounts: the same filter rejects stale sessions when a database account is missing, not ACTIVE, unverified, or its role has changed.
+
+Test coverage added: `src/test/java/com/example/sikka/SecurityHardeningHttpTest.java` (browser CSRF bootstrap/login/logout; password change and suspended account session invalidation; form and Basic brute-force rejection; verification/reset invalid-code lockouts). Frontend integration-contract and live-flow mocks updated to exercise the CSRF header and same-origin gateway. Existing permission tests remain in place.
+
+Validation status: GitHub fetches show the correct testing branch files and wiring; no Maven build or live HTTP execution was possible in this session because the code checkout/dependencies cannot be fetched by the container. Java tests, full frontend integration suite, browser login and live Railway Testing are NOT YET VERIFIED. Do NOT merge to main or deploy to production until full tests pass. Any current production payment/notification/AI behavior remains unchanged, and no production config was modified.
