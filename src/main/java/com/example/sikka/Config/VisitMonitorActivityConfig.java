@@ -26,9 +26,13 @@ public class VisitMonitorActivityConfig implements WebMvcConfigurer {
             public void afterCompletion(HttpServletRequest request, HttpServletResponse response,
                                         Object handler, Exception error) {
                 if (error != null || response.getStatus() >= 400) return;
+                String path = request.getServletPath();
+                // Public park exploration also needs fresh ride data while a browser is using SIKKA.
+                if ("GET".equals(request.getMethod()) &&
+                    (path.startsWith("/api/v1/ride/") || path.startsWith("/api/v1/map/")))
+                    gate.recordVisitRequest();
                 Authentication auth = SecurityContextHolder.getContext().getAuthentication();
                 if (auth == null || !auth.isAuthenticated() || "anonymousUser".equals(auth.getPrincipal())) return;
-                String path = request.getServletPath();
                 if (path.startsWith("/api/v1/visit/") ||
                     path.startsWith("/api/v1/visit-plan/") ||
                     path.startsWith("/api/v1/activity-session/") ||
