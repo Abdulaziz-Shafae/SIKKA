@@ -17,6 +17,14 @@ public class AuthController {
 
     private final VerificationService verificationService;
 
+    @GetMapping("/csrf")
+    public ResponseEntity<?> csrf(jakarta.servlet.http.HttpServletRequest request) {
+        org.springframework.security.web.csrf.CsrfToken token =
+                (org.springframework.security.web.csrf.CsrfToken) request.getAttribute(org.springframework.security.web.csrf.CsrfToken.class.getName());
+        if (token == null) return ResponseEntity.status(503).body(new ApiResponse("CSRF protection unavailable"));
+        return ResponseEntity.ok(java.util.Map.of("token", token.getToken()));
+    }
+
     @PostMapping("/verify-email")
     public ResponseEntity<?> verifyEmail(@RequestBody @Valid VerifyEmailDtoIn dto) {
         verificationService.verify(dto.getEmail(), dto.getCode());
