@@ -35,14 +35,14 @@ public class BasicAttemptFilter extends OncePerRequestFilter {
             response.sendError(400);
             return;
         }
-        if (!limiter.allowed("basic-login", username)) {
+        if (!limiter.allowed("login", username)) {
             response.setStatus(429);
             response.setContentType("application/json;charset=UTF-8");
             response.getWriter().write("{\"message\":\"Too many login attempts. Try again later.\"}");
             return;
         }
         chain.doFilter(request, response);
-        if (response.getStatus() == 401) limiter.failed("basic-login", username);
-        else limiter.succeeded("basic-login", username);
+        if (response.getStatus() == 401) limiter.failed("login", username);
+        else limiter.succeeded("login", username);
     }
 }
