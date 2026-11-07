@@ -2,6 +2,7 @@ package com.example.sikka.Service;
 
 import com.example.sikka.Api.ApiException;
 import com.example.sikka.Model.Account;
+import com.example.sikka.Config.AuthenticationAttemptLimiter;
 import com.example.sikka.Repository.AccountRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -20,6 +21,7 @@ public class VerificationService {
     private final PasswordEncoder passwordEncoder;
     private final AccountRepository accountRepository;
     private final EmailService emailService;
+    private final AuthenticationAttemptLimiter attemptLimiter;
     private final WhatsAppService whatsAppService;
     private final SecureRandom random = new SecureRandom();
 
@@ -60,9 +62,14 @@ public class VerificationService {
     }
 
     public void verify(String email, String code) {
+        if (!attemptLimiter.allowed("email-verification", email))
+            throw new ApiException("too many verification attempts; try again later");
         Account account = accountRepository.findAccountByEmail(email);
-        if (account == null || account.getVerificationTokenHash() == null || account.getVerificationExpiresAt() == null || account.getVerificationExpiresAt().isBefore(LocalDateTime.now()) || !MessageDigest.isEqual(hash(code).getBytes(StandardCharsets.UTF_8), account.getVerificationTokenHash().getBytes(StandardCharsets.UTF_8)))
+        if (account == null || account.getVerificationTokenHash() == null || account.getVerificationExpiresAt() == null || account.getVerificationExpiresAt().isBefore(LocalDateTime.now()) || !MessageDigest.isEqual(hash(code).getBytes(StandardCharsets.UTF_8), account.getVerificationTokenHash().getBytes(StandardCharsets.UTF_8))) {
+            attemptLimiter.failed("email-verification", email);
             throw new ApiException("invalid or expired code");
+        }
+        attemptLimiter.succeeded("email-verification", email);
 
         account.setEmailVerified(true);
         account.setVerificationTokenHash(null);
@@ -115,9 +122,14 @@ public class VerificationService {
     }
 
     public void resetPassword(String email, String code, String newPassword) {
+        if (!attemptLimiter.allowed("password-reset", email))
+            throw new ApiException("too many reset attempts; try again later");
         Account account = accountRepository.findAccountByEmail(email);
-        if (account == null || account.getResetTokenHash() == null || account.getResetExpiresAt() == null || account.getResetExpiresAt().isBefore(LocalDateTime.now()) || !MessageDigest.isEqual(hash(code).getBytes(StandardCharsets.UTF_8), account.getResetTokenHash().getBytes(StandardCharsets.UTF_8)))
+        if (account == null || account.getResetTokenHash() == null || account.getResetExpiresAt() == null || account.getResetExpiresAt().isBefore(LocalDateTime.now()) || !MessageDigest.isEqual(hash(code).getBytes(StandardCharsets.UTF_8), account.getResetTokenHash().getBytes(StandardCharsets.UTF_8))) {
+            attemptLimiter.failed("password-reset", email);
             throw new ApiException("invalid or expired code");
+        }
+        attemptLimiter.succeeded("password-reset", email);
 
         account.setPasswordHash(passwordEncoder.encode(newPassword));
         account.setResetTokenHash(null);
