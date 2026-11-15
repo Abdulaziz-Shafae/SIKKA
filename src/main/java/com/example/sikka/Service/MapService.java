@@ -160,6 +160,10 @@ public class MapService {
             throw new ApiException("Only admins can import rides");
         }
 
+        return importRideCatalogue();
+    }
+
+    private int importRideCatalogue(){
         JsonNode seedData;
 
         ClassPathResource resource = new ClassPathResource(rideSeedResource);
@@ -312,6 +316,10 @@ public class MapService {
             throw new ApiException("Only admins can import places");
         }
 
+        return importPlaceCatalogue();
+    }
+
+    private int importPlaceCatalogue(){
         ClassPathResource resource =
                 new ClassPathResource("maps/places-seed.json");
 
@@ -666,4 +674,14 @@ public class MapService {
         return Map.of("entranceNodeKey", "ENTRANCE", "revision", "IMAGE_ROUTE_V1:" + entranceNodeId + ":" + walkingMetersPerMinute, "places", places, "routes", routes, "estimated", true);
     }
 
+
+    @Transactional
+    public void initializeEmptyParkCatalogue() {
+        if (rideRepository.count() == 0) {
+            importRideCatalogue();
+        }
+        if (placeRepository.count() == 0) {
+            importPlaceCatalogue();
+        }
+    }
 }
