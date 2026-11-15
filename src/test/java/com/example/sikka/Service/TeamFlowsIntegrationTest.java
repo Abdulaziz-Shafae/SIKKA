@@ -48,7 +48,7 @@ class TeamFlowsIntegrationTest {
         visit.setPlannedStartTime(java.time.LocalTime.of(12, 0));
         visit.setPlannedEndTime(java.time.LocalTime.of(18, 0));
         createActiveGroupPlan(visit);
-        var result = visitService.reuseVisit(visit.getOrganizer().getId(), visit.getId(), new ReuseVisitDtoIn(LocalDate.now().plusDays(3)));
+        var result = visitService.reuseVisit(visit.getOrganizer().getId(), visit.getId(), new ReuseVisitDtoIn(nextOpenVisitDate(3)));
         Visit reused = entityManager.find(Visit.class, result.getVisitId());
         assertEquals(360, reused.getDurationMinutes());
         assertNull(reused.getPlannedStartTime());
@@ -77,7 +77,7 @@ class TeamFlowsIntegrationTest {
         assertEquals(savedName, saved.getName());
         assertNull(saved.getFamilyMember());
         createActiveGroupPlan(visit);
-        var result = visitService.reuseVisit(visit.getOrganizer().getId(), visit.getId(), new ReuseVisitDtoIn(LocalDate.now().plusDays(3)));
+        var result = visitService.reuseVisit(visit.getOrganizer().getId(), visit.getId(), new ReuseVisitDtoIn(nextOpenVisitDate(3)));
         assertEquals(1, visitMemberRepository.findAllByVisit_Id(result.getVisitId()).size());
     }
 
@@ -87,7 +87,7 @@ class TeamFlowsIntegrationTest {
         FamilyMember family = createFamily(visit.getOrganizer());
         visitMemberService.addFamilyMembers(visit.getOrganizer().getId(), visit.getId(), new AddFamilyMembersDtoIn(List.of(family.getId())));
         createActiveGroupPlan(visit);
-        var result = visitService.reuseVisit(visit.getOrganizer().getId(), visit.getId(), new ReuseVisitDtoIn(LocalDate.now().plusDays(3)));
+        var result = visitService.reuseVisit(visit.getOrganizer().getId(), visit.getId(), new ReuseVisitDtoIn(nextOpenVisitDate(3)));
         assertEquals(2, visitMemberRepository.findAllByVisit_Id(result.getVisitId()).size());
         assertNull(result.getInviteCode());
     }
@@ -208,7 +208,7 @@ class TeamFlowsIntegrationTest {
         Visit original = createVisit("SOLO");
         createActiveGroupPlan(original);
         Integer accountId = original.getOrganizer().getId();
-        var result = visitService.reuseVisit(accountId, original.getId(), new ReuseVisitDtoIn(LocalDate.now().plusDays(3)));
+        var result = visitService.reuseVisit(accountId, original.getId(), new ReuseVisitDtoIn(nextOpenVisitDate(3)));
         Visit copied = entityManager.find(Visit.class, result.getVisitId());
         assertEquals(original.getId(), copied.getReusedFromVisitId());
         assertFalse(Boolean.TRUE.equals(copied.getFreeSlotReserved()));
@@ -223,7 +223,7 @@ class TeamFlowsIntegrationTest {
         Visit original = createVisit("SOLO");
         createActiveGroupPlan(original);
         Integer accountId = original.getOrganizer().getId();
-        var result = visitService.reuseVisit(accountId, original.getId(), new ReuseVisitDtoIn(LocalDate.now().plusDays(3)));
+        var result = visitService.reuseVisit(accountId, original.getId(), new ReuseVisitDtoIn(nextOpenVisitDate(3)));
         assertThrows(ApiException.class, () -> visitMemberService.updateSelectedRides(accountId, result.getVisitId(), new SelectedRidesDtoIn()));
     }
 
@@ -284,7 +284,7 @@ class TeamFlowsIntegrationTest {
         Visit visit = new Visit();
         visit.setOrganizer(account);
         visit.setTripType("SOLO");
-        visit.setVisitDate(LocalDate.now().plusDays(2));
+        visit.setVisitDate(nextOpenVisitDate(2));
         visit.setMaxParticipants(1);
         visit.setName("Quota test visit");
         visit.setDurationMinutes(360);
@@ -490,7 +490,7 @@ class TeamFlowsIntegrationTest {
         createProfile(account);
         CreateVisitDtoIn dto = new CreateVisitDtoIn();
         dto.setName("Integration visit");
-        dto.setVisitDate(LocalDate.now().plusDays(2));
+        dto.setVisitDate(nextOpenVisitDate(2));
         dto.setDurationMinutes(360);
         dto.setTripType(type);
         dto.setTogetherMode("FRIENDS".equals(type) ? "SPLIT" : null);
@@ -532,5 +532,13 @@ class TeamFlowsIntegrationTest {
         family.setGender("MALE");
         entityManager.persist(family);
         return family;
+    }
+
+    private LocalDate nextOpenVisitDate(int daysAhead) {
+        LocalDate date = LocalDate.now(java.time.ZoneId.of("Asia/Riyadh")).plusDays(daysAhead);
+        while (date.getDayOfWeek() == java.time.DayOfWeek.MONDAY || date.getDayOfWeek() == java.time.DayOfWeek.TUESDAY) {
+            date = date.plusDays(1);
+        }
+        return date;
     }
 }
