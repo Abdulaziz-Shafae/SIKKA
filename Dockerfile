@@ -3,7 +3,7 @@ WORKDIR /app
 COPY .mvn .mvn
 COPY mvnw pom.xml ./
 COPY src src
-RUN bash mvnw -B -DskipTests package
+RUN bash mvnw -B --no-transfer-progress verify
 
 FROM eclipse-temurin:17-jre
 WORKDIR /app
