@@ -136,6 +136,7 @@ public class VisitGroupService {
         visitGroupRepository.save(group);
 
         visit.setGroup(group);
+        group.setVisit(visit);
         visitRepository.save(visit);
         return code;
     }
