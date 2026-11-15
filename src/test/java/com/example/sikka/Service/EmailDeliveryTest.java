@@ -14,6 +14,7 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.*;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.*;
 
+@org.junit.jupiter.api.extension.ExtendWith(org.springframework.boot.test.system.OutputCaptureExtension.class)
 class EmailDeliveryTest {
     @Test
     void deliversThroughHttpsWithoutCallingSmtp() {
@@ -22,7 +23,7 @@ class EmailDeliveryTest {
         RestClient.Builder builder = RestClient.builder().baseUrl("https://api.brevo.com");
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
         ReflectionTestUtils.setField(service, "emailApiClient", builder.build());
-        ReflectionTestUtils.setField(service, "brevoApiKey", "test-key");
+        ReflectionTestUtils.setField(service, "brevoApiKey", " \r\ntest-key\r\n ");
         ReflectionTestUtils.setField(service, "from", "sender@example.test");
         server.expect(requestTo("https://api.brevo.com/v3/smtp/email")).andExpect(method(HttpMethod.POST)).andExpect(header("api-key", "test-key")).andExpect(content().string(org.hamcrest.Matchers.containsString("verification code"))).andRespond(withStatus(HttpStatus.CREATED).contentType(MediaType.APPLICATION_JSON).body("{\"messageId\":\"test\"}"));
         assertTrue(service.sendEmail("recipient@example.test", "verification code", "test content"));
@@ -46,11 +47,12 @@ class EmailDeliveryTest {
     }
 
     @Test
-    void reportsSmtpFailureInsteadOfClaimingDelivery() {
+    void reportsSmtpFailureInsteadOfClaimingDelivery(org.springframework.boot.test.system.CapturedOutput output) {
         JavaMailSender smtp = mock(JavaMailSender.class);
         EmailService service = new EmailService(smtp);
         ReflectionTestUtils.setField(service, "from", "sender@example.test");
-        doThrow(new MailSendException("unavailable")).when(smtp).send(any(org.springframework.mail.SimpleMailMessage.class));
+        doThrow(new MailSendException("secret-must-not-appear-in-logs")).when(smtp).send(any(org.springframework.mail.SimpleMailMessage.class));
         assertFalse(service.sendEmail("recipient@example.test", "verification code", "test content"));
+        assertFalse(output.getAll().contains("secret-must-not-appear-in-logs"));
     }
 }
