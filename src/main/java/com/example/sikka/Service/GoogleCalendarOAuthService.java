@@ -47,6 +47,10 @@ public class GoogleCalendarOAuthService {
     private String encryptionKey;
 
     private void configured() {
+        clientId = clientId.strip();
+        clientSecret = clientSecret.strip();
+        redirectUri = redirectUri.strip();
+        encryptionKey = encryptionKey.strip();
         if (clientId.isBlank() || clientSecret.isBlank() || encryptionKey.isBlank()) {
             throw new ApiException("Google Calendar OAuth is not configured");
         }
