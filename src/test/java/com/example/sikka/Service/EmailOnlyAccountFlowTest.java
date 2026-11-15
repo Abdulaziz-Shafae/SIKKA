@@ -1,6 +1,7 @@
 package com.example.sikka.Service;
 
 import com.example.sikka.Model.Account;
+import com.example.sikka.Config.AuthenticationAttemptLimiter;
 import com.example.sikka.Repository.AccountRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -32,7 +33,7 @@ class EmailOnlyAccountFlowTest {
         account.setVerificationTokenHash(hash("123456"));
         account.setVerificationExpiresAt(LocalDateTime.now().plusMinutes(5));
         when(accounts.findAccountByEmail("test@example.com")).thenReturn(account);
-        VerificationService service = new VerificationService(mock(PasswordEncoder.class), accounts, email, whatsapp);
+        VerificationService service = new VerificationService(mock(PasswordEncoder.class), accounts, email, new AuthenticationAttemptLimiter(), whatsapp);
         assertFalse(account.isEnabled());
         service.verify("test@example.com", "123456");
         assertTrue(account.getEmailVerified());
@@ -54,7 +55,7 @@ class EmailOnlyAccountFlowTest {
         account.setPhone("966500000000");
         account.setPhoneVerified(true);
         when(accounts.findAccountByEmail(account.getEmail())).thenReturn(account);
-        VerificationService service = new VerificationService(mock(PasswordEncoder.class), accounts, email, whatsapp);
+        VerificationService service = new VerificationService(mock(PasswordEncoder.class), accounts, email, new AuthenticationAttemptLimiter(), whatsapp);
         service.sendResetCode(account.getEmail());
         assertNotNull(account.getResetTokenHash());
         verify(email).sendEmail(eq(account.getEmail()), anyString(), anyString());
