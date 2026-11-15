@@ -38,9 +38,9 @@ class FrontendSessionHttpTest {
         URI me = URI.create("http://localhost:" + port + "/api/v1/account/me");
         assertEquals(401, browser.send(HttpRequest.newBuilder(me).GET().build(), HttpResponse.BodyHandlers.ofString()).statusCode());
         URI login = URI.create("http://localhost:" + port + "/api/v1/auth/login");
-        HttpResponse<String> wrong = browser.send(HttpRequest.newBuilder(login).header("Content-Type", "application/x-www-form-urlencoded").POST(HttpRequest.BodyPublishers.ofString("username=session.qa%40example.test&password=wrong")).build(), HttpResponse.BodyHandlers.ofString());
+        HttpResponse<String> wrong = browser.send(HttpRequest.newBuilder(login).header("X-CSRF-TOKEN", fetchCsrfToken(browser)).header("Content-Type", "application/x-www-form-urlencoded").POST(HttpRequest.BodyPublishers.ofString("username=session.qa%40example.test&password=wrong")).build(), HttpResponse.BodyHandlers.ofString());
         assertEquals(401, wrong.statusCode());
-        HttpResponse<String> authenticated = browser.send(HttpRequest.newBuilder(login).header("Content-Type", "application/x-www-form-urlencoded").POST(HttpRequest.BodyPublishers.ofString("username=session.qa%40example.test&password=SessionTest123%21")).build(), HttpResponse.BodyHandlers.ofString());
+        HttpResponse<String> authenticated = browser.send(HttpRequest.newBuilder(login).header("X-CSRF-TOKEN", fetchCsrfToken(browser)).header("Content-Type", "application/x-www-form-urlencoded").POST(HttpRequest.BodyPublishers.ofString("username=session.qa%40example.test&password=SessionTest123%21")).build(), HttpResponse.BodyHandlers.ofString());
         assertEquals(200, authenticated.statusCode());
         assertTrue(authenticated.headers().allValues("set-cookie").stream().anyMatch(value -> value.contains("JSESSIONID=") && value.contains("HttpOnly")));
         HttpResponse<String> current = browser.send(HttpRequest.newBuilder(me).GET().build(), HttpResponse.BodyHandlers.ofString());
@@ -48,7 +48,7 @@ class FrontendSessionHttpTest {
         assertTrue(current.body().contains("session.qa@example.test"));
         assertFalse(current.body().contains("passwordHash"));
         URI logout = URI.create("http://localhost:" + port + "/api/v1/auth/logout");
-        assertEquals(200, browser.send(HttpRequest.newBuilder(logout).POST(HttpRequest.BodyPublishers.noBody()).build(), HttpResponse.BodyHandlers.ofString()).statusCode());
+        assertEquals(200, browser.send(HttpRequest.newBuilder(logout).header("X-CSRF-TOKEN", fetchCsrfToken(browser)).POST(HttpRequest.BodyPublishers.noBody()).build(), HttpResponse.BodyHandlers.ofString()).statusCode());
         assertEquals(401, browser.send(HttpRequest.newBuilder(me).GET().build(), HttpResponse.BodyHandlers.ofString()).statusCode());
     }
     @Test
@@ -71,10 +71,10 @@ class FrontendSessionHttpTest {
         HttpClient second = HttpClient.newBuilder().cookieHandler(secondCookies).build();
         String form = "username=" + java.net.URLEncoder.encode(account.getEmail(), java.nio.charset.StandardCharsets.UTF_8) + "&password=DeleteMe123%21";
         for (HttpClient browser : new HttpClient[]{first,second}) {
-            assertEquals(200,browser.send(HttpRequest.newBuilder(login).header("Content-Type","application/x-www-form-urlencoded").POST(HttpRequest.BodyPublishers.ofString(form)).build(),HttpResponse.BodyHandlers.ofString()).statusCode());
+            assertEquals(200,browser.send(HttpRequest.newBuilder(login).header("X-CSRF-TOKEN", fetchCsrfToken(browser)).header("Content-Type","application/x-www-form-urlencoded").POST(HttpRequest.BodyPublishers.ofString(form)).build(),HttpResponse.BodyHandlers.ofString()).statusCode());
             assertEquals(200,browser.send(HttpRequest.newBuilder(me).GET().build(),HttpResponse.BodyHandlers.ofString()).statusCode());
         }
-        HttpResponse<String> erased=first.send(HttpRequest.newBuilder(erase).header("Content-Type","application/json").POST(HttpRequest.BodyPublishers.ofString("{\"password\":\"DeleteMe123!\"}")).build(),HttpResponse.BodyHandlers.ofString());
+        HttpResponse<String> erased=first.send(HttpRequest.newBuilder(erase).header("X-CSRF-TOKEN", fetchCsrfToken(first)).header("Content-Type","application/json").POST(HttpRequest.BodyPublishers.ofString("{\"password\":\"DeleteMe123!\"}")).build(),HttpResponse.BodyHandlers.ofString());
         assertEquals(200,erased.statusCode(),erased.body());
         assertFalse(accountRepository.existsById(accountId));
         assertEquals(401,first.send(HttpRequest.newBuilder(me).GET().build(),HttpResponse.BodyHandlers.ofString()).statusCode());
@@ -90,6 +90,12 @@ class FrontendSessionHttpTest {
         URI admin = URI.create("http://localhost:" + port + "/api/v1/place/get");
         assertEquals(401, guest.send(HttpRequest.newBuilder(admin).GET().build(), HttpResponse.BodyHandlers.ofString()).statusCode());
         URI add = URI.create("http://localhost:" + port + "/api/v1/place/add");
-        assertEquals(401, guest.send(HttpRequest.newBuilder(add).header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString("{}")).build(), HttpResponse.BodyHandlers.ofString()).statusCode());
+        assertEquals(403, guest.send(HttpRequest.newBuilder(add).header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString("{}")).build(), HttpResponse.BodyHandlers.ofString()).statusCode());
+    }
+
+    private String fetchCsrfToken(HttpClient browser) throws Exception {
+        HttpResponse<String> response = browser.send(HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/v1/auth/csrf")).GET().build(), HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, response.statusCode());
+        return new tools.jackson.databind.json.JsonMapper().readTree(response.body()).path("token").asString();
     }
 }
