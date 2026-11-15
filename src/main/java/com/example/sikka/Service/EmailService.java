@@ -38,7 +38,7 @@ public class EmailService {
     public boolean sendEmail(String to, String subject, String text) {
         try {
             if (brevoApiKey != null && !brevoApiKey.isBlank()) {
-                emailApiClient.post().uri("/v3/smtp/email").header("api-key", brevoApiKey).contentType(MediaType.APPLICATION_JSON).body(Map.of("sender", Map.of("email", from, "name", "Sikka"), "to", List.of(Map.of("email", to)), "subject", subject, "textContent", text)).retrieve().toBodilessEntity();
+                emailApiClient.post().uri("/v3/smtp/email").header("api-key", brevoApiKey.strip()).contentType(MediaType.APPLICATION_JSON).body(Map.of("sender", Map.of("email", from.strip(), "name", "Sikka"), "to", List.of(Map.of("email", to)), "subject", subject, "textContent", text)).retrieve().toBodilessEntity();
                 return true;
             }
             SimpleMailMessage message = new SimpleMailMessage();
@@ -49,7 +49,7 @@ public class EmailService {
             mailSender.send(message);
             return true;
         } catch (Exception e) {
-            log.warn("Failed to send email to {}: {}", to, e.getMessage());
+            log.warn("Failed to send email ({}); inspect provider delivery status", e.getClass().getSimpleName());
             return false;
         }
     }
